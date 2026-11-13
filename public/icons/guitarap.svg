@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title id="title">GuitarAP</title>
+  <rect width="512" height="512" rx="112" fill="#0f766e"/>
+  <path fill="#f4fbf9" d="M337 70c-16 0-30 13-30 30v109l-88 31a69 69 0 1 0 20 48v-91l68-24v69a69 69 0 1 0 20 48V100c0-17-13-30-30-30h40Zm-151 251a27 27 0 1 1 0-54 27 27 0 0 1 0 54Zm88-48a27 27 0 1 1 0 54 27 27 0 0 1 0-54Z"/>
+</svg>
