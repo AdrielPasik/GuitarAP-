@@ -1,0 +1,9 @@
+import type { TabColumn, TablatureContent, Technique } from '@/core/model';
+
+export function blankColumn(): TabColumn { return { id: crypto.randomUUID(), cells: Array.from({ length: 6 }, () => ({})) }; }
+export function insertColumn(tab: TablatureContent, index: number) { return { ...tab, columns: [...tab.columns.slice(0, index + 1), blankColumn(), ...tab.columns.slice(index + 1)] }; }
+export function removeColumn(tab: TablatureContent, index: number) { return tab.columns.length <= 1 ? tab : { ...tab, columns: tab.columns.filter((_, item) => item !== index) }; }
+export function setFret(tab: TablatureContent, column: number, string: number, fret: number | undefined) { if (fret !== undefined && (!Number.isInteger(fret) || fret < 0 || fret > 24)) return tab; return { ...tab, columns: tab.columns.map((item, index) => index !== column ? item : { ...item, cells: item.cells.map((cell, row) => row !== string ? cell : { ...cell, fret }) }) }; }
+export function toggleTechnique(tab: TablatureContent, column: number, string: number, technique: Technique) { return { ...tab, columns: tab.columns.map((item, index) => index !== column ? item : { ...item, cells: item.cells.map((cell, row) => { if (row !== string) return cell; const techniques = new Set(cell.techniques ?? []); if (techniques.has(technique)) techniques.delete(technique); else techniques.add(technique); return { ...cell, techniques: [...techniques] }; }) }) }; }
+export function copyColumns(tab: TablatureContent, start: number, end: number) { return structuredClone(tab.columns.slice(Math.max(0, start), Math.min(tab.columns.length, end + 1))); }
+export function pasteColumns(tab: TablatureContent, at: number, columns: TabColumn[]) { return { ...tab, columns: [...tab.columns.slice(0, at), ...structuredClone(columns).map((column) => ({ ...column, id: crypto.randomUUID() })), ...tab.columns.slice(at)] }; }
