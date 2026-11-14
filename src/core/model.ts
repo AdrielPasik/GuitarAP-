@@ -17,7 +17,7 @@ export type LibraryNode = {
 };
 
 export type TabCell = { fret?: number; techniques?: Technique[]; annotation?: string };
-export type TabColumn = { id: string; cells: TabCell[]; section?: string };
+export type TabColumn = { id: string; cells: TabCell[]; section?: string; lineBreak?: boolean };
 export type TablatureContent = {
   tuning: string[];
   columns: TabColumn[];
