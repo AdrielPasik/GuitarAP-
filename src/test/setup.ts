@@ -7,3 +7,4 @@ afterEach(() => {
   window.localStorage.clear();
   delete document.documentElement.dataset.theme;
 });
+import 'fake-indexeddb/auto';

@@ -15,6 +15,19 @@
   background: #101816;
 }
 
+.control, .control-primary {
+  border-radius: .5rem;
+  border: 1px solid color-mix(in srgb, currentColor 16%, transparent);
+  padding: .48rem .72rem;
+  font-size: .8rem;
+  font-weight: 600;
+  line-height: 1.1;
+  transition: border-color .15s ease, background .15s ease, transform .15s ease;
+}
+.control:hover { border-color: #d97706; background: color-mix(in srgb, #fbbf24 12%, transparent); }
+.control-primary { border-color: #b45309; background: #b45309; color: #fffdf8; }
+.control-primary:hover { background: #92400e; transform: translateY(-1px); }
+
 body {
   margin: 0;
   min-width: 320px;

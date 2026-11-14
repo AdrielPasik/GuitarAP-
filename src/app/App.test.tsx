@@ -17,13 +17,13 @@ describe('App', () => {
     expect(screen.getByText('Metrónomo')).toBeVisible();
   });
 
-  it('navigates to provisional sections', async () => {
+  it('keeps navigation inside the working library until a document is selected', async () => {
     const user = userEvent.setup();
     render(<App />);
 
     await user.click(screen.getByRole('link', { name: /^Diapasón/ }));
 
-    expect(await screen.findByRole('heading', { name: 'Diapasón' })).toBeVisible();
+    expect(await screen.findByRole('heading', { name: 'Biblioteca' })).toBeVisible();
   });
 
   it('changes theme and persists the preference', async () => {

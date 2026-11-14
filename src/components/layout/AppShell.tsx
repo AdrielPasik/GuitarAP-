@@ -1,5 +1,6 @@
 import { NavLink, Outlet } from 'react-router-dom';
 import { ThemeToggle } from '@/features/theme/ThemeToggle';
+import { MetronomeControl } from '@/features/metronome/Metronome';
 
 const navigation = [
   { to: '/biblioteca', label: 'Biblioteca', shortcut: 'B' },
@@ -19,6 +20,7 @@ export function AppShell() {
           GuitarAP
         </a>
         <div className="flex items-center gap-2">
+          <MetronomeControl />
           <span className="hidden text-sm text-slate-500 dark:text-slate-400 sm:inline">
             Todo se guarda localmente por ahora
           </span>
