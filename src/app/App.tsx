@@ -6,6 +6,8 @@ import { LibraryScreen } from '@/features/library/LibraryScreen';
 import { TablatureScreen } from '@/features/tablature/TablatureScreen';
 import { FretboardScreen } from '@/features/fretboard/FretboardScreen';
 import { MetronomeProvider } from '@/features/metronome/Metronome';
+import { PracticeScreen } from '@/features/practice/PracticeScreen';
+import { RecoveryScreen } from '@/features/library/RecoveryScreen';
 
 export function App() {
   return (
@@ -20,8 +22,8 @@ export function App() {
             <Route path="diapason/:id" element={<FretboardScreen />} />
             <Route path="tablaturas" element={<Navigate replace to="/biblioteca" />} />
             <Route path="diapason" element={<Navigate replace to="/biblioteca" />} />
-            <Route path="practica" element={<LibraryScreen />} />
-            <Route path="configuracion" element={<LibraryScreen />} />
+            <Route path="practica" element={<PracticeScreen />} />
+            <Route path="configuracion" element={<RecoveryScreen />} />
             <Route path="*" element={<Navigate replace to="/biblioteca" />} />
           </Route>
         </Routes>

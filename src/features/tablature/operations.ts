@@ -7,3 +7,7 @@ export function setFret(tab: TablatureContent, column: number, string: number, f
 export function toggleTechnique(tab: TablatureContent, column: number, string: number, technique: Technique) { return { ...tab, columns: tab.columns.map((item, index) => index !== column ? item : { ...item, cells: item.cells.map((cell, row) => { if (row !== string) return cell; const techniques = new Set(cell.techniques ?? []); if (techniques.has(technique)) techniques.delete(technique); else techniques.add(technique); return { ...cell, techniques: [...techniques] }; }) }) }; }
 export function copyColumns(tab: TablatureContent, start: number, end: number) { return structuredClone(tab.columns.slice(Math.max(0, start), Math.min(tab.columns.length, end + 1))); }
 export function pasteColumns(tab: TablatureContent, at: number, columns: TabColumn[]) { return { ...tab, columns: [...tab.columns.slice(0, at), ...structuredClone(columns).map((column) => ({ ...column, id: crypto.randomUUID() })), ...tab.columns.slice(at)] }; }
+export function annotateColumn(tab: TablatureContent, columnIndex: number, text: string) {
+  if (!text.trim() || !tab.columns[columnIndex]) return tab;
+  return { ...tab, annotations: [...tab.annotations, text.trim()], columns: tab.columns.map((column, index) => index === columnIndex ? { ...column, section: text.trim() } : column) };
+}
