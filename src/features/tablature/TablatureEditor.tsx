@@ -21,7 +21,7 @@ export function TablatureEditor({ document: musicalDocument, readOnly = false }:
   const exportRef = useRef<HTMLDivElement>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
   const columns = useMemo(() => content.columns, [content.columns]);
-  const columnsPerRow = autoWrap ? Math.max(4, Math.min(24, Math.floor((availableWidth - 58) / (content.zoom * 37.6)))) : content.wrapAfter;
+  const columnsPerRow = autoWrap ? Math.max(4, Math.min(40, Math.floor((availableWidth - 58) / (content.zoom * 37.6)))) : content.wrapAfter;
   const systems = useMemo(() => { const rows: Array<{ columns: typeof columns; start: number }> = []; let row: typeof columns = []; let start = 0; columns.forEach((column, index) => { if (row.length && (row.length >= columnsPerRow || column.lineBreak)) { rows.push({ columns: row, start }); row = []; start = index; } row.push(column); }); if (row.length) rows.push({ columns: row, start }); return rows; }, [columns, columnsPerRow]);
   const range = { start: Math.min(selected.column, rangeEnd?.column ?? selected.column), end: Math.max(selected.column, rangeEnd?.column ?? selected.column) };
 
