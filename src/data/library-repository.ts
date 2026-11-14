@@ -43,10 +43,32 @@ export class LibraryRepository {
     return copy;
   }
 
+  async duplicateNode(id: string) {
+    const source = await db.nodes.get(id);
+    if (!source) throw new Error('La carpeta no existe.');
+    const copy: LibraryNode = { ...source, id: crypto.randomUUID(), name: `${source.name} — copia`, createdAt: now(), updatedAt: now(), deletedAt: undefined };
+    await db.nodes.add(copy);
+    return copy;
+  }
+
+  async moveDocument(id: string, nodeId: string | null) { await db.documents.update(id, { nodeId, updatedAt: now() }); }
+
+  private async descendants(id: string) {
+    const result: string[] = [id];
+    const visit = async (parentId: string) => { const children = await db.nodes.where('parentId').equals(parentId).toArray(); for (const child of children) { result.push(child.id); await visit(child.id); } };
+    await visit(id); return result;
+  }
+
   async trashDocument(id: string) { await db.documents.update(id, { deletedAt: now(), updatedAt: now() }); }
   async restoreDocument(id: string) { await db.documents.update(id, { deletedAt: undefined, updatedAt: now() }); }
-  async trashNode(id: string) { await db.nodes.update(id, { deletedAt: now(), updatedAt: now() }); }
-  async restoreNode(id: string) { await db.nodes.update(id, { deletedAt: undefined, updatedAt: now() }); }
+  async trashNode(id: string) {
+    const ids = await this.descendants(id); const time = now();
+    await db.transaction('rw', db.nodes, db.documents, async () => { await db.nodes.bulkUpdate(ids.map((nodeId) => ({ key: nodeId, changes: { deletedAt: time, updatedAt: time } }))); const documents = await db.documents.where('nodeId').anyOf(ids).toArray(); await db.documents.bulkUpdate(documents.map((document) => ({ key: document.id, changes: { deletedAt: time, updatedAt: time } }))); });
+  }
+  async restoreNode(id: string) {
+    const ids = await this.descendants(id); const time = now();
+    await db.transaction('rw', db.nodes, db.documents, async () => { await db.nodes.bulkUpdate(ids.map((nodeId) => ({ key: nodeId, changes: { deletedAt: undefined, updatedAt: time } }))); const documents = await db.documents.where('nodeId').anyOf(ids).toArray(); await db.documents.bulkUpdate(documents.map((document) => ({ key: document.id, changes: { deletedAt: undefined, updatedAt: time } }))); });
+  }
 
   async restoreVersion(documentId: string, versionId: string) {
     const version = await db.versions.get(versionId);
@@ -60,6 +82,17 @@ export class LibraryRepository {
 
   async exportBackup() {
     return JSON.stringify({ schema: 1, exportedAt: new Date().toISOString(), nodes: await db.nodes.toArray(), documents: await db.documents.toArray(), versions: await db.versions.toArray() }, null, 2);
+  }
+
+  async importBackup(raw: string, mode: 'merge' | 'replace') {
+    const candidate: unknown = JSON.parse(raw);
+    if (!candidate || typeof candidate !== 'object' || !('schema' in candidate) || (candidate as { schema: unknown }).schema !== 1) throw new Error('El backup no tiene un esquema compatible.');
+    const backup = candidate as { nodes?: unknown; documents?: unknown; versions?: unknown };
+    if (!Array.isArray(backup.nodes) || !Array.isArray(backup.documents) || !Array.isArray(backup.versions)) throw new Error('El backup está incompleto.');
+    await db.transaction('rw', db.nodes, db.documents, db.versions, async () => {
+      if (mode === 'replace') { await db.nodes.clear(); await db.documents.clear(); await db.versions.clear(); }
+      await db.nodes.bulkPut(backup.nodes as LibraryNode[]); await db.documents.bulkPut(backup.documents as MusicalDocument[]); await db.versions.bulkPut(backup.versions as import('@/core/model').DocumentVersion[]);
+    });
   }
 }
 

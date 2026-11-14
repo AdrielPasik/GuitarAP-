@@ -23,4 +23,21 @@ describe('LibraryRepository', () => {
     expect((await db.documents.get(document.id))?.title).toBe('Escala');
     expect(await db.versions.where('documentId').equals(document.id).count()).toBe(2);
   });
+
+  it('trashes and restores a folder subtree with its documents atomically', async () => {
+    const parent = await libraryRepository.createNode('Escalas', 'folder');
+    const child = await libraryRepository.createNode('Mayor', 'folder', parent.id);
+    const document = await libraryRepository.createDocument('fretboard', 'Re mayor', child.id);
+    await libraryRepository.trashNode(parent.id);
+    expect((await db.nodes.get(child.id))?.deletedAt).toBeTypeOf('number');
+    expect((await db.documents.get(document.id))?.deletedAt).toBeTypeOf('number');
+    await libraryRepository.restoreNode(parent.id);
+    expect((await db.nodes.get(child.id))?.deletedAt).toBeUndefined();
+    expect((await db.documents.get(document.id))?.deletedAt).toBeUndefined();
+  });
+
+  it('validates a backup before replacing local data', async () => {
+    await expect(libraryRepository.importBackup('{"schema":2}', 'replace')).rejects.toThrow('esquema compatible');
+    expect(await db.documents.count()).toBe(0);
+  });
 });
