@@ -9,10 +9,10 @@ F0 deja listo el build estático en `dist/`; no contiene claves ni requiere vari
 3. Elegí la rama que quieras publicar (para una vista previa, `codex/f0-foundations`; para producción, únicamente la que apruebes después de revisar el PR).
 4. Configurá **Build command**: `npm run build`.
 5. Configurá **Build output directory**: `dist`.
-6. No agregues secretos ni variables de Supabase en F0. Si los hubiera en fases futuras, se cargarán únicamente en Cloudflare y en archivos locales ignorados por Git.
+6. Si configurás Supabase, agregá en **Settings → Environment variables** únicamente `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY` para Production y Preview. Son valores públicos de navegador; no cargues una `service_role`.
 7. Tras el primer despliegue, abrí la URL HTTPS, visitá la app una vez, poné el navegador offline y recargá para verificar el shell cacheado.
 
-`wrangler.toml` declara el directorio de salida para herramientas compatibles; el despliegue conectado a Git queda deliberadamente gestionado por Pages.
+`public/_redirects` preserva las rutas SPA en Pages. `wrangler.toml` declara el directorio de salida para herramientas compatibles; el despliegue conectado a Git queda deliberadamente gestionado por Pages.
 
 ## Estado en F0
 

@@ -25,9 +25,10 @@ Consulta [la arquitectura](docs/architecture.md), los [ADRs](docs/adr) y la [gu�
 
 La sincronización remota no está activa por defecto ni fue validada contra un proyecto real. Para prepararla:
 
-1. Creá un proyecto Supabase y aplicá, en orden, `supabase/migrations/0001_guitarap.sql` y `supabase/migrations/0002_sync.sql` con el SQL Editor o la CLI.
-2. Configurá Supabase Auth. Las políticas usan `auth.uid()`; el usuario autenticado nunca debe proporcionar un `owner_id` distinto.
-3. En el cliente, tras obtener el JWT de una sesión real, construí `new SupabaseTransport(SUPABASE_URL, accessToken)` y ejecutá `new SyncEngine(transport).sync(user.id)`.
-4. No expongas una `service_role` en el navegador. La clave/JWT usada por el transporte debe ser de sesión de usuario y respetar RLS.
+1. Creá un proyecto Supabase y aplicá, en orden, `supabase/migrations/0001_guitarap.sql`, `0002_sync.sql` y `0003_sync_hardening.sql` con el SQL Editor o la CLI.
+2. En **Authentication → Providers → Email**, desactivá los nuevos registros públicos. Creá los usuarios autorizados desde el Dashboard; la app solo ofrece inicio de sesión, nunca registro.
+3. Copiá `.env.example` como `.env.local` y completá la URL y la clave anónima/publicable. Ambas se exponen al navegador por diseño; jamás uses `service_role`.
+4. Abrí **Configuración** en GuitarAP, iniciá sesión, exportá el backup exigido por la interfaz y luego sincronizá. El JWT de sesión se usa como `Authorization` y la clave anónima como `apikey`, bajo RLS.
+5. Probá dos navegadores con dos usuarios distintos: cada uno debe ver solo sus documentos. Para dos dispositivos del mismo usuario, sincronizá el primero, abrí el segundo, iniciá sesión y sincronizá.
 
-El motor mantiene el cursor, las revisiones locales, reintentos y conflictos en IndexedDB. Ante un conflicto conserva la copia remota pendiente hasta una resolución explícita; ante una red caída deja los cambios locales intactos para el próximo intento.
+El motor mantiene el cursor, las revisiones locales, reintentos y conflictos en IndexedDB. Ante un conflicto conserva la copia remota pendiente hasta una resolución explícita; ante una red caída deja los cambios locales intactos para el próximo intento. La primera subida exige exportar un backup y confirmar esa copia local.

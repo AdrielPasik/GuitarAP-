@@ -1,6 +1,7 @@
 import { NavLink, Outlet } from 'react-router-dom';
 import { ThemeToggle } from '@/features/theme/ThemeToggle';
 import { MetronomeControl } from '@/features/metronome/Metronome';
+import { configuredSupabase } from '@/features/sync/supabase-auth';
 
 const navigation = [
   { to: '/biblioteca', label: 'Biblioteca', shortcut: 'B' },
@@ -8,6 +9,7 @@ const navigation = [
 ];
 
 export function AppShell() {
+  const cloudLabel = configuredSupabase() ? 'Sincronización disponible en Configuración' : 'Guardado local · sin nube configurada';
   return (
     <div className="min-h-screen bg-[#f5f7f8] text-slate-800 transition-colors dark:bg-[#11181e] dark:text-slate-100">
       <header className="sticky top-0 z-10 flex h-14 items-center justify-between border-b border-slate-200 bg-white/90 px-4 backdrop-blur dark:border-white/10 dark:bg-[#182229]/90 sm:px-6">
@@ -20,7 +22,7 @@ export function AppShell() {
         <div className="flex items-center gap-2">
           <MetronomeControl />
           <span className="hidden text-sm text-slate-500 dark:text-slate-400 sm:inline">
-            Guardado local · sin nube configurada
+            {cloudLabel}
           </span>
           <ThemeToggle />
         </div>
