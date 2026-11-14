@@ -1,6 +1,12 @@
 import type { LinkedTechnique, TabColumn, TabTechniqueLink, TablatureContent, Technique } from '@/core/model';
+import { tuningPitch } from '@/core/music';
 
 export type TabClipboard = { columns: TabColumn[]; links: TabTechniqueLink[] };
+
+function absolutePitch(tuning: string, fret: number) {
+  const octave = Number(tuning.match(/(-?\d+)$/)?.[1] ?? 0);
+  return octave * 12 + tuningPitch(tuning) + fret;
+}
 
 export function blankColumn(): TabColumn { return { id: crypto.randomUUID(), cells: Array.from({ length: 6 }, () => ({})) }; }
 export function insertColumn(tab: TablatureContent, index: number) { return { ...tab, columns: [...tab.columns.slice(0, index + 1), blankColumn(), ...tab.columns.slice(index + 1)] }; }
@@ -31,9 +37,9 @@ export function pasteTabFragment(tab: TablatureContent, at: number, fragment: Ta
 export function linkTechnique(tab: TablatureContent, from: { column: number; string: number }, to: { column: number; string: number }, technique: LinkedTechnique) {
   const source = tab.columns[from.column]; const destination = tab.columns[to.column];
   if (!source || !destination || source.cells[from.string]?.fret === undefined || destination.cells[to.string]?.fret === undefined || (source.id === destination.id && from.string === to.string)) return tab;
-  const sourceFret = source.cells[from.string].fret!; const destinationFret = destination.cells[to.string].fret!;
-  if ((technique === 'hammer-on' || technique === 'slide-up') && destinationFret <= sourceFret) return tab;
-  if ((technique === 'pull-off' || technique === 'slide-down') && destinationFret >= sourceFret) return tab;
+  const sourcePitch = absolutePitch(tab.tuning[from.string], source.cells[from.string].fret!); const destinationPitch = absolutePitch(tab.tuning[to.string], destination.cells[to.string].fret!);
+  if ((technique === 'hammer-on' || technique === 'slide-up') && destinationPitch <= sourcePitch) return tab;
+  if ((technique === 'pull-off' || technique === 'slide-down') && destinationPitch >= sourcePitch) return tab;
   const same = (tab.techniqueLinks ?? []).find((link) => link.from.columnId === source.id && link.from.string === from.string && link.to.columnId === destination.id && link.to.string === to.string && link.technique === technique);
   if (same) return { ...tab, techniqueLinks: (tab.techniqueLinks ?? []).filter((link) => link.id !== same.id) };
   return { ...tab, techniqueLinks: [...(tab.techniqueLinks ?? []), { id: crypto.randomUUID(), technique, from: { columnId: source.id, string: from.string }, to: { columnId: destination.id, string: to.string } }] };

@@ -17,6 +17,10 @@ describe('tablature operations', () => {
     expect(linkTechnique(tab, { column: 0, string: 0 }, { column: 1, string: 0 }, 'slide-up').techniqueLinks).toEqual([]);
     expect(linkTechnique(tab, { column: 0, string: 0 }, { column: 1, string: 0 }, 'hammer-on').techniqueLinks).toEqual([]);
   });
+  it('uses the actual pitch when a link crosses strings', () => {
+    let tab = setFret(createTablatureContent(), 0, 1, 0); tab = setFret(tab, 1, 0, 0);
+    expect(linkTechnique(tab, { column: 0, string: 1 }, { column: 1, string: 0 }, 'hammer-on').techniqueLinks).toHaveLength(1);
+  });
   it('remaps both endpoints when copying a fragment', () => {
     let tab = setFret(createTablatureContent(), 0, 0, 5); tab = setFret(tab, 1, 0, 7); tab = linkTechnique(tab, { column: 0, string: 0 }, { column: 1, string: 0 }, 'hammer-on');
     const pasted = pasteTabFragment(tab, 2, copyTabFragment(tab, 0, 1)); const link = pasted.techniqueLinks?.[1];
