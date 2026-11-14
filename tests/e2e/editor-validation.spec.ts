@@ -29,7 +29,7 @@ function tablatureSeed(): SeedDocument {
       return {};
     }),
   }));
-  return { id: 'validation-tab', nodeId: null, type: 'tablature', title: 'Validación · 200 columnas', content: { tuning: ['E4', 'B3', 'G3', 'D3', 'A2', 'E2'], columns, zoom: 1, wrapAfter: 24, annotations: [] }, rev: 1, createdAt: 1, updatedAt: 1 };
+  return { id: 'validation-tab', nodeId: null, type: 'tablature', title: 'Validación · 200 columnas', content: { tuning: ['E4', 'B3', 'G3', 'D3', 'A2', 'E2'], columns, zoom: 1, wrapAfter: 24, annotations: [], techniqueLinks: [{ id: 'cross-system-slide', technique: 'slide-up', from: { columnId: 'column-15', string: 0 }, to: { columnId: 'column-16', string: 0 } }] }, rev: 1, createdAt: 1, updatedAt: 1 };
 }
 
 test('validates 200-column tablature reflow, navigation, history and persistence', async ({ page }, testInfo) => {
@@ -41,6 +41,7 @@ test('validates 200-column tablature reflow, navigation, history and persistence
   await expect(page.getByRole('textbox', { name: 'Cuerda 6, columna 1', exact: true })).toHaveValue('12');
   await expect(page.getByRole('textbox', { name: 'Cuerda 5, columna 1', exact: true })).toHaveValue('10');
   await expect(page.locator('.technique-mark')).toHaveCount(2);
+  await expect(page.getByTestId('tech-link-cross-system-slide')).toContainText('/→17');
   await page.getByRole('textbox', { name: 'Cuerda 6, columna 16', exact: true }).focus();
   await page.keyboard.press('ArrowRight');
   await expect(page.getByRole('textbox', { name: 'Cuerda 6, columna 17', exact: true })).toBeFocused();
@@ -84,16 +85,20 @@ test('validates three C-major positions, labels, isolation and persistence', asy
   await page.getByTestId('fret-3-10').click();
   await page.getByText('Posición 2', { exact: true }).click();
   await page.getByTestId('fret-4-7').click();
-  await expect(page.getByTestId('fret-4-7').locator('circle')).toHaveAttribute('fill', 'transparent');
+  await expect(page.getByTestId('fret-4-7').locator('[data-note-marker]')).toHaveAttribute('fill', 'transparent');
   await page.getByText('Posición 1', { exact: true }).click();
   await expect(page.getByTestId('fret-1-5')).toContainText('E');
+  const noteX = await page.getByTestId('fret-0-8').locator('[data-note-marker]').getAttribute('cx');
+  const fretWireX = await page.getByTestId('fretwire-8').getAttribute('x1');
+  expect(Number(noteX)).toBeLessThan(Number(fretWireX));
   await page.screenshot({ path: testInfo.outputPath('diapason-do-mayor-individual.png'), fullPage: true });
   await page.getByRole('button', { name: 'Conjunta' }).click();
+  await expect(page.getByTestId('combined-positions').locator('figure')).toHaveCount(3);
   await page.screenshot({ path: testInfo.outputPath('diapason-do-mayor-conjunta.png'), fullPage: true });
   await page.getByRole('button', { name: 'Completa' }).click();
   await page.screenshot({ path: testInfo.outputPath('diapason-do-mayor-completa.png'), fullPage: true });
   await page.waitForTimeout(800);
   await page.reload();
   await page.getByText('Posición 2', { exact: true }).click();
-  await expect(page.getByTestId('fret-4-7').locator('circle')).toHaveAttribute('fill', 'transparent');
+  await expect(page.getByTestId('fret-4-7').locator('[data-note-marker]')).toHaveAttribute('fill', 'transparent');
 });

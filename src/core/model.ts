@@ -18,12 +18,23 @@ export type LibraryNode = {
 
 export type TabCell = { fret?: number; techniques?: Technique[]; annotation?: string };
 export type TabColumn = { id: string; cells: TabCell[]; section?: string; lineBreak?: boolean };
+export type LinkedTechnique = Extract<Technique, 'hammer-on' | 'pull-off' | 'slide-up' | 'slide-down'>;
+/** A musical gesture between two actual notes. Column ids, rather than indexes,
+ * keep it stable while the tablature is reflowed or columns are inserted. */
+export type TabTechniqueLink = {
+  id: string;
+  technique: LinkedTechnique;
+  from: { columnId: string; string: number };
+  to: { columnId: string; string: number };
+};
 export type TablatureContent = {
   tuning: string[];
   columns: TabColumn[];
   zoom: number;
   wrapAfter: number;
   annotations: string[];
+  /** Optional for backwards compatibility with documents saved before links. */
+  techniqueLinks?: TabTechniqueLink[];
 };
 
 export type FretNote = { string: number; fret: number; finger?: 1 | 2 | 3 | 4; root?: boolean };
@@ -70,6 +81,7 @@ export function createTablatureContent(): TablatureContent {
     zoom: 1,
     wrapAfter: 16,
     annotations: [],
+    techniqueLinks: [],
   };
 }
 
