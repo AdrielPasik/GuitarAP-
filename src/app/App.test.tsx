@@ -13,17 +13,17 @@ describe('App', () => {
 
     expect(screen.getByRole('banner')).toHaveTextContent('GuitarAP');
     expect(await screen.findByRole('heading', { name: 'Biblioteca' })).toBeVisible();
-    expect(screen.getByText('Sincronización')).toBeVisible();
-    expect(screen.getByText('Metrónomo')).toBeVisible();
+    expect(screen.getByText('Guardado local · sin nube configurada')).toBeVisible();
+    expect(screen.getByLabelText('BPM')).toBeVisible();
   });
 
-  it('keeps navigation inside the working library until a document is selected', async () => {
+  it('opens practice from the compact primary navigation', async () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole('link', { name: /^Diapasón/ }));
+    await user.click(screen.getByRole('link', { name: /^Práctica/ }));
 
-    expect(await screen.findByRole('heading', { name: 'Biblioteca' })).toBeVisible();
+    expect(await screen.findByRole('heading', { name: 'Modo Práctica' })).toBeVisible();
   });
 
   it('changes theme and persists the preference', async () => {
