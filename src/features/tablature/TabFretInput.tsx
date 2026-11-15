@@ -12,6 +12,7 @@ export function TabFretInput({
   onVisibleFretsChange,
   onAutoAdvanceChange,
   onSelectColumn,
+  onMoveColumn,
   onInput,
 }: {
   content: TablatureContent;
@@ -21,20 +22,46 @@ export function TabFretInput({
   onVisibleFretsChange: (value: number) => void;
   onAutoAdvanceChange: (value: boolean) => void;
   onSelectColumn: (column: number) => void;
+  onMoveColumn: (offset: -1 | 1) => void;
   onInput: (string: number, fret: number) => void;
 }) {
   const activeColumn = content.columns[selected.column];
   const frets = Array.from({ length: visibleFrets + 1 }, (_, fret) => fret);
+  const activeNotes = activeColumn.cells.flatMap((cell, stringIndex) =>
+    cell.fret === undefined
+      ? []
+      : [
+          {
+            stringIndex,
+            fret: cell.fret,
+            tuning: content.tuning[stringIndex].replace(/[0-9]/g, ''),
+          },
+        ],
+  );
+
+  function navigateWithArrows(event: React.KeyboardEvent<HTMLElement>) {
+    if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+    if (event.target instanceof HTMLSelectElement || event.target instanceof HTMLInputElement)
+      return;
+    event.preventDefault();
+    onMoveColumn(event.key === 'ArrowLeft' ? -1 : 1);
+  }
 
   return (
-    <section className="fret-input-panel" aria-label="Entrada visual por mástil">
+    <section
+      className="fret-input-panel"
+      aria-label="Entrada visual por mástil"
+      tabIndex={0}
+      onKeyDown={navigateWithArrows}
+    >
       <div className="fret-input-heading">
         <div>
           <p className="eyebrow">Entrada sobre el instrumento</p>
           <h2>Mástil interactivo</h2>
           <p>
-            Columna {selected.column + 1}: elegí una cuerda y un traste para escribir la nota en la
-            tablatura.
+            Elegí una cuerda y un traste. Todos los clics editan la columna activa hasta que decidas
+            avanzar.
           </p>
         </div>
         <div className="fret-input-options">
@@ -58,8 +85,46 @@ export function TabFretInput({
               checked={autoAdvance}
               onChange={(event) => onAutoAdvanceChange(event.target.checked)}
             />
-            Avanzar una columna tras cada nota
+            Avanzar automáticamente después de cada nota
           </label>
+        </div>
+      </div>
+
+      <div className="active-column-panel" aria-live="polite">
+        <div className="active-column-navigation">
+          <button
+            className="control"
+            disabled={selected.column === 0}
+            onClick={() => onMoveColumn(-1)}
+          >
+            ← Columna anterior
+          </button>
+          <div>
+            <span>Columna activa</span>
+            <strong>{selected.column + 1}</strong>
+            <small>
+              {activeNotes.length} {activeNotes.length === 1 ? 'nota' : 'notas'}
+            </small>
+          </div>
+          <button
+            className="control"
+            disabled={selected.column === content.columns.length - 1}
+            onClick={() => onMoveColumn(1)}
+          >
+            Columna siguiente →
+          </button>
+        </div>
+        <div className="active-column-notes">
+          {activeNotes.length ? (
+            activeNotes.map((note) => (
+              <span key={note.stringIndex}>
+                Cuerda {6 - note.stringIndex} · {note.tuning}
+                {note.fret}
+              </span>
+            ))
+          ) : (
+            <span className="empty">Todavía no hay notas en esta columna.</span>
+          )}
         </div>
       </div>
 
@@ -127,7 +192,7 @@ export function TabFretInput({
       </div>
       <p className="fret-input-hint">
         La cejuela separa las cuerdas al aire del mástil. Los puntos marcan los trastes 3, 5, 7, 9 y
-        sus equivalentes; el doble punto identifica 12 y 24.
+        sus equivalentes; el doble punto identifica 12 y 24. Usá ← y → para cambiar de columna.
       </p>
     </section>
   );

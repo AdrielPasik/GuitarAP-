@@ -123,9 +123,22 @@ export function TablatureEditor({
   function inputFromFretboard(stringIndex: number, fret: number) {
     const alreadyEntered = content.columns[selected.column]?.cells[stringIndex]?.fret === fret;
     changeFret(selected.column, stringIndex, alreadyEntered ? '' : String(fret));
-    if (!alreadyEntered && autoAdvance && selected.column < columns.length - 1)
-      setSelected({ column: selected.column + 1, string: stringIndex });
-    else setSelected({ column: selected.column, string: stringIndex });
+    if (!alreadyEntered && autoAdvance) {
+      setSelected((current) => ({
+        column: Math.min(columns.length - 1, current.column + 1),
+        string: stringIndex,
+      }));
+      return;
+    }
+    setSelected((current) => ({ ...current, string: stringIndex }));
+  }
+
+  function moveActiveColumn(offset: -1 | 1) {
+    setSelected((current) => ({
+      ...current,
+      column: Math.max(0, Math.min(columns.length - 1, current.column + offset)),
+    }));
+    setRangeEnd(null);
   }
   function copySelection() {
     setClipboard(copyTabFragment(content, range.start, range.end));
@@ -373,7 +386,7 @@ export function TablatureEditor({
               {(Object.keys(techniqueLabels) as Technique[]).map((technique) => (
                 <button
                   key={technique}
-                aria-label={technique.replace('-', ' ')}
+                  aria-label={technique.replace('-', ' ')}
                   className={`tool-button ${selectedTechniques.includes(technique) ? 'active' : ''}`}
                   title={techniqueNames[technique]}
                   onClick={() =>
@@ -403,13 +416,13 @@ export function TablatureEditor({
                 className={`control ${linkSource ? 'linking' : ''}`}
                 onClick={() => setLinkSource(linkSource ? null : selected)}
               >
-              {linkSource ? 'Cancelar vínculo' : 'Enlazar desde selección'}
+                {linkSource ? 'Cancelar vínculo' : 'Enlazar desde selección'}
               </button>
             </div>
             <div className="toolbar-group structure-tools">
               <span className="toolbar-label">Estructura</span>
               <button
-              aria-label="Eliminar columna"
+                aria-label="Eliminar columna"
                 className="control"
                 onClick={() => {
                   history.set((current) => removeColumn(current, selected.column));
@@ -422,7 +435,7 @@ export function TablatureEditor({
                 − Columna
               </button>
               <button
-              aria-label="Insertar columna"
+                aria-label="Insertar columna"
                 className="control"
                 onClick={() => history.set((current) => insert(current, selected.column))}
               >
@@ -526,6 +539,7 @@ export function TablatureEditor({
             onVisibleFretsChange={setVisibleFrets}
             onAutoAdvanceChange={setAutoAdvance}
             onSelectColumn={(column) => setSelected((current) => ({ ...current, column }))}
+            onMoveColumn={moveActiveColumn}
             onInput={inputFromFretboard}
           />
         ) : null}
