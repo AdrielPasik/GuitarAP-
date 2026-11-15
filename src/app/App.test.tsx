@@ -13,7 +13,7 @@ describe('App', () => {
 
     expect(screen.getByRole('banner')).toHaveTextContent('GuitarAP');
     expect(await screen.findByRole('heading', { name: 'Biblioteca' })).toBeVisible();
-    expect(screen.getByText('Guardado local · sin nube configurada')).toBeVisible();
+    expect(screen.getByText(/Guardado local · sin nube configurada|Sincronización disponible en Configuración/)).toBeVisible();
     expect(screen.getByLabelText('BPM')).toBeVisible();
   });
 

@@ -40,4 +40,21 @@ describe('LibraryRepository', () => {
     await expect(libraryRepository.importBackup('{"schema":2}', 'replace')).rejects.toThrow('esquema compatible');
     expect(await db.documents.count()).toBe(0);
   });
+
+  it('exports the visible library with folders, documents and recovery versions', async () => {
+    const folder = await libraryRepository.createNode('Escalas', 'folder');
+    const document = await libraryRepository.createDocument('tablature', 'Riff', folder.id);
+    await libraryRepository.saveDocument({ ...document, title: 'Riff guardado' });
+
+    const backup = JSON.parse(await libraryRepository.exportBackup()) as {
+      schema: number;
+      nodes: Array<{ id: string }>;
+      documents: Array<{ id: string }>;
+      versions: Array<{ documentId: string }>;
+    };
+    expect(backup.schema).toBe(1);
+    expect(backup.nodes.map((item) => item.id)).toContain(folder.id);
+    expect(backup.documents.map((item) => item.id)).toContain(document.id);
+    expect(backup.versions.map((item) => item.documentId)).toContain(document.id);
+  });
 });

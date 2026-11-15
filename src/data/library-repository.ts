@@ -1,7 +1,7 @@
 import type { DocumentType, LibraryNode, MusicalDocument } from '@/core/model';
 import { createFretboardContent, createTablatureContent } from '@/core/model';
 import { db } from '@/data/database';
-import { activeOwnerId } from '@/data/library-scope';
+import { activeOwnerId, belongsToOwner, libraryScope } from '@/data/library-scope';
 
 const now = () => Date.now();
 
@@ -83,7 +83,15 @@ export class LibraryRepository {
   }
 
   async exportBackup() {
-    return JSON.stringify({ schema: 1, exportedAt: new Date().toISOString(), nodes: await db.nodes.toArray(), documents: await db.documents.toArray(), versions: await db.versions.toArray() }, null, 2);
+    const scope = await libraryScope();
+    const [nodes, documents, versions] = await Promise.all([db.nodes.toArray(), db.documents.toArray(), db.versions.toArray()]);
+    return JSON.stringify({
+      schema: 1,
+      exportedAt: new Date().toISOString(),
+      nodes: nodes.filter((item) => belongsToOwner(item, scope)),
+      documents: documents.filter((item) => belongsToOwner(item, scope)),
+      versions: versions.filter((item) => belongsToOwner(item, scope)),
+    }, null, 2);
   }
 
   async importBackup(raw: string, mode: 'merge' | 'replace') {

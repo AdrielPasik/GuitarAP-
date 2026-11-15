@@ -1,4 +1,5 @@
 @import 'tailwindcss';
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
 
 @theme {
   --font-sans: Inter, ui-sans-serif, system-ui, sans-serif;
@@ -66,5 +67,5 @@ a:focus-visible {
   outline-offset: 3px;
 }
 
-:root[data-theme='dark'] .library-tree { border-color:#2a3942; }:root[data-theme='dark'] .tree-row:hover,:root[data-theme='dark'] .tree-root:hover { background:#1c2931; }:root[data-theme='dark'] .tree-row.selected,:root[data-theme='dark'] .tree-root.selected { background:#193c49; color:#a9deec; }:root[data-theme='dark'] .search-field,:root[data-theme='dark'] .document-card { background:#182229; border-color:#30404a; }:root[data-theme='dark'] .song-strip { background:#18313b; }:root[data-theme='dark'] .document-open small,:root[data-theme='dark'] .subtle { color:#9eafb9; }:root[data-theme='dark'] .empty-library h2 { color:#d9e5ea; }
+:root[data-theme='dark'] .library-tree { border-color:#2a3942; }:root[data-theme='dark'] .tree-row:hover,:root[data-theme='dark'] .tree-root:hover { background:#1c2931; }:root[data-theme='dark'] .tree-row.selected,:root[data-theme='dark'] .tree-root.selected { background:#193c49; color:#a9deec; }:root[data-theme='dark'] .search-field,:root[data-theme='dark'] .document-card { background:#182229; border-color:#30404a; }:root[data-theme='dark'] .document-card { color:#e8f0f3; }:root[data-theme='dark'] .document-card:hover { border-color:#6495a3; }:root[data-theme='dark'] .document-open { color:#e8f0f3; }:root[data-theme='dark'] .card-actions { border-color:#30404a; }:root[data-theme='dark'] .card-actions button { color:#b9c8cf; }:root[data-theme='dark'] .card-actions .danger { color:#ff9aa8 !important; }:root[data-theme='dark'] .song-strip { background:#18313b; }:root[data-theme='dark'] .document-open small,:root[data-theme='dark'] .subtle { color:#aebdc5; }:root[data-theme='dark'] .empty-library h2 { color:#d9e5ea; }
 @media (max-width: 760px) { .page-heading { align-items:start; flex-direction:column; }.library-grid { grid-template-columns:1fr; }.library-tree { border-right:0; border-bottom:1px solid #d9e1e5; padding:0 0 .75rem; }.tree-row,.tree-root { max-width:24rem; }.content-toolbar { align-items:stretch; flex-direction:column; }.song-strip { align-items:start; flex-wrap:wrap; }.song-strip .control { margin-left:0; } }
