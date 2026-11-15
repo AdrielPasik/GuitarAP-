@@ -36,7 +36,7 @@ export function PracticeScreen() {
     </div>
   ) : (
     <p className="rounded-xl border border-dashed border-stone-300 p-10 text-center text-sm text-stone-500">
-      Creá una tablatura o un diapasón desde Biblioteca para practicarlo aquí.
+      Creá una tablatura o un mapa de notas desde Biblioteca para practicarlo aquí.
     </p>
   );
   return (
@@ -90,7 +90,7 @@ export function PracticeScreen() {
           >
             {documents.map((document) => (
               <option key={document.id} value={document.id}>
-                {document.type === 'tablature' ? 'Tab' : 'Dia'} · {document.title}
+                {document.type === 'tablature' ? 'Tab' : 'Mapa'} · {document.title}
               </option>
             ))}
           </select>

@@ -13,8 +13,8 @@ test('creates a reflowing tablature and preserves editing in practice mode', asy
   await page.goto('/biblioteca');
   await createMaterial(page, 'tablature', 'Riff con acordes');
   await expect(page.getByLabel('Título de tablatura')).toHaveValue('Riff con acordes');
-  await page.getByRole('textbox', { name: 'Cuerda 6, columna 1', exact: true }).fill('12');
-  await page.getByRole('textbox', { name: 'Cuerda 5, columna 1', exact: true }).fill('10');
+  await page.getByRole('textbox', { name: 'Cuerda 1, columna 1', exact: true }).fill('12');
+  await page.getByRole('textbox', { name: 'Cuerda 2, columna 1', exact: true }).fill('10');
   await page.getByRole('button', { name: /slide up/i }).click();
   await page.getByLabel('Ajuste automático').uncheck();
   await page.getByLabel('Columnas por renglón').selectOption('8');
@@ -29,7 +29,7 @@ test('renders a musical phrase identically in read-only practice after saving', 
   await page.setViewportSize({ width: 1366, height: 768 });
   await page.goto('/biblioteca');
   await createMaterial(page, 'tablature', 'Frases musicales');
-  const cell = (string: number, column: number) => page.getByRole('textbox', { name: `Cuerda ${string}, columna ${column}`, exact: true });
+  const cell = (string: number, column: number) => page.getByRole('textbox', { name: `Cuerda ${7 - string}, columna ${column}`, exact: true });
   await cell(6, 1).fill('5'); await cell(5, 1).fill('3'); await cell(4, 1).fill('2');
   await cell(6, 2).fill('7'); await cell(5, 2).fill('5'); await cell(4, 2).fill('4');
   await cell(6, 3).fill('8'); await cell(5, 3).fill('6'); await cell(4, 3).fill('5');
@@ -52,8 +52,10 @@ test('renders a musical phrase identically in read-only practice after saving', 
   await page.getByRole('button', { name: 'Rehacer' }).click(); await expect(page.locator('.linked-technique.outgoing')).toContainText('/→9');
   await page.getByLabel('Anotación').fill('Verso'); await page.getByRole('button', { name: 'Añadir sección' }).click();
   await expect(page.locator('.section-mark')).toHaveCount(1);
+  await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: testInfo.outputPath('tablatura-frase-musical-clara.png'), fullPage: true });
   await page.getByRole('button', { name: 'Activar modo oscuro' }).click();
+  await page.waitForTimeout(350);
   await page.screenshot({ path: testInfo.outputPath('tablatura-frase-musical-oscura.png'), fullPage: true });
   await page.getByRole('button', { name: 'Activar modo claro' }).click();
   await page.waitForTimeout(900);
@@ -65,6 +67,7 @@ test('renders a musical phrase identically in read-only practice after saving', 
   await page.screenshot({ path: testInfo.outputPath('practica-frases-clara.png'), fullPage: true });
   await page.getByRole('button', { name: 'Salir foco' }).click();
   await page.getByRole('button', { name: 'Activar modo oscuro' }).click();
+  await page.waitForTimeout(350);
   await page.screenshot({ path: testInfo.outputPath('practica-frases-oscura.png'), fullPage: true });
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Modo Práctica' })).toBeVisible(); await expect(cell(6, 1)).toHaveValue('5');
@@ -89,6 +92,7 @@ test('edits three fretboard positions and captures all views', async ({ page }, 
   await page.getByRole('button', { name: 'Completa' }).click();
   await page.screenshot({ path: testInfo.outputPath('diapason-completa.png'), fullPage: true });
   await page.getByRole('button', { name: 'Activar modo oscuro' }).click();
+  await page.waitForTimeout(350);
   await page.screenshot({ path: testInfo.outputPath('diapason-completa-oscura.png'), fullPage: true });
 });
 

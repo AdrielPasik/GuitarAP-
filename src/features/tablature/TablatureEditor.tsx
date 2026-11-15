@@ -184,6 +184,11 @@ export function TablatureEditor({
       history.set((current) => pasteTabFragment(current, column, clipboard));
       return;
     }
+    if (event.key === 'Backspace' || event.key === 'Delete') {
+      event.preventDefault();
+      changeFret(column, string, '');
+      return;
+    }
     const direction =
       event.key === 'ArrowRight'
         ? { column: Math.min(columns.length - 1, column + 1), string }
@@ -222,7 +227,7 @@ export function TablatureEditor({
             <div key={`${tuning}-${systemIndex}`} className="contents">
               <div className="tab-string-name">
                 <span>{tuning.replace(/[0-9]/g, '')}</span>
-                <small>{6 - stringIndex}</small>
+                <small>{stringIndex + 1}</small>
               </div>
               {system.columns.map((column, localIndex) => {
                 const columnIndex = system.start + localIndex;
@@ -243,7 +248,7 @@ export function TablatureEditor({
                   >
                     <input
                       id={`tab-cell-${columnIndex}-${stringIndex}`}
-                      aria-label={`Cuerda ${6 - stringIndex}, columna ${columnIndex + 1}`}
+                      aria-label={`Cuerda ${stringIndex + 1}, columna ${columnIndex + 1}`}
                       readOnly={readOnly}
                       value={cell.fret ?? ''}
                       inputMode="numeric"
@@ -307,7 +312,7 @@ export function TablatureEditor({
           <p>
             {readOnly
               ? 'Lectura enfocada del arreglo'
-              : `Columna ${selected.column + 1} · cuerda ${6 - selected.string} · guardado automático local`}
+              : `Paso ${selected.column + 1} · cuerda ${selected.string + 1} · guardado automático local`}
           </p>
         </div>
         <div className="editor-primary-actions">
@@ -354,14 +359,14 @@ export function TablatureEditor({
                   <small>tiempo y técnicas</small>
                 </button>
                 <button
-                  aria-label="Mástil"
+                  aria-label="Entrada por mástil"
                   className={editorMode === 'fretboard' ? 'active' : ''}
                   aria-pressed={editorMode === 'fretboard'}
                   onClick={() => setEditorMode('fretboard')}
                 >
                   <span>⌁</span>
-                  <strong>Mástil</strong>
-                  <small>entrada visual</small>
+                  <strong>Entrada por mástil</strong>
+                  <small>secuencia temporal</small>
                 </button>
                 <button
                   aria-label="Combinada"
@@ -376,8 +381,8 @@ export function TablatureEditor({
               </div>
             </div>
             <p>
-              Las tres vistas editan el mismo documento. Cambiar de modo no duplica ni transforma
-              las notas.
+              Este mástil escribe una secuencia temporal. Para estudiar una escala sin orden, creá
+              un Mapa de notas desde Biblioteca.
             </p>
           </div>
           <div className="editor-toolbar">
@@ -422,7 +427,7 @@ export function TablatureEditor({
             <div className="toolbar-group structure-tools">
               <span className="toolbar-label">Estructura</span>
               <button
-                aria-label="Eliminar columna"
+                aria-label="Eliminar paso"
                 className="control"
                 onClick={() => {
                   history.set((current) => removeColumn(current, selected.column));
@@ -432,14 +437,14 @@ export function TablatureEditor({
                   }));
                 }}
               >
-                − Columna
+                − Paso
               </button>
               <button
-                aria-label="Insertar columna"
+                aria-label="Insertar paso"
                 className="control"
                 onClick={() => history.set((current) => insert(current, selected.column))}
               >
-                + Columna
+                + Paso
               </button>
               <button className="control" onClick={copySelection}>
                 Copiar{range.start !== range.end ? ` ${range.end - range.start + 1}` : ''}
@@ -560,7 +565,7 @@ export function TablatureEditor({
             />
           </div>
           <button aria-label="Añadir sección" className="control-primary" onClick={addAnnotation}>
-            Marcar columna {selected.column + 1}
+            Anotar paso {selected.column + 1}
           </button>
           <p>Shift+clic selecciona un fragmento · Flechas navegan · Ctrl/Cmd+Z deshace</p>
         </div>

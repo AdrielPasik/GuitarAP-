@@ -23,11 +23,13 @@ async function createLibraryWithHistory(page: Page) {
   await dialog.getByLabel('Tipo').selectOption('tablature');
   await dialog.getByLabel('Nombre').fill('Documento con historial');
   await dialog.getByRole('button', { name: 'Crear' }).click();
-  await page.getByRole('textbox', { name: 'Cuerda 6, columna 1', exact: true }).fill('12');
+  await page.getByRole('textbox', { name: 'Cuerda 1, columna 1', exact: true }).fill('12');
   await page.waitForTimeout(900);
 }
 
-test('downloads valid backups and links only after explicit confirmation', async ({ page }, testInfo) => {
+test('downloads valid backups and links only after explicit confirmation', async ({
+  page,
+}, testInfo) => {
   await page.route('**/auth/v1/**', async (route) => {
     await route.fulfill({
       status: 200,
@@ -68,6 +70,10 @@ test('downloads valid backups and links only after explicit confirmation', async
   expect(secondBackup.nodes).toHaveLength(1);
   expect(secondBackup.documents).toHaveLength(1);
   expect(secondBackup.versions.length).toBeGreaterThanOrEqual(1);
+  await page.screenshot({
+    path: testInfo.outputPath('configuracion-backup-sincronizacion.png'),
+    fullPage: true,
+  });
 
   await page.goto('/biblioteca');
   await page.getByRole('button', { name: 'Activar modo oscuro' }).click();
@@ -82,5 +88,8 @@ test('downloads valid backups and links only after explicit confirmation', async
   });
   expect(colors.background).not.toBe('rgb(255, 255, 255)');
   expect(colors.background).not.toBe(colors.text);
-  await page.screenshot({ path: testInfo.outputPath('biblioteca-oscura-contraste.png'), fullPage: true });
+  await page.screenshot({
+    path: testInfo.outputPath('biblioteca-oscura-contraste.png'),
+    fullPage: true,
+  });
 });

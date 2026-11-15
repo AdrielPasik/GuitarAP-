@@ -3,14 +3,18 @@ import type { FretNote, FretPosition, FretboardContent, MusicalDocument } from '
 import { noteName, SCALE_PATTERNS, tuningPitch, type ScaleName } from '@/core/music';
 import { libraryRepository } from '@/data/library-repository';
 import { exportPdf, exportPng } from '@/features/export/export-document';
+import {
+  duplicateSpatialPosition,
+  removeSpatialPosition,
+  toggleSpatialNote,
+  uniqueSpatialNotes,
+} from '@/features/fretboard/operations';
 
 type View = 'position' | 'combined' | 'complete';
 type LabelMode = 'theory' | 'finger' | 'none';
 const positionColors = ['#f2ecd9', '#d8e8bd', '#e4cff0', '#f5d1bc'];
+const intervalNames = ['1', '♭2', '2', '♭3', '3', '4', '♭5', '5', '♭6', '6', '♭7', '7'];
 const noteKey = (note: Pick<FretNote, 'string' | 'fret'>) => `${note.string}:${note.fret}`;
-function uniqueNotes(notes: FretNote[]) {
-  return [...new Map(notes.map((note) => [noteKey(note), note])).values()];
-}
 function ownersFor(positions: FretPosition[]) {
   const owners = new Map<string, FretPosition[]>();
   positions.forEach((position) =>
@@ -63,7 +67,8 @@ function FretboardDiagram({
           role="img"
           aria-label={heading ? `Diapasón: ${heading}` : 'Diapasón interactivo'}
           viewBox={`0 0 ${width} 270`}
-          className="min-w-[740px] w-full"
+          className="w-full"
+          style={{ minWidth: `${Math.max(520, content.maxFret * 48)}px` }}
         >
           <rect x="0" y="0" width={width} height="270" rx="8" fill="#26352f" />
           <rect x={nutX} y="22" width={content.maxFret * scale} height="216" fill="#31443a" />
@@ -91,10 +96,10 @@ function FretboardDiagram({
               <text x={noteX(fret)} y="258" textAnchor="middle" fontSize="10" fill="#d9e6db">
                 {fret}
               </text>
-              {[3, 5, 7, 9, 15].includes(fret) && (
+              {[3, 5, 7, 9, 15, 17, 19, 21].includes(fret) && (
                 <circle cx={noteX(fret)} cy="130" r="3" fill="#789184" />
               )}
-              {fret === 12 && (
+              {(fret === 12 || fret === 24) && (
                 <>
                   <circle cx={noteX(fret)} cy="93" r="3" fill="#789184" />
                   <circle cx={noteX(fret)} cy="167" r="3" fill="#789184" />
@@ -123,10 +128,9 @@ function FretboardDiagram({
                 const marked = positionFor(string, fret);
                 const itemOwners = owners.get(`${string}:${fret}`) ?? [];
                 const root = pitch === content.root;
-                const theory =
-                  content.notation === 'notes'
-                    ? noteName(pitch, 0, content.latin)
-                    : String((pitch - content.root + 12) % 12);
+                const musicalNote = noteName(pitch, 0, content.latin);
+                const interval = intervalNames[(pitch - content.root + 12) % 12];
+                const theory = content.notation === 'notes' ? musicalNote : interval;
                 const label =
                   labelMode === 'none'
                     ? ''
@@ -148,12 +152,12 @@ function FretboardDiagram({
                     key={fret}
                     data-testid={`fret-${string}-${fret}`}
                     data-owners={itemOwners.map((item) => item.name).join(', ')}
-                    aria-label={`Cuerda ${6 - string}, traste ${fret}: ${theory}`}
+                    aria-label={`Cuerda ${string + 1}, traste ${fret}: ${musicalNote}, intervalo ${interval}`}
                     onClick={() => editable && onToggle?.(string, fret)}
                     className={editable ? 'cursor-pointer' : ''}
                   >
                     <title>
-                      Cuerda {6 - string}, traste {fret}: {theory}
+                      Cuerda {string + 1}, traste {fret}: {musicalNote} · intervalo {interval}
                       {itemOwners.length
                         ? ` · ${itemOwners.map((owner) => owner.name).join(', ')}`
                         : ''}
@@ -218,7 +222,7 @@ export function FretboardEditor({
     content.positions[0];
   const owners = useMemo(() => ownersFor(content.positions), [content.positions]);
   const completeNotes = useMemo(
-    () => uniqueNotes(content.positions.flatMap((item) => item.notes)),
+    () => uniqueSpatialNotes(content.positions.flatMap((item) => item.notes)),
     [content.positions],
   );
   function selectPosition(id: string, open = false) {
@@ -226,37 +230,7 @@ export function FretboardEditor({
     if (open) setView('position');
   }
   function toggle(string: number, fret: number) {
-    setContent((current) => {
-      const currentPosition = current.positions.find(
-        (item) => item.id === current.selectedPositionId,
-      );
-      if (!currentPosition) return current;
-      const present = currentPosition.notes.find(
-        (note) => note.string === string && note.fret === fret,
-      );
-      const notes = present
-        ? currentPosition.notes.filter((note) => note !== present)
-        : [
-            ...currentPosition.notes,
-            {
-              string,
-              fret,
-              finger,
-              root: (tuningPitch(current.tuning[string]) + fret) % 12 === current.root,
-            },
-          ];
-      return {
-        ...current,
-        positions: current.positions.map((item) =>
-          item.id === currentPosition.id ? { ...item, notes } : item,
-        ),
-        baseNotes: uniqueNotes(
-          current.positions.flatMap((item) =>
-            item.id === currentPosition.id ? notes : item.notes,
-          ),
-        ),
-      };
-    });
+    setContent((current) => toggleSpatialNote(current, string, fret, finger));
   }
   function generateScale(name: ScaleName) {
     const intervals = SCALE_PATTERNS[name];
@@ -272,7 +246,7 @@ export function FretboardEditor({
         positions: current.positions.map((item) =>
           item.id === position.id ? { ...item, notes } : item,
         ),
-        baseNotes: uniqueNotes(
+        baseNotes: uniqueSpatialNotes(
           current.positions.flatMap((item) => (item.id === position.id ? notes : item.notes)),
         ),
       }));
@@ -290,6 +264,14 @@ export function FretboardEditor({
     }));
     setView('position');
   }
+  function duplicatePosition() {
+    setContent((current) => duplicateSpatialPosition(current, position.id));
+  }
+  function deletePosition() {
+    if (content.positions.length <= 1) return;
+    if (window.confirm(`¿Eliminar ${position.name}? Las demás posiciones no se modificarán.`))
+      setContent((current) => removeSpatialPosition(current, position.id));
+  }
   const diagram = (
     <FretboardDiagram
       content={content}
@@ -306,7 +288,7 @@ export function FretboardEditor({
     <section className="fretboard-editor-shell">
       <div className="editor-document-header">
         <div className="editor-title-block">
-          <span className="document-type-label">DIAPASÓN · mapa armónico</span>
+          <span className="document-type-label">MAPA DE NOTAS · sin secuencia temporal</span>
           <input
             aria-label="Título del diapasón"
             readOnly={readOnly}
@@ -316,7 +298,7 @@ export function FretboardEditor({
           <p>
             {readOnly
               ? 'Lectura enfocada del diagrama'
-              : `${position.name} · guardado automático local`}
+              : `${position.name} · marcado libre · guardado automático local`}
           </p>
         </div>
         <div className="editor-primary-actions">
@@ -359,7 +341,7 @@ export function FretboardEditor({
               setContent((current) => ({ ...current, maxFret: Number(event.target.value) }))
             }
           >
-            {[12, 15, 18, 21, 24].map((fret) => (
+            {[5, 12, 15, 18, 21, 24].map((fret) => (
               <option key={fret} value={fret}>
                 {fret} trastes
               </option>
@@ -457,7 +439,7 @@ export function FretboardEditor({
         </div>
       </div>
       {!readOnly && view === 'position' && (
-        <div className="mt-3 flex gap-2">
+        <div className="position-editor-bar">
           <input
             aria-label="Nombre de posición"
             className="control min-w-48"
@@ -485,6 +467,16 @@ export function FretboardEditor({
               }))
             }
           />
+          <button className="control" onClick={duplicatePosition}>
+            Duplicar posición
+          </button>
+          <button
+            className="control danger"
+            disabled={content.positions.length <= 1}
+            onClick={deletePosition}
+          >
+            Eliminar posición
+          </button>
         </div>
       )}
       <div ref={exportRef} className="mt-6">

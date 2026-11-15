@@ -25,7 +25,7 @@ test('edits one tablature through sequential, fretboard and combined views', asy
     fullPage: true,
   });
 
-  await page.getByRole('button', { name: 'Mástil' }).click();
+  await page.getByRole('button', { name: 'Entrada por mástil' }).click();
   await expect(page.getByRole('heading', { name: 'Mástil interactivo' })).toBeVisible();
   await page.getByLabel('Trastes visibles').selectOption('24');
   await expect(page.getByTestId('tab-fret-0-24')).toBeVisible();
@@ -40,19 +40,17 @@ test('edits one tablature through sequential, fretboard and combined views', asy
   await expect(page.getByTestId('tab-fret-0-5')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByTestId('tab-fret-1-3')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByTestId('tab-fret-2-2')).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.getByRole('button', { name: 'Seleccionar columna 1', exact: true })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  );
+  await expect(
+    page.getByRole('button', { name: 'Seleccionar paso 1', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByText('3 notas', { exact: true })).toBeVisible();
 
   // Eliminar y volver a agregar una nota no cambia la columna activa.
   await page.getByTestId('tab-fret-1-3').click();
   await expect(page.getByTestId('tab-fret-1-3')).toHaveAttribute('aria-pressed', 'false');
-  await expect(page.getByRole('button', { name: 'Seleccionar columna 1', exact: true })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  );
+  await expect(
+    page.getByRole('button', { name: 'Seleccionar paso 1', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'true');
   await page.getByTestId('tab-fret-1-3').click();
   await page.screenshot({
     path: testInfo.outputPath('editor-mastil-entrada-real.png'),
@@ -60,50 +58,45 @@ test('edits one tablature through sequential, fretboard and combined views', asy
   });
 
   // Navegación explícita y por teclado.
-  await page.getByRole('button', { name: 'Columna siguiente' }).click();
-  await expect(page.getByRole('button', { name: 'Seleccionar columna 2', exact: true })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  );
+  await page.getByRole('button', { name: 'Paso siguiente' }).click();
+  await expect(
+    page.getByRole('button', { name: 'Seleccionar paso 2', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'true');
   const fretPanel = page.getByRole('region', { name: 'Entrada visual por mástil' });
   await fretPanel.focus();
   await page.keyboard.press('ArrowLeft');
-  await expect(page.getByRole('button', { name: 'Seleccionar columna 1', exact: true })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  );
-  await page.getByRole('button', { name: 'Columna siguiente' }).click();
+  await expect(
+    page.getByRole('button', { name: 'Seleccionar paso 1', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: 'Paso siguiente' }).click();
 
   // Una melodía: cada nota ingresada avanza exactamente una columna.
   await autoAdvance.check();
   await page.getByTestId('tab-fret-0-7').click();
-  await expect(page.getByRole('button', { name: 'Seleccionar columna 3', exact: true })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  );
+  await expect(
+    page.getByRole('button', { name: 'Seleccionar paso 3', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'true');
   await page.getByTestId('tab-fret-1-8').click();
-  await expect(page.getByRole('button', { name: 'Seleccionar columna 4', exact: true })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  );
+  await expect(
+    page.getByRole('button', { name: 'Seleccionar paso 4', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'true');
   await page.getByRole('button', { name: 'Combinada' }).click();
-  await expect(page.getByRole('button', { name: 'Seleccionar columna 4', exact: true })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  );
-  await expect(page.getByRole('textbox', { name: 'Cuerda 6, columna 1', exact: true })).toHaveValue(
+  await expect(
+    page.getByRole('button', { name: 'Seleccionar paso 4', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('textbox', { name: 'Cuerda 1, columna 1', exact: true })).toHaveValue(
     '5',
   );
-  await expect(page.getByRole('textbox', { name: 'Cuerda 5, columna 1', exact: true })).toHaveValue(
+  await expect(page.getByRole('textbox', { name: 'Cuerda 2, columna 1', exact: true })).toHaveValue(
     '3',
   );
-  await expect(page.getByRole('textbox', { name: 'Cuerda 4, columna 1', exact: true })).toHaveValue(
+  await expect(page.getByRole('textbox', { name: 'Cuerda 3, columna 1', exact: true })).toHaveValue(
     '2',
   );
-  await expect(page.getByRole('textbox', { name: 'Cuerda 6, columna 2', exact: true })).toHaveValue(
+  await expect(page.getByRole('textbox', { name: 'Cuerda 1, columna 2', exact: true })).toHaveValue(
     '7',
   );
-  await expect(page.getByRole('textbox', { name: 'Cuerda 5, columna 3', exact: true })).toHaveValue(
+  await expect(page.getByRole('textbox', { name: 'Cuerda 2, columna 3', exact: true })).toHaveValue(
     '8',
   );
   await page.screenshot({
@@ -113,13 +106,13 @@ test('edits one tablature through sequential, fretboard and combined views', asy
 
   await page.waitForTimeout(850);
   await page.reload();
-  await expect(page.getByRole('textbox', { name: 'Cuerda 6, columna 1', exact: true })).toHaveValue(
+  await expect(page.getByRole('textbox', { name: 'Cuerda 1, columna 1', exact: true })).toHaveValue(
     '5',
   );
-  await expect(page.getByRole('textbox', { name: 'Cuerda 6, columna 2', exact: true })).toHaveValue(
+  await expect(page.getByRole('textbox', { name: 'Cuerda 1, columna 2', exact: true })).toHaveValue(
     '7',
   );
-  await expect(page.getByRole('textbox', { name: 'Cuerda 5, columna 3', exact: true })).toHaveValue(
+  await expect(page.getByRole('textbox', { name: 'Cuerda 2, columna 3', exact: true })).toHaveValue(
     '8',
   );
   await page.getByRole('link', { name: /Biblioteca/ }).click();

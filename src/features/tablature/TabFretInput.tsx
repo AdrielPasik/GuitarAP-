@@ -60,7 +60,7 @@ export function TabFretInput({
           <p className="eyebrow">Entrada sobre el instrumento</p>
           <h2>Mástil interactivo</h2>
           <p>
-            Elegí una cuerda y un traste. Todos los clics editan la columna activa hasta que decidas
+            Elegí una cuerda y un traste. Todos los clics editan el paso activo hasta que decidas
             avanzar.
           </p>
         </div>
@@ -97,10 +97,10 @@ export function TabFretInput({
             disabled={selected.column === 0}
             onClick={() => onMoveColumn(-1)}
           >
-            ← Columna anterior
+            ← Paso anterior
           </button>
           <div>
-            <span>Columna activa</span>
+            <span>Paso actual</span>
             <strong>{selected.column + 1}</strong>
             <small>
               {activeNotes.length} {activeNotes.length === 1 ? 'nota' : 'notas'}
@@ -111,19 +111,19 @@ export function TabFretInput({
             disabled={selected.column === content.columns.length - 1}
             onClick={() => onMoveColumn(1)}
           >
-            Columna siguiente →
+            Paso siguiente →
           </button>
         </div>
         <div className="active-column-notes">
           {activeNotes.length ? (
             activeNotes.map((note) => (
               <span key={note.stringIndex}>
-                Cuerda {6 - note.stringIndex} · {note.tuning}
+                Cuerda {note.stringIndex + 1} · {note.tuning}
                 {note.fret}
               </span>
             ))
           ) : (
-            <span className="empty">Todavía no hay notas en esta columna.</span>
+            <span className="empty">Todavía no hay notas en este paso.</span>
           )}
         </div>
       </div>
@@ -135,7 +135,7 @@ export function TabFretInput({
             <button
               key={column.id}
               className={index === selected.column ? 'active' : ''}
-              aria-label={`Seleccionar columna ${index + 1}`}
+              aria-label={`Seleccionar paso ${index + 1}`}
               aria-pressed={index === selected.column}
               onClick={() => onSelectColumn(index)}
             >
@@ -172,7 +172,7 @@ export function TabFretInput({
                   type="button"
                   data-testid={`tab-fret-${stringIndex}-${fret}`}
                   className={`fret-position ${fret === 0 ? 'open' : ''} ${entered ? 'entered' : ''} ${selectedPosition ? 'selected' : ''}`}
-                  aria-label={`Cuerda ${6 - stringIndex} (${tuning.replace(/[0-9]/g, '')}), traste ${fret}, columna ${selected.column + 1}`}
+                  aria-label={`Cuerda ${stringIndex + 1} (${tuning.replace(/[0-9]/g, '')}), traste ${fret}, paso ${selected.column + 1}`}
                   aria-pressed={entered}
                   onClick={() => onInput(stringIndex, fret)}
                 >
@@ -192,7 +192,7 @@ export function TabFretInput({
       </div>
       <p className="fret-input-hint">
         La cejuela separa las cuerdas al aire del mástil. Los puntos marcan los trastes 3, 5, 7, 9 y
-        sus equivalentes; el doble punto identifica 12 y 24. Usá ← y → para cambiar de columna.
+        sus equivalentes; el doble punto identifica 12 y 24. Usá ← y → para cambiar de paso.
       </p>
     </section>
   );
