@@ -4,6 +4,9 @@ type SeedDocument = Record<string, unknown>;
 
 async function seedDocument(page: Page, document: SeedDocument) {
   await page.goto('/biblioteca');
+  // Route chunks load asynchronously. Wait until Dexie has opened/upgraded the
+  // database before creating a second raw IndexedDB connection for test data.
+  await expect(page.getByRole('heading', { name: 'Biblioteca' })).toBeVisible();
   await page.evaluate(
     async (value) =>
       new Promise<void>((resolve, reject) => {
