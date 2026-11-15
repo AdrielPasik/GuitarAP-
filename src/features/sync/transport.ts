@@ -1,21 +1,161 @@
 import type { DocumentVersion, LibraryNode, MusicalDocument } from '@/core/model';
-export type RemoteDocument = MusicalDocument & { ownerId: string; lastOpId: string }; export type RemoteNode = LibraryNode & { ownerId: string; lastOpId: string }; export type RemoteVersion = DocumentVersion & { ownerId: string; lastOpId: string };
-export type SyncSnapshot = { documents: MusicalDocument[]; nodes: LibraryNode[]; versions: DocumentVersion[] };
-export type PushResult = { documents: RemoteDocument[]; nodes: RemoteNode[]; versions: RemoteVersion[]; conflicts: Array<RemoteDocument | RemoteNode> };
-export type PullPage = { cursor: string; changes: Array<{ kind: 'document' | 'node' | 'version'; record: RemoteDocument | RemoteNode | RemoteVersion }>; hasMore: boolean };
-export interface SyncTransport { push(ownerId: string, opId: string, snapshot: SyncSnapshot): Promise<PushResult>; pull(ownerId: string, cursor: string, limit: number): Promise<PullPage>; }
+export type RemoteDocument = MusicalDocument & { ownerId: string; lastOpId: string };
+export type RemoteNode = LibraryNode & { ownerId: string; lastOpId: string };
+export type RemoteVersion = DocumentVersion & { ownerId: string; lastOpId: string };
+export type SyncSnapshot = {
+  documents: MusicalDocument[];
+  nodes: LibraryNode[];
+  versions: DocumentVersion[];
+};
+export type PushResult = {
+  documents: RemoteDocument[];
+  nodes: RemoteNode[];
+  versions: RemoteVersion[];
+  conflicts: Array<RemoteDocument | RemoteNode>;
+};
+export type PullPage = {
+  cursor: string;
+  changes: Array<{
+    kind: 'document' | 'node' | 'version';
+    record: RemoteDocument | RemoteNode | RemoteVersion;
+  }>;
+  hasMore: boolean;
+};
+export interface SyncTransport {
+  push(ownerId: string, opId: string, snapshot: SyncSnapshot): Promise<PushResult>;
+  pull(ownerId: string, cursor: string, limit: number): Promise<PullPage>;
+}
+export class SyncTransportError extends Error {
+  constructor(
+    message: string,
+    readonly retryable: boolean,
+    readonly status?: number,
+  ) {
+    super(message);
+    this.name = 'SyncTransportError';
+  }
+}
 const copy = <T>(item: T) => structuredClone(item);
 export class FakeTransport implements SyncTransport {
-  private documents = new Map<string, RemoteDocument>(); private nodes = new Map<string, RemoteNode>(); private versions = new Map<string, RemoteVersion>(); private operations = new Map<string, PushResult>(); private logs = new Map<string, PullPage['changes']>(); private lost = false;
-  loseNextResponse() { this.lost = true; }
-  private log(owner: string, kind: PullPage['changes'][number]['kind'], record: PullPage['changes'][number]['record']) { this.logs.set(owner, [...(this.logs.get(owner) ?? []), { kind, record: copy(record) }]); }
-  async push(ownerId: string, opId: string, snapshot: SyncSnapshot) { const prior = this.operations.get(`${ownerId}:${opId}`); if (prior) return copy(prior); const result: PushResult = { documents: [], nodes: [], versions: [], conflicts: [] };
-    for (const node of snapshot.nodes.sort((a, b) => Number(Boolean(a.parentId)) - Number(Boolean(b.parentId)))) { const current = this.nodes.get(node.id); if (current && current.rev !== (node.rev ?? 1) - 1) result.conflicts.push(copy(current)); else { const next = { ...copy(node), rev: node.rev ?? 1, ownerId, lastOpId: opId }; this.nodes.set(node.id, next); result.nodes.push(next); this.log(ownerId, 'node', next); } }
-    for (const document of snapshot.documents) { const current = this.documents.get(document.id); if (current && current.rev !== document.rev - 1) result.conflicts.push(copy(current)); else { const next = { ...copy(document), ownerId, lastOpId: opId }; this.documents.set(document.id, next); result.documents.push(next); this.log(ownerId, 'document', next); } }
-    for (const version of snapshot.versions) { const current = this.versions.get(version.id); if (current) result.versions.push(copy(current)); else { const next = { ...copy(version), ownerId, lastOpId: opId }; this.versions.set(version.id, next); result.versions.push(next); this.log(ownerId, 'version', next); } }
-    this.operations.set(`${ownerId}:${opId}`, copy(result)); if (this.lost) { this.lost = false; throw new Error('response lost after commit'); } return copy(result); }
-  async pull(ownerId: string, cursor: string, limit: number) { const all = this.logs.get(ownerId) ?? []; const start = Number(cursor) || 0; const changes = all.slice(start, start + limit).map(copy); return { cursor: String(start + changes.length), changes, hasMore: start + changes.length < all.length }; }
+  private documents = new Map<string, RemoteDocument>();
+  private nodes = new Map<string, RemoteNode>();
+  private versions = new Map<string, RemoteVersion>();
+  private operations = new Map<string, PushResult>();
+  private logs = new Map<string, PullPage['changes']>();
+  private lost = false;
+  loseNextResponse() {
+    this.lost = true;
+  }
+  private log(
+    owner: string,
+    kind: PullPage['changes'][number]['kind'],
+    record: PullPage['changes'][number]['record'],
+  ) {
+    this.logs.set(owner, [...(this.logs.get(owner) ?? []), { kind, record: copy(record) }]);
+  }
+  async push(ownerId: string, opId: string, snapshot: SyncSnapshot) {
+    const prior = this.operations.get(`${ownerId}:${opId}`);
+    if (prior) return copy(prior);
+    const result: PushResult = { documents: [], nodes: [], versions: [], conflicts: [] };
+    for (const node of snapshot.nodes.sort(
+      (a, b) => Number(Boolean(a.parentId)) - Number(Boolean(b.parentId)),
+    )) {
+      const current = this.nodes.get(node.id);
+      if (current && current.rev !== (node.rev ?? 1) - 1) result.conflicts.push(copy(current));
+      else {
+        const next = { ...copy(node), rev: node.rev ?? 1, ownerId, lastOpId: opId };
+        this.nodes.set(node.id, next);
+        result.nodes.push(next);
+        this.log(ownerId, 'node', next);
+      }
+    }
+    for (const document of snapshot.documents) {
+      const current = this.documents.get(document.id);
+      if (current && current.rev !== document.rev - 1) result.conflicts.push(copy(current));
+      else {
+        const next = { ...copy(document), ownerId, lastOpId: opId };
+        this.documents.set(document.id, next);
+        result.documents.push(next);
+        this.log(ownerId, 'document', next);
+      }
+    }
+    for (const version of snapshot.versions) {
+      const current = this.versions.get(version.id);
+      if (current) result.versions.push(copy(current));
+      else {
+        const next = { ...copy(version), ownerId, lastOpId: opId };
+        this.versions.set(version.id, next);
+        result.versions.push(next);
+        this.log(ownerId, 'version', next);
+      }
+    }
+    this.operations.set(`${ownerId}:${opId}`, copy(result));
+    if (this.lost) {
+      this.lost = false;
+      throw new Error('response lost after commit');
+    }
+    return copy(result);
+  }
+  async pull(ownerId: string, cursor: string, limit: number) {
+    const all = this.logs.get(ownerId) ?? [];
+    const start = Number(cursor) || 0;
+    const changes = all.slice(start, start + limit).map(copy);
+    return {
+      cursor: String(start + changes.length),
+      changes,
+      hasMore: start + changes.length < all.length,
+    };
+  }
 }
-export class SupabaseTransport implements SyncTransport { constructor(private readonly url: string, private readonly anonKey: string, private readonly accessToken: string) {} private async rpc<T>(method: string, body: unknown): Promise<T> { const response = await fetch(`${this.url.replace(/\/$/, '')}/rest/v1/rpc/${method}`, { method: 'POST', headers: { 'content-type': 'application/json', apikey: this.anonKey, authorization: `Bearer ${this.accessToken}` }, body: JSON.stringify(body) }); if (!response.ok) throw new Error(`Supabase ${method}: ${response.status} ${await response.text()}`); return response.json() as Promise<T>; }
-  async push(ownerId: string, opId: string, snapshot: SyncSnapshot) { return this.rpc<PushResult>('sync_library', { p_owner_id: ownerId, p_op_id: opId, p_snapshot: snapshot }); }
-  async pull(ownerId: string, cursor: string, limit: number) { return this.rpc<PullPage>('pull_library', { p_owner_id: ownerId, p_after: cursor, p_limit: limit }); } }
+export class SupabaseTransport implements SyncTransport {
+  constructor(
+    private readonly url: string,
+    private readonly anonKey: string,
+    private readonly accessToken: string,
+  ) {}
+  private async rpc<T>(method: string, body: unknown): Promise<T> {
+    let response: Response;
+    try {
+      response = await fetch(`${this.url.replace(/\/$/, '')}/rest/v1/rpc/${method}`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          apikey: this.anonKey,
+          authorization: `Bearer ${this.accessToken}`,
+        },
+        body: JSON.stringify(body),
+      });
+    } catch {
+      throw new SyncTransportError(
+        'No se pudo conectar con Supabase. Los cambios permanecen guardados localmente.',
+        true,
+      );
+    }
+    if (!response.ok) {
+      const retryable =
+        response.status === 408 || response.status === 429 || response.status >= 500;
+      throw new SyncTransportError(
+        retryable
+          ? `Supabase no está disponible temporalmente (${response.status}).`
+          : `Supabase rechazó la sincronización (${response.status}). Revisá las migraciones y permisos del proyecto.`,
+        retryable,
+        response.status,
+      );
+    }
+    return response.json() as Promise<T>;
+  }
+  async push(ownerId: string, opId: string, snapshot: SyncSnapshot) {
+    return this.rpc<PushResult>('sync_library', {
+      p_owner_id: ownerId,
+      p_op_id: opId,
+      p_snapshot: snapshot,
+    });
+  }
+  async pull(ownerId: string, cursor: string, limit: number) {
+    return this.rpc<PullPage>('pull_library', {
+      p_owner_id: ownerId,
+      p_after: cursor,
+      p_limit: limit,
+    });
+  }
+}
