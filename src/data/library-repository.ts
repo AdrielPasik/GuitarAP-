@@ -1,26 +1,28 @@
 import type { DocumentType, LibraryNode, MusicalDocument } from '@/core/model';
 import { createFretboardContent, createTablatureContent } from '@/core/model';
 import { db } from '@/data/database';
+import { activeOwnerId } from '@/data/library-scope';
 
 const now = () => Date.now();
 
 export class LibraryRepository {
   async createNode(name: string, kind: LibraryNode['kind'], parentId: string | null = null) {
     const createdAt = now();
-    const node: LibraryNode = { id: crypto.randomUUID(), parentId, kind, name: name.trim() || 'Sin título', order: createdAt, createdAt, updatedAt: createdAt };
+    const node: LibraryNode = { id: crypto.randomUUID(), parentId, kind, name: name.trim() || 'Sin título', order: createdAt, createdAt, updatedAt: createdAt, rev: 1, ownerId: (await activeOwnerId()) ?? undefined };
     await db.nodes.add(node);
     return node;
   }
 
   async updateNode(id: string, change: Partial<Pick<LibraryNode, 'name' | 'parentId' | 'order' | 'song'>>) {
-    await db.nodes.update(id, { ...change, updatedAt: now() });
+    const node = await db.nodes.get(id); if (!node || node.ownerId !== ((await activeOwnerId()) ?? undefined)) return;
+    await db.nodes.update(id, { ...change, rev: (node.rev ?? 1) + 1, updatedAt: now() });
   }
 
   async createDocument(type: DocumentType, title: string, nodeId: string | null = null, songId: string | null = null) {
     const createdAt = now();
     const document: MusicalDocument = {
       id: crypto.randomUUID(), nodeId, songId, type, title: title.trim() || (type === 'tablature' ? 'Nueva tablatura' : 'Nuevo diapasón'),
-      content: type === 'tablature' ? createTablatureContent() : createFretboardContent(), rev: 1, createdAt, updatedAt: createdAt,
+      content: type === 'tablature' ? createTablatureContent() : createFretboardContent(), rev: 1, createdAt, updatedAt: createdAt, ownerId: (await activeOwnerId()) ?? undefined,
     };
     await db.documents.add(document);
     return document;
@@ -30,7 +32,7 @@ export class LibraryRepository {
     await db.transaction('rw', db.documents, db.versions, async () => {
       const current = await db.documents.get(document.id);
       if (!current) throw new Error('El documento no existe.');
-      await db.versions.add({ id: crypto.randomUUID(), documentId: current.id, createdAt: now(), reason, title: current.title, content: structuredClone(current.content) });
+      await db.versions.add({ id: crypto.randomUUID(), documentId: current.id, createdAt: now(), reason, title: current.title, content: structuredClone(current.content), ownerId: current.ownerId });
       await db.documents.put({ ...document, rev: current.rev + 1, updatedAt: now() });
     });
   }
@@ -46,12 +48,12 @@ export class LibraryRepository {
   async duplicateNode(id: string) {
     const source = await db.nodes.get(id);
     if (!source) throw new Error('La carpeta no existe.');
-    const copy: LibraryNode = { ...source, id: crypto.randomUUID(), name: `${source.name} — copia`, createdAt: now(), updatedAt: now(), deletedAt: undefined };
+    const copy: LibraryNode = { ...source, id: crypto.randomUUID(), name: `${source.name} — copia`, createdAt: now(), updatedAt: now(), deletedAt: undefined, rev: 1 };
     await db.nodes.add(copy);
     return copy;
   }
 
-  async moveDocument(id: string, nodeId: string | null) { await db.documents.update(id, { nodeId, updatedAt: now() }); }
+  async moveDocument(id: string, nodeId: string | null) { const current = await db.documents.get(id); if (current) await db.documents.update(id, { nodeId, rev: current.rev + 1, updatedAt: now() }); }
 
   private async descendants(id: string) {
     const result: string[] = [id];
@@ -59,15 +61,15 @@ export class LibraryRepository {
     await visit(id); return result;
   }
 
-  async trashDocument(id: string) { await db.documents.update(id, { deletedAt: now(), updatedAt: now() }); }
-  async restoreDocument(id: string) { await db.documents.update(id, { deletedAt: undefined, updatedAt: now() }); }
+  async trashDocument(id: string) { const current = await db.documents.get(id); if (current) await db.documents.update(id, { deletedAt: now(), rev: current.rev + 1, updatedAt: now() }); }
+  async restoreDocument(id: string) { const current = await db.documents.get(id); if (current) await db.documents.update(id, { deletedAt: undefined, rev: current.rev + 1, updatedAt: now() }); }
   async trashNode(id: string) {
     const ids = await this.descendants(id); const time = now();
-    await db.transaction('rw', db.nodes, db.documents, async () => { await db.nodes.bulkUpdate(ids.map((nodeId) => ({ key: nodeId, changes: { deletedAt: time, updatedAt: time } }))); const documents = await db.documents.where('nodeId').anyOf(ids).toArray(); await db.documents.bulkUpdate(documents.map((document) => ({ key: document.id, changes: { deletedAt: time, updatedAt: time } }))); });
+    await db.transaction('rw', db.nodes, db.documents, async () => { const nodes = await db.nodes.bulkGet(ids); await db.nodes.bulkPut(nodes.filter(Boolean).map((node) => ({ ...node!, deletedAt: time, updatedAt: time, rev: (node!.rev ?? 1) + 1 }))); const documents = await db.documents.where('nodeId').anyOf(ids).toArray(); await db.documents.bulkPut(documents.map((document) => ({ ...document, deletedAt: time, updatedAt: time, rev: document.rev + 1 }))); });
   }
   async restoreNode(id: string) {
     const ids = await this.descendants(id); const time = now();
-    await db.transaction('rw', db.nodes, db.documents, async () => { await db.nodes.bulkUpdate(ids.map((nodeId) => ({ key: nodeId, changes: { deletedAt: undefined, updatedAt: time } }))); const documents = await db.documents.where('nodeId').anyOf(ids).toArray(); await db.documents.bulkUpdate(documents.map((document) => ({ key: document.id, changes: { deletedAt: undefined, updatedAt: time } }))); });
+    await db.transaction('rw', db.nodes, db.documents, async () => { const nodes = await db.nodes.bulkGet(ids); await db.nodes.bulkPut(nodes.filter(Boolean).map((node) => ({ ...node!, deletedAt: undefined, updatedAt: time, rev: (node!.rev ?? 1) + 1 }))); const documents = await db.documents.where('nodeId').anyOf(ids).toArray(); await db.documents.bulkPut(documents.map((document) => ({ ...document, deletedAt: undefined, updatedAt: time, rev: document.rev + 1 }))); });
   }
 
   async restoreVersion(documentId: string, versionId: string) {
@@ -75,7 +77,7 @@ export class LibraryRepository {
     const document = await db.documents.get(documentId);
     if (!version || !document) throw new Error('No se encontró la versión solicitada.');
     await db.transaction('rw', db.documents, db.versions, async () => {
-      await db.versions.add({ id: crypto.randomUUID(), documentId, createdAt: now(), reason: 'pre-restore', title: document.title, content: structuredClone(document.content) });
+      await db.versions.add({ id: crypto.randomUUID(), documentId, createdAt: now(), reason: 'pre-restore', title: document.title, content: structuredClone(document.content), ownerId: document.ownerId });
       await db.documents.put({ ...document, title: version.title, content: structuredClone(version.content), rev: document.rev + 1, updatedAt: now() });
     });
   }

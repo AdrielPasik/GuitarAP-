@@ -2,18 +2,14 @@ import { useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/data/database';
 import { libraryRepository } from '@/data/library-repository';
+import { belongsToOwner, libraryScope } from '@/data/library-scope';
 import { SyncPanel } from '@/features/sync/SyncPanel';
 
 export function RecoveryScreen() {
   const fileInput = useRef<HTMLInputElement>(null);
   const [message, setMessage] = useState('');
   const [selectedDocument, setSelectedDocument] = useState('');
-  const data = useLiveQuery(async () => ({
-    documents: await db.documents.toArray(),
-    deletedDocuments: await db.documents.filter((item) => Boolean(item.deletedAt)).toArray(),
-    deletedNodes: await db.nodes.filter((item) => Boolean(item.deletedAt)).toArray(),
-    versions: await db.versions.where('documentId').equals(selectedDocument).reverse().sortBy('createdAt'),
-  }), [selectedDocument]) ?? { documents: [], deletedDocuments: [], deletedNodes: [], versions: [] };
+  const data = useLiveQuery(async () => { const scope = await libraryScope(); const [documents, nodes, versions] = await Promise.all([db.documents.toArray(), db.nodes.toArray(), db.versions.where('documentId').equals(selectedDocument).toArray()]); return { documents: documents.filter((item) => belongsToOwner(item, scope)), deletedDocuments: documents.filter((item) => belongsToOwner(item, scope) && Boolean(item.deletedAt)), deletedNodes: nodes.filter((item) => belongsToOwner(item, scope) && Boolean(item.deletedAt)), versions: versions.filter((item) => belongsToOwner(item, scope)).sort((a, b) => b.createdAt - a.createdAt) }; }, [selectedDocument]) ?? { documents: [], deletedDocuments: [], deletedNodes: [], versions: [] };
   const activeDocuments = data.documents.filter((item) => !item.deletedAt);
   async function exportBackup() {
     const payload = await libraryRepository.exportBackup();

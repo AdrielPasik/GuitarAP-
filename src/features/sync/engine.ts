@@ -1,36 +1,13 @@
-import type { MusicalDocument } from '@/core/model';
-import { db } from '@/data/database';
-import type { RemoteDocument, SyncTransport } from '@/features/sync/transport';
-
-type SyncState = { cursor: number; revisions: Record<string, number>; conflicts: Record<string, RemoteDocument> };
-const stateKey = (ownerId: string) => `sync-state:${ownerId}`;
-const initialState = (): SyncState => ({ cursor: 0, revisions: {}, conflicts: {} });
-function local(remote: RemoteDocument): MusicalDocument { const { ownerId, lastOpId, ...document } = remote; void ownerId; void lastOpId; return document; }
-async function getState(ownerId: string) { return ((await db.settings.get(stateKey(ownerId)))?.value as SyncState | undefined) ?? initialState(); }
-async function saveState(ownerId: string, state: SyncState) { await db.settings.put({ key: stateKey(ownerId), value: state, updatedAt: Date.now() }); }
-
+import type { DocumentVersion, LibraryNode, MusicalDocument } from '@/core/model';
+import { db } from '@/data/database'; import { activeOwnerId } from '@/data/library-scope'; import type { PullPage, RemoteDocument, SyncSnapshot, SyncTransport } from '@/features/sync/transport';
+type State = { cursor: string; documents: Record<string, number>; nodes: Record<string, number>; versions: Record<string, true>; conflicts: Record<string, RemoteDocument>; pending?: { id: string; snapshot: SyncSnapshot } };
+const key = (owner: string) => `sync-state:${owner}`; const blank = (): State => ({ cursor: '0', documents: {}, nodes: {}, versions: {}, conflicts: {} }); const get = async (owner: string) => ((await db.settings.get(key(owner)))?.value as State | undefined) ?? blank(); const save = async (owner: string, value: State) => db.settings.put({ key: key(owner), value, updatedAt: Date.now() });
+const local = (item: RemoteDocument): MusicalDocument => { const { ownerId, lastOpId, ...document } = item; void ownerId; void lastOpId; return document; };
 export type SyncReport = { pushed: number; pulled: number; conflicts: number; retries: number; offline: boolean };
-export class SyncEngine {
-  constructor(private readonly transport: SyncTransport, private readonly maxRetries = 2) {}
-  async sync(ownerId: string): Promise<SyncReport> {
-    const state = await getState(ownerId); const report: SyncReport = { pushed: 0, pulled: 0, conflicts: 0, retries: 0, offline: false };
-    const pending = (await db.documents.toArray()).filter((document) => state.revisions[document.id] !== document.rev);
-    if (pending.length) {
-      let failed = false;
-      for (let attempt = 0; attempt <= this.maxRetries; attempt += 1) try {
-        const result = await this.transport.push(ownerId, crypto.randomUUID(), pending);
-        result.applied.forEach((document) => { state.revisions[document.id] = document.rev; }); result.conflicts.forEach((document) => { state.conflicts[document.id] = document; });
-        report.pushed = result.applied.length; report.conflicts += result.conflicts.length; failed = false; break;
-      } catch { failed = true; report.retries += 1; }
-      if (failed) { await saveState(ownerId, state); return { ...report, offline: true }; }
-    }
-    try {
-      const remote = await this.transport.pull(ownerId, state.cursor);
-      await db.transaction('rw', db.documents, async () => { for (const incoming of remote) { const current = await db.documents.get(incoming.id); const known = state.revisions[incoming.id] ?? 0; if (current && current.rev !== known && current.rev !== incoming.rev) { state.conflicts[incoming.id] = incoming; report.conflicts += 1; continue; } await db.documents.put(local(incoming)); state.revisions[incoming.id] = incoming.rev; report.pulled += 1; } });
-      state.cursor = Math.max(state.cursor, ...remote.map((document) => document.updatedAt));
-    } catch { report.offline = true; }
-    await saveState(ownerId, state); return report;
-  }
-  async conflicts(ownerId: string) { return (await getState(ownerId)).conflicts; }
-  async acceptRemote(ownerId: string, documentId: string) { const state = await getState(ownerId); const remote = state.conflicts[documentId]; if (!remote) return; await db.documents.put(local(remote)); state.revisions[documentId] = remote.rev; delete state.conflicts[documentId]; await saveState(ownerId, state); }
-}
+export class SyncEngine { constructor(private readonly transport: SyncTransport, private readonly maxRetries = 2, private readonly pageSize = 100) {}
+  async sync(owner: string): Promise<SyncReport> { if ((await activeOwnerId()) !== owner) throw new Error('La biblioteca local no está vinculada a esta cuenta.'); const state = await get(owner); const report: SyncReport = { pushed: 0, pulled: 0, conflicts: 0, retries: 0, offline: false }; if (!state.pending) state.pending = { id: crypto.randomUUID(), snapshot: await this.pending(owner, state) };
+    if (Object.values(state.pending.snapshot).some((items) => items.length)) { let result; for (let attempt = 0; attempt <= this.maxRetries; attempt += 1) try { result = await this.transport.push(owner, state.pending.id, state.pending.snapshot); break; } catch { report.retries += 1; } if (!result) { await save(owner, state); return { ...report, offline: true }; } result.documents.forEach((x) => { state.documents[x.id] = x.rev; }); result.nodes.forEach((x) => { state.nodes[x.id] = x.rev ?? 1; }); result.versions.forEach((x) => { state.versions[x.id] = true; }); result.conflicts.forEach((x) => { if ('type' in x) state.conflicts[x.id] = x; }); report.pushed = result.documents.length + result.nodes.length + result.versions.length; report.conflicts = result.conflicts.length; state.pending = undefined; } else state.pending = undefined;
+    try { let page: PullPage; do { page = await this.transport.pull(owner, state.cursor, this.pageSize); await this.apply(owner, state, page, report); } while (page.hasMore); } catch { report.offline = true; } await save(owner, state); return report; }
+  private async pending(owner: string, state: State): Promise<SyncSnapshot> { const [documents, nodes, versions] = await Promise.all([db.documents.where('ownerId').equals(owner).toArray(), db.nodes.where('ownerId').equals(owner).toArray(), db.versions.where('ownerId').equals(owner).toArray()]); return { documents: documents.filter((x) => state.documents[x.id] !== x.rev), nodes: nodes.filter((x) => state.nodes[x.id] !== (x.rev ?? 1)), versions: versions.filter((x) => !state.versions[x.id]) }; }
+  private async apply(owner: string, state: State, page: PullPage, report: SyncReport) { await db.transaction('rw', db.nodes, db.documents, db.versions, async () => { for (const change of page.changes) { if (change.kind === 'node') { const x = change.record as LibraryNode; await db.nodes.put({ ...x, ownerId: owner }); state.nodes[x.id] = x.rev ?? 1; } else if (change.kind === 'version') { const x = change.record as DocumentVersion; await db.versions.put({ ...x, ownerId: owner }); state.versions[x.id] = true; } else { const x = change.record as RemoteDocument; const current = await db.documents.get(x.id); const known = state.documents[x.id] ?? 0; if (current && current.ownerId === owner && current.rev !== known && current.rev !== x.rev) { state.conflicts[x.id] = x; report.conflicts += 1; continue; } await db.documents.put({ ...local(x), ownerId: owner }); state.documents[x.id] = x.rev; } report.pulled += 1; } state.cursor = page.cursor; }); }
+  async conflicts(owner: string) { return (await get(owner)).conflicts; } }

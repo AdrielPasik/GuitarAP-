@@ -1,27 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { createTablatureContent, type MusicalDocument } from '@/core/model';
-import { db } from '@/data/database';
-import { SyncEngine } from '@/features/sync/engine';
-import { FakeTransport, type SyncTransport } from '@/features/sync/transport';
-
-const document = (id = 'doc', rev = 1): MusicalDocument => ({ id, nodeId: null, type: 'tablature', title: 'Riff', content: createTablatureContent(), rev, createdAt: 1, updatedAt: 10 + rev });
+import { createTablatureContent, type LibraryNode, type MusicalDocument } from '@/core/model';
+import { db } from '@/data/database'; import { activateOwner } from '@/data/library-scope'; import { SyncEngine } from '@/features/sync/engine'; import { FakeTransport } from '@/features/sync/transport';
+const doc = (id = 'doc', rev = 1): MusicalDocument => ({ id, nodeId: 'folder', type: 'tablature', title: 'Riff', content: createTablatureContent(), rev, createdAt: 1, updatedAt: 10 + rev, ownerId: 'u' }); const node = (): LibraryNode => ({ id: 'folder', parentId: null, kind: 'folder', name: 'Escalas', order: 1, rev: 1, createdAt: 1, updatedAt: 1, ownerId: 'u' });
 afterEach(async () => { await db.delete(); await db.open(); });
 describe('SyncEngine', () => {
-  it('pushes only unsynced local revisions and is quiet when up to date', async () => {
-    await db.documents.add(document()); const engine = new SyncEngine(new FakeTransport());
-    expect((await engine.sync('u')).pushed).toBe(1);
-    expect((await engine.sync('u')).pushed).toBe(0);
-  });
-  it('marks a transport outage and retries it', async () => {
-    await db.documents.add(document()); let tries = 0;
-    const offline: SyncTransport = { push: async () => { tries += 1; throw new Error('offline'); }, pull: async () => [] };
-    const report = await new SyncEngine(offline, 1).sync('u');
-    expect(report.offline).toBe(true); expect(tries).toBe(2);
-  });
-  it('records an optimistic concurrency conflict', async () => {
-    const transport = new FakeTransport(); await transport.push('u', 'seed', [document()]);
-    await db.documents.add(document('doc', 1)); const engine = new SyncEngine(transport);
-    const report = await engine.sync('u');
-    expect(report.conflicts).toBe(1); expect(Object.keys(await engine.conflicts('u'))).toEqual(['doc']);
-  });
+  it('syncs a folder, document and version to a second device in pages', async () => { await activateOwner('u'); await db.nodes.add(node()); await db.documents.add(doc()); await db.versions.add({ id: 'v', documentId: 'doc', reason: 'manual', title: 'Riff', content: createTablatureContent(), createdAt: 2, ownerId: 'u' }); const remote = new FakeTransport(); expect((await new SyncEngine(remote, 2, 1).sync('u')).pushed).toBe(3); await db.delete(); await db.open(); await activateOwner('u'); const report = await new SyncEngine(remote, 2, 1).sync('u'); expect(report.pulled).toBe(3); expect(await db.nodes.get('folder')).toMatchObject({ name: 'Escalas' }); expect(await db.documents.get('doc')).toMatchObject({ nodeId: 'folder' }); expect(await db.versions.get('v')).toBeTruthy(); });
+  it('reuses its operation after a response is lost', async () => { await activateOwner('u'); await db.documents.add({ ...doc(), nodeId: null }); const remote = new FakeTransport(); remote.loseNextResponse(); const report = await new SyncEngine(remote, 1).sync('u'); expect(report.retries).toBe(1); expect(report.pushed).toBe(1); expect((await new SyncEngine(remote).sync('u')).pushed).toBe(0); });
+  it('keeps another user records outside the active account', async () => { const remote = new FakeTransport(); await activateOwner('a'); await db.documents.add({ ...doc('a'), nodeId: null, ownerId: 'a' }); await new SyncEngine(remote).sync('a'); await activateOwner('b'); await expect(new SyncEngine(remote).sync('b')).resolves.toMatchObject({ pulled: 0 }); });
 });

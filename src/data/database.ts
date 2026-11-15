@@ -15,6 +15,12 @@ export class GuitarDatabase extends Dexie {
       versions: 'id, documentId, createdAt, [documentId+createdAt]',
       settings: 'key, updatedAt',
     });
+    this.version(2).stores({
+      nodes: 'id, ownerId, parentId, kind, name, updatedAt, deletedAt, [ownerId+parentId], [ownerId+updatedAt]',
+      documents: 'id, ownerId, nodeId, songId, type, title, updatedAt, deletedAt, [ownerId+nodeId], [ownerId+updatedAt]',
+      versions: 'id, ownerId, documentId, createdAt, [ownerId+documentId], [ownerId+createdAt]',
+      settings: 'key, updatedAt',
+    });
   }
 }
 

@@ -25,7 +25,7 @@ Consulta [la arquitectura](docs/architecture.md), los [ADRs](docs/adr) y la [gu�
 
 La sincronización remota no está activa por defecto ni fue validada contra un proyecto real. Para prepararla:
 
-1. Creá un proyecto Supabase y aplicá, en orden, `supabase/migrations/0001_guitarap.sql`, `0002_sync.sql` y `0003_sync_hardening.sql` con el SQL Editor o la CLI.
+1. Creá un proyecto Supabase y aplicá, en orden, todas las migraciones `0001` a `0005` con el SQL Editor o la CLI. `0004` agrega nodos, versiones y el cursor por cuenta; `0005` instala los RPC atómicos.
 2. En **Authentication → Providers → Email**, desactivá los nuevos registros públicos. Creá los usuarios autorizados desde el Dashboard; la app solo ofrece inicio de sesión, nunca registro.
 3. Copiá `.env.example` como `.env.local` y completá la URL y la clave anónima/publicable. Ambas se exponen al navegador por diseño; jamás uses `service_role`.
 4. Abrí **Configuración** en GuitarAP, iniciá sesión, exportá el backup exigido por la interfaz y luego sincronizá. El JWT de sesión se usa como `Authorization` y la clave anónima como `apikey`, bajo RLS.

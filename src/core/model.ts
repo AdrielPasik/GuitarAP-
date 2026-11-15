@@ -13,6 +13,8 @@ export type LibraryNode = {
   deletedAt?: number;
   createdAt: number;
   updatedAt: number;
+  rev?: number;
+  ownerId?: string;
   song?: { artist?: string; key?: string; bpm?: number; comments?: string };
 };
 
@@ -61,6 +63,7 @@ export type MusicalDocument = {
   createdAt: number;
   updatedAt: number;
   deletedAt?: number;
+  ownerId?: string;
 };
 
 export type DocumentVersion = {
@@ -70,6 +73,7 @@ export type DocumentVersion = {
   reason: 'autosave' | 'pre-restore' | 'manual' | 'import';
   title: string;
   content: MusicalDocument['content'];
+  ownerId?: string;
 };
 
 export type AppSetting = { key: string; value: unknown; updatedAt: number };
