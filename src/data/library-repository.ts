@@ -1,9 +1,11 @@
-import type { DocumentType, LibraryNode, MusicalDocument } from '@/core/model';
+import type { DocumentType, LibraryNode, MusicalDocument, NotebookContent } from '@/core/model';
 import { createFretboardContent, createTablatureContent } from '@/core/model';
 import { db } from '@/data/database';
 import { activeOwnerId, belongsToOwner, libraryScope } from '@/data/library-scope';
 
 const now = () => Date.now();
+/** Autosaves keep one recovery checkpoint per document at most this often. */
+const AUTOSAVE_VERSION_INTERVAL = 2 * 60 * 1000;
 
 export class LibraryRepository {
   async createNode(name: string, kind: LibraryNode['kind'], parentId: string | null = null) {
@@ -21,19 +23,38 @@ export class LibraryRepository {
   async createDocument(type: DocumentType, title: string, nodeId: string | null = null, songId: string | null = null) {
     const createdAt = now();
     const document: MusicalDocument = {
-      id: crypto.randomUUID(), nodeId, songId, type, title: title.trim() || (type === 'tablature' ? 'Nueva tablatura' : 'Nuevo diapasón'),
+      id: crypto.randomUUID(), nodeId, songId, type, title: title.trim() || (type === 'tablature' ? 'Nueva tablatura' : 'Nuevo mapa'),
       content: type === 'tablature' ? createTablatureContent() : createFretboardContent(), rev: 1, createdAt, updatedAt: createdAt, ownerId: (await activeOwnerId()) ?? undefined,
     };
     await db.documents.add(document);
     return document;
   }
 
+  /** An empty study notebook: blocks (tablature, map, text) are added from the editor. */
+  async createStudyMaterial(title: string, nodeId: string | null = null, songId: string | null = null) {
+    const createdAt = now();
+    const content: NotebookContent = { kind: 'notebook', version: 1, blocks: [] };
+    const document: MusicalDocument = {
+      id: crypto.randomUUID(), nodeId, songId, type: 'tablature', title: title.trim() || 'Nuevo material de estudio',
+      content, rev: 1, createdAt, updatedAt: createdAt, ownerId: (await activeOwnerId()) ?? undefined,
+    };
+    await db.documents.add(document);
+    return document;
+  }
+
+  /**
+   * Saves only what an editor owns (title and content); location, trash state and sync metadata are
+   * read from the stored record so a stale open editor can never overwrite them. A recovery version of
+   * the previous state is kept at most once every few minutes for autosaves, always for explicit saves.
+   */
   async saveDocument(document: MusicalDocument, reason: 'autosave' | 'manual' = 'autosave') {
     await db.transaction('rw', db.documents, db.versions, async () => {
       const current = await db.documents.get(document.id);
       if (!current) throw new Error('El documento no existe.');
-      await db.versions.add({ id: crypto.randomUUID(), documentId: current.id, createdAt: now(), reason, title: current.title, content: structuredClone(current.content), ownerId: current.ownerId });
-      await db.documents.put({ ...document, rev: current.rev + 1, updatedAt: now() });
+      const latest = (await db.versions.where('documentId').equals(document.id).sortBy('createdAt')).at(-1);
+      const recent = reason === 'autosave' && latest && now() - latest.createdAt < AUTOSAVE_VERSION_INTERVAL;
+      if (!recent) await db.versions.add({ id: crypto.randomUUID(), documentId: current.id, createdAt: now(), reason, title: current.title, content: structuredClone(current.content), ownerId: current.ownerId });
+      await db.documents.put({ ...current, title: document.title, content: document.content, rev: current.rev + 1, updatedAt: now() });
     });
   }
 

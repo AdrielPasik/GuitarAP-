@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/data/database';
 import { libraryRepository } from '@/data/library-repository';
 
@@ -56,5 +56,48 @@ describe('LibraryRepository', () => {
     expect(backup.nodes.map((item) => item.id)).toContain(folder.id);
     expect(backup.documents.map((item) => item.id)).toContain(document.id);
     expect(backup.versions.map((item) => item.documentId)).toContain(document.id);
+  });
+
+  it('never lets a stale open editor overwrite where a material lives or whether it is in the trash', async () => {
+    const folder = await libraryRepository.createNode('Escalas', 'folder');
+    const document = await libraryRepository.createDocument('tablature', 'Riff');
+    const staleCopy = { ...document };
+    await libraryRepository.moveDocument(document.id, folder.id);
+    await libraryRepository.trashDocument(document.id);
+
+    await libraryRepository.saveDocument({ ...staleCopy, title: 'Riff editado' });
+
+    const stored = await db.documents.get(document.id);
+    expect(stored?.title).toBe('Riff editado');
+    expect(stored?.nodeId).toBe(folder.id);
+    expect(stored?.deletedAt).toBeTypeOf('number');
+  });
+
+  it('keeps one autosave checkpoint every few minutes, and always one for explicit saves', async () => {
+    const start = Date.now();
+    const clock = vi.spyOn(Date, 'now');
+    clock.mockReturnValue(start);
+    const document = await libraryRepository.createDocument('tablature', 'Riff');
+    const versions = () => db.versions.where('documentId').equals(document.id).count();
+
+    await libraryRepository.saveDocument({ ...document, title: 'a' });
+    expect(await versions()).toBe(1);
+    clock.mockReturnValue(start + 20_000);
+    await libraryRepository.saveDocument({ ...document, title: 'b' });
+    await libraryRepository.saveDocument({ ...document, title: 'c' });
+    expect(await versions()).toBe(1);
+    await libraryRepository.saveDocument({ ...document, title: 'd' }, 'manual');
+    expect(await versions()).toBe(2);
+    clock.mockReturnValue(start + 5 * 60_000);
+    await libraryRepository.saveDocument({ ...document, title: 'e' });
+    expect(await versions()).toBe(3);
+    clock.mockRestore();
+  });
+
+  it('stores a study notebook and exports it in the backup', async () => {
+    const material = await libraryRepository.createStudyMaterial('Pentatónica');
+    expect(material.content).toMatchObject({ kind: 'notebook', blocks: [] });
+    const backup = JSON.parse(await libraryRepository.exportBackup()) as { documents: Array<{ id: string; content: { kind?: string } }> };
+    expect(backup.documents.find((item) => item.id === material.id)?.content.kind).toBe('notebook');
   });
 });

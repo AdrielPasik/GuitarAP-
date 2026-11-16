@@ -28,6 +28,27 @@ const local = (item: RemoteDocument): MusicalDocument => {
   void lastOpId;
   return document;
 };
+async function pendingSnapshot(owner: string, state: State): Promise<SyncSnapshot> {
+  const [documents, nodes, versions] = await Promise.all([
+    db.documents.where('ownerId').equals(owner).toArray(),
+    db.nodes.where('ownerId').equals(owner).toArray(),
+    db.versions.where('ownerId').equals(owner).toArray(),
+  ]);
+  return {
+    documents: documents.filter((x) => state.documents[x.id] !== x.rev),
+    nodes: nodes.filter((x) => state.nodes[x.id] !== (x.rev ?? 1)),
+    versions: versions.filter((x) => !state.versions[x.id]),
+  };
+}
+/** Number of local changes (documents, folders) not yet confirmed by the server. History versions are not counted. */
+export async function countPending(owner: string) {
+  const snapshot = await pendingSnapshot(owner, await get(owner));
+  return snapshot.documents.length + snapshot.nodes.length;
+}
+/** Conflicts kept locally for manual review. */
+export async function countConflicts(owner: string) {
+  return Object.keys((await get(owner)).conflicts).length;
+}
 export type SyncReport = {
   pushed: number;
   pulled: number;
@@ -98,16 +119,7 @@ export class SyncEngine {
     return report;
   }
   private async pending(owner: string, state: State): Promise<SyncSnapshot> {
-    const [documents, nodes, versions] = await Promise.all([
-      db.documents.where('ownerId').equals(owner).toArray(),
-      db.nodes.where('ownerId').equals(owner).toArray(),
-      db.versions.where('ownerId').equals(owner).toArray(),
-    ]);
-    return {
-      documents: documents.filter((x) => state.documents[x.id] !== x.rev),
-      nodes: nodes.filter((x) => state.nodes[x.id] !== (x.rev ?? 1)),
-      versions: versions.filter((x) => !state.versions[x.id]),
-    };
+    return pendingSnapshot(owner, state);
   }
   private async apply(owner: string, state: State, page: PullPage, report: SyncReport) {
     await db.transaction('rw', db.nodes, db.documents, db.versions, async () => {
