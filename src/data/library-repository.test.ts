@@ -100,4 +100,40 @@ describe('LibraryRepository', () => {
     const backup = JSON.parse(await libraryRepository.exportBackup()) as { documents: Array<{ id: string; content: { kind?: string } }> };
     expect(backup.documents.find((item) => item.id === material.id)?.content.kind).toBe('notebook');
   });
+
+  it('starts each template with exactly the blocks it promises and nothing else', async () => {
+    const kinds = async (template: Parameters<typeof libraryRepository.createFromTemplate>[0]) => {
+      const created = await libraryRepository.createFromTemplate(template);
+      const content = created.content as { kind?: string; blocks?: Array<{ kind: string }> };
+      return content.kind === 'notebook' ? content.blocks!.map((block) => block.kind) : [created.type === 'fretboard' ? 'map' : 'tablature'];
+    };
+    expect(await kinds('scale')).toEqual(['map']);
+    expect(await kinds('triad')).toEqual(['map']);
+    expect(await kinds('riff')).toEqual(['tablature']);
+    expect(await kinds('empty')).toEqual([]);
+    expect(await kinds('text')).toEqual(['text']);
+    expect(await kinds('study')).toEqual(['map', 'tablature']);
+  });
+
+  it('creates a triad template with the harmony already highlighted, without adding notes', async () => {
+    const created = await libraryRepository.createFromTemplate('triad');
+    const content = created.content as import('@/core/model').FretboardContent;
+    expect(content.view).toEqual({ labels: 'both', emphasis: ['root', 'third', 'fifth'] });
+    expect(content.baseNotes).toEqual([]);
+  });
+
+  it('creates materials inside the folder where the person is', async () => {
+    const folder = await libraryRepository.createNode('Escalas', 'folder');
+    const created = await libraryRepository.createFromTemplate('scale', folder.id);
+    expect(created.nodeId).toBe(folder.id);
+  });
+
+  it('never moves a folder into itself or its own descendants', async () => {
+    const parent = await libraryRepository.createNode('Escalas', 'folder');
+    const child = await libraryRepository.createNode('Modos', 'folder', parent.id);
+    await expect(libraryRepository.moveNode(parent.id, child.id)).rejects.toThrow('dentro de sí misma');
+    await expect(libraryRepository.moveNode(parent.id, parent.id)).rejects.toThrow('dentro de sí misma');
+    await libraryRepository.moveNode(child.id, null);
+    expect((await db.nodes.get(child.id))?.parentId).toBeNull();
+  });
 });

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import type { MusicalDocument } from '@/core/model';
 import { documentKind, notebookOutline, toNotebook } from '@/core/notebook';
@@ -8,6 +8,9 @@ import { Menu, Popover } from '@/components/ui/Popover';
 import { useLibrary } from '@/data/use-library';
 import { MetronomeStrip } from '@/features/metronome/MetronomeBar';
 import { NotebookBlocks } from '@/features/notebook/NotebookBlocks';
+import { everything } from '@/features/export/export-plan';
+
+const ExportDialog = lazy(() => import('@/features/export/ExportDialog').then((module) => ({ default: module.ExportDialog })));
 
 const ZOOM_MIN = 0.8;
 const ZOOM_MAX = 2.2;
@@ -65,6 +68,7 @@ export function PracticeScreen() {
   const [zoom, setZoom] = usePref('practice-zoom', 1.15);
   const [focus, setFocus] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const current = documents.find((item) => item.id === (id ?? last)) ?? (id ? undefined : documents[0]);
   const neighbors = useMemo(() => {
@@ -160,6 +164,11 @@ export function PracticeScreen() {
             <Icon name="focus" size={14} /> Modo foco
           </button>
           {current && (
+            <button type="button" className="btn btn-ghost" onClick={() => setExporting(true)}>
+              <Icon name="export" size={14} /> Exportar
+            </button>
+          )}
+          {current && (
             <Link className="btn btn-ghost" to={`/material/${current.id}`}>
               <Icon name="pencil" size={14} /> Editar
             </Link>
@@ -179,6 +188,11 @@ export function PracticeScreen() {
           </p>
         )}
       </div>
+      {exporting && current && notebook && (
+        <Suspense fallback={null}>
+          <ExportDialog title={current.title} notebook={notebook} initial={everything(notebook)} onClose={() => setExporting(false)} />
+        </Suspense>
+      )}
       {focus && (
         <div className="practice-foot">
           <MetronomeStrip />

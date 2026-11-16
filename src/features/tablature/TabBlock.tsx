@@ -433,6 +433,7 @@ export function TabBlock({
           <div
             key={system.columns[0].id}
             className="tb-system"
+            data-export-unit
             role="group"
             aria-label={`Renglón ${systemIndex + 1}`}
             style={{ gridTemplateColumns: `2.4em repeat(${system.columns.length}, minmax(2.5em, 1fr))` }}

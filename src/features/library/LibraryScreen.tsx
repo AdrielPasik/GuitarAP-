@@ -7,7 +7,7 @@ import { Dialog } from '@/components/ui/Dialog';
 import { Icon, type IconName } from '@/components/ui/Icon';
 import { Menu } from '@/components/ui/Popover';
 import { useToast } from '@/components/ui/toast-context';
-import { libraryRepository } from '@/data/library-repository';
+import { libraryRepository, type MaterialTemplate } from '@/data/library-repository';
 import { ancestry, pathOf } from '@/data/paths';
 import { useLibrary } from '@/data/use-library';
 import { useAccount } from '@/features/account/account-context';
@@ -48,7 +48,7 @@ export function LibraryScreen() {
   const folderId = params.get('c');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [naming, setNaming] = useState<Naming>(null);
-  const [moving, setMoving] = useState<MusicalDocument | null>(null);
+  const [moving, setMoving] = useState<{ kind: 'doc' | 'node'; id: string; title: string; from: string | null } | null>(null);
   const [sort, setSort] = usePref<'recent' | 'name'>('library-sort', 'recent');
   const [bannerHidden, setBannerHidden] = usePref('local-banner-hidden', false);
   const current = nodes.find((node) => node.id === folderId) ?? null;
@@ -87,14 +87,10 @@ export function LibraryScreen() {
     documents.filter((item) => item.nodeId === node.id || item.songId === node.id).length;
   const everything = documents.length + nodes.length;
 
-  async function createMaterial(kind: 'tablature' | 'map' | 'study') {
+  /** New material lands where you are: in the open folder, or as a part of the open song. */
+  async function createFrom(template: MaterialTemplate) {
     const song = current?.kind === 'song' ? current : null;
-    const nodeId = song ? song.parentId : folderId;
-    const songId = song?.id ?? null;
-    const created =
-      kind === 'study'
-        ? await libraryRepository.createStudyMaterial('', nodeId, songId)
-        : await libraryRepository.createDocument(kind === 'map' ? 'fretboard' : 'tablature', '', nodeId, songId);
+    const created = await libraryRepository.createFromTemplate(template, song ? song.parentId : folderId, song?.id ?? null);
     navigate(`/material/${created.id}`);
   }
   const open = (item: MusicalDocument) => navigate(`/material/${item.id}`);
@@ -121,9 +117,11 @@ export function LibraryScreen() {
         </>
       }
       items={[
-        { label: 'Tablatura', icon: 'tab', onSelect: () => void createMaterial('tablature') },
-        { label: 'Mapa de escala', icon: 'map', onSelect: () => void createMaterial('map') },
-        { label: 'Material de estudio', icon: 'mixed', onSelect: () => void createMaterial('study') },
+        { label: 'Mapa de escala', icon: 'map', description: 'Marcá notas, intervalos y posiciones', onSelect: () => void createFrom('scale') },
+        { label: 'Acorde o tríada', icon: 'map', description: 'Un mapa con la tríada resaltada', onSelect: () => void createFrom('triad') },
+        { label: 'Riff o tablatura', icon: 'tab', description: 'Escribí notas en orden', onSelect: () => void createFrom('riff') },
+        { label: 'Cuaderno vacío', icon: 'mixed', description: 'Agregá solo los bloques que quieras', onSelect: () => void createFrom('empty') },
+        { label: 'Escala y frase', icon: 'mixed', description: 'Un mapa y una tablatura juntos', onSelect: () => void createFrom('study') },
         { separator: true },
         { label: 'Canción', icon: 'song', onSelect: () => setNaming({ mode: 'song' }) },
         { label: 'Carpeta', icon: 'folder', onSelect: () => setNaming({ mode: 'folder' }) },
@@ -220,7 +218,7 @@ export function LibraryScreen() {
               <strong>{current.name}</strong>
               <span className="muted small">Canción · {countIn(current)} partes</span>
             </div>
-            <button type="button" className="btn" onClick={() => void createMaterial('tablature')}>
+            <button type="button" className="btn" onClick={() => void createFrom('riff')}>
               <Icon name="plus" size={14} /> Agregar parte
             </button>
           </div>
@@ -231,14 +229,14 @@ export function LibraryScreen() {
             <h2>Tu cuaderno está vacío</h2>
             <p>Empezá por lo que quieras tocar hoy.</p>
             <div className="empty-actions">
-              <button type="button" className="btn btn-primary" onClick={() => void createMaterial('tablature')}>
+              <button type="button" className="btn btn-primary" onClick={() => void createFrom('riff')}>
                 <Icon name="tab" size={14} /> Escribir una tablatura
               </button>
-              <button type="button" className="btn" onClick={() => void createMaterial('map')}>
+              <button type="button" className="btn" onClick={() => void createFrom('scale')}>
                 <Icon name="map" size={14} /> Marcar una escala
               </button>
-              <button type="button" className="btn" onClick={() => void createMaterial('study')}>
-                <Icon name="mixed" size={14} /> Armar un material de estudio
+              <button type="button" className="btn" onClick={() => void createFrom('empty')}>
+                <Icon name="mixed" size={14} /> Empezar un cuaderno vacío
               </button>
             </div>
           </div>
@@ -263,6 +261,7 @@ export function LibraryScreen() {
                     { label: 'Abrir', icon: 'folder', onSelect: () => goTo(node.id) },
                     { label: 'Renombrar', icon: 'pencil', onSelect: () => setNaming({ mode: 'rename-node', id: node.id, initial: node.name }) },
                     { label: 'Duplicar', icon: 'copy', onSelect: () => void libraryRepository.duplicateNode(node.id) },
+                    { label: 'Mover a…', onSelect: () => setMoving({ kind: 'node', id: node.id, title: node.name, from: node.parentId }) },
                     {
                       label: 'Enviar a la papelera',
                       icon: 'trash',
@@ -296,7 +295,7 @@ export function LibraryScreen() {
                       { label: 'Practicar', icon: 'practice', onSelect: () => navigate(`/practica/${item.id}`) },
                       { label: 'Renombrar', onSelect: () => setNaming({ mode: 'rename-doc', id: item.id, initial: item.title }) },
                       { label: 'Duplicar', icon: 'copy', onSelect: () => void libraryRepository.duplicateDocument(item.id) },
-                      { label: 'Mover a…', onSelect: () => setMoving(item) },
+                      { label: 'Mover a…', onSelect: () => setMoving({ kind: 'doc', id: item.id, title: item.title, from: item.nodeId }) },
                       {
                         label: 'Enviar a la papelera',
                         icon: 'trash',
@@ -313,10 +312,10 @@ export function LibraryScreen() {
                 {text ? 'No encontramos materiales con ese nombre.' : 'Todavía no hay nada acá.'}
                 {!text && (
                   <span className="empty-actions inline">
-                    <button type="button" className="btn btn-link" onClick={() => void createMaterial('tablature')}>
+                    <button type="button" className="btn btn-link" onClick={() => void createFrom('riff')}>
                       Escribir una tablatura
                     </button>
-                    <button type="button" className="btn btn-link" onClick={() => void createMaterial('map')}>
+                    <button type="button" className="btn btn-link" onClick={() => void createFrom('scale')}>
                       Marcar una escala
                     </button>
                   </span>
@@ -348,11 +347,15 @@ export function LibraryScreen() {
       {moving && (
         <MoveDialog
           nodes={nodes}
-          document={moving}
+          subject={moving}
           onClose={() => setMoving(null)}
           onMove={async (location) => {
-            await libraryRepository.moveDocument(moving.id, location);
-            setMoving(null);
+            try {
+              if (moving.kind === 'doc') await libraryRepository.moveDocument(moving.id, location);
+              else await libraryRepository.moveNode(moving.id, location);
+            } finally {
+              setMoving(null);
+            }
           }}
         />
       )}
@@ -453,18 +456,27 @@ function NameDialog({
 
 function MoveDialog({
   nodes,
-  document,
+  subject,
   onClose,
   onMove,
 }: {
   nodes: LibraryNode[];
-  document: MusicalDocument;
+  subject: { kind: 'doc' | 'node'; id: string; title: string; from: string | null };
   onClose: () => void;
   onMove: (location: string | null) => Promise<void>;
 }) {
-  const [location, setLocation] = useState(document.nodeId ?? '');
+  const [location, setLocation] = useState(subject.from ?? '');
+  // A folder cannot be moved into itself or into one of its own subfolders.
+  const blocked = new Set<string>();
+  if (subject.kind === 'node') {
+    const visit = (id: string) => {
+      blocked.add(id);
+      nodes.filter((node) => node.parentId === id).forEach((node) => visit(node.id));
+    };
+    visit(subject.id);
+  }
   return (
-    <Dialog title={`Mover «${document.title || 'Sin título'}»`} onClose={onClose} size="sm">
+    <Dialog title={`Mover «${subject.title || 'Sin título'}»`} onClose={onClose} size="sm">
       <form
         className="stack"
         onSubmit={(event) => {
@@ -477,7 +489,7 @@ function MoveDialog({
           <select autoFocus value={location} onChange={(event) => setLocation(event.target.value)}>
             <option value="">Biblioteca (raíz)</option>
             {nodes
-              .filter((node) => node.kind === 'folder')
+              .filter((node) => node.kind === 'folder' && !blocked.has(node.id))
               .map((node) => (
                 <option key={node.id} value={node.id}>
                   {pathOf(nodes, node.id)}

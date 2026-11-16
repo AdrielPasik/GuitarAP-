@@ -36,6 +36,8 @@ export type MenuItem =
       danger?: boolean;
       disabled?: boolean;
       hint?: string;
+      /** Second line under the label (used by creation templates). */
+      description?: string;
     };
 
 export function Popover({
@@ -139,7 +141,10 @@ export function Menu({
                 <span className="menu-icon">
                   {item.checked ? <Icon name="check" size={14} /> : item.icon ? <Icon name={item.icon} size={14} /> : null}
                 </span>
-                <span className="menu-label">{item.label}</span>
+                <span className="menu-label">
+                  {item.label}
+                  {item.description && <small className="menu-desc">{item.description}</small>}
+                </span>
                 {item.hint && <kbd>{item.hint}</kbd>}
               </button>
             ),

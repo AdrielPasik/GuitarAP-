@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import type { MusicalDocument } from '@/core/model';
 import { documentKind } from '@/core/notebook';
@@ -12,6 +12,9 @@ import { blockFor } from '@/features/notebook/block-meta';
 import { NotebookBlocks } from '@/features/notebook/NotebookBlocks';
 import { useNotebookDocument, type SaveState } from '@/features/notebook/useNotebookDocument';
 import { insertBlock } from '@/core/notebook';
+import { everything, onlyBlock, type ExportSelection } from '@/features/export/export-plan';
+
+const ExportDialog = lazy(() => import('@/features/export/ExportDialog').then((module) => ({ default: module.ExportDialog })));
 
 const kindLabel = { tablature: 'Tablatura', map: 'Mapa', mixed: 'Material de estudio' } as const;
 
@@ -49,8 +52,9 @@ export function NotebookEditor({
   const doc = useNotebookDocument(record);
   const navigate = useNavigate();
   const toast = useToast();
-  const page = useRef<HTMLDivElement>(null);
   const [dialog, setDialog] = useState<null | 'history' | 'shortcuts'>(null);
+  const [exportFor, setExportFor] = useState<ExportSelection | null>(null);
+  const [activeBlock, setActiveBlock] = useState<string | null>(null);
   const kind = documentKind({ ...record, content: doc.notebook });
 
   useEffect(() => {
@@ -70,20 +74,8 @@ export function NotebookEditor({
     return () => window.removeEventListener('keydown', onKey);
   }, [doc]);
 
-  async function exportAs(format: 'png' | 'pdf') {
-    const element = page.current;
-    if (!element) return;
-    element.classList.add('is-exporting');
-    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-    try {
-      const tools = await import('@/features/export/export-document');
-      if (format === 'png') await tools.exportPng(element, doc.title);
-      else await tools.exportPdf(element, doc.title);
-    } catch {
-      toast.show('No se pudo exportar. Probá de nuevo.');
-    } finally {
-      element.classList.remove('is-exporting');
-    }
+  function openExport(blockId: string | null) {
+    setExportFor(blockId ? onlyBlock(blockId) : everything(doc.notebook));
   }
 
   return (
@@ -116,20 +108,9 @@ export function NotebookEditor({
           <Link className="btn" to={`/practica/${record.id}`}>
             <Icon name="practice" size={14} /> Practicar
           </Link>
-          <Menu
-            label="Exportar"
-            align="end"
-            triggerClassName="btn"
-            trigger={
-              <>
-                <Icon name="export" size={14} /> Exportar
-              </>
-            }
-            items={[
-              { label: 'Imagen PNG', onSelect: () => void exportAs('png') },
-              { label: 'Documento PDF', onSelect: () => void exportAs('pdf') },
-            ]}
-          />
+          <button type="button" className="btn" onClick={() => openExport(null)}>
+            <Icon name="export" size={14} /> Exportar
+          </button>
           <Menu
             label="Más acciones del material"
             align="end"
@@ -163,13 +144,17 @@ export function NotebookEditor({
         </div>
       </header>
 
-      <div ref={page} className="nb-page">
-        <h1 className="export-title">{doc.title}</h1>
-        <NotebookBlocks notebook={doc.notebook} change={doc.change} undo={doc.undo} />
+      <div className="nb-page">
+        <NotebookBlocks notebook={doc.notebook} change={doc.change} undo={doc.undo} onExportBlock={openExport} onActiveChange={setActiveBlock} />
       </div>
 
       {dialog === 'history' && <HistoryDialog documentId={record.id} onClose={() => setDialog(null)} onRestored={onRestored} />}
       {dialog === 'shortcuts' && <ShortcutsDialog onClose={() => setDialog(null)} />}
+      {exportFor && (
+        <Suspense fallback={null}>
+          <ExportDialog title={doc.title} notebook={doc.notebook} initial={exportFor} activeBlockId={activeBlock} onClose={() => setExportFor(null)} />
+        </Suspense>
+      )}
     </section>
   );
 }

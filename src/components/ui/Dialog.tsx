@@ -14,7 +14,7 @@ export function Dialog({
   title: string;
   children: ReactNode;
   onClose: () => void;
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'sm' | 'md' | 'lg' | 'xl';
 }) {
   const titleId = useId();
   const panel = useRef<HTMLElement>(null);

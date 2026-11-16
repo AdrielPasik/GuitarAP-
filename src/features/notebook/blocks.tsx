@@ -38,17 +38,25 @@ export function AddBlockMenu({
   );
 }
 
-/** Quiet frame around a musical block: a title when it has one, actions on hover or focus. No card. */
+/**
+ * Quiet frame around a musical block. Every block has a slim header that is always there: what it is, its
+ * optional title, fold/unfold, and one menu with every action (move, duplicate, export, delete). The block
+ * being worked on gets a thin accent edge. No card, no gutter icons to hunt for.
+ */
 export function BlockFrame({
   block,
   index,
   count,
   active,
   readOnly,
+  collapsed,
+  summary,
   onTitle,
   onMove,
   onDuplicate,
   onRemove,
+  onToggleCollapse,
+  onExport,
   onAddAfter,
   children,
 }: {
@@ -57,51 +65,77 @@ export function BlockFrame({
   count: number;
   active: boolean;
   readOnly: boolean;
+  collapsed: boolean;
+  summary: string;
   onTitle: (title: string) => void;
   onMove: (offset: -1 | 1) => void;
   onDuplicate: () => void;
   onRemove: () => void;
+  onToggleCollapse: () => void;
+  onExport?: () => void;
   onAddAfter: (kind: NewBlockKind) => void;
   children: ReactNode;
 }) {
   const meta = blockMeta[block.kind];
   const title = block.kind === 'text' ? '' : (block.title ?? '');
+  const isText = block.kind === 'text';
   return (
     <section
       id={`block-${block.id}`}
-      className={`block kind-${block.kind}${active ? ' active' : ''}`}
+      className={`block kind-${block.kind}${active ? ' active' : ''}${collapsed ? ' collapsed' : ''}`}
       aria-label={`${meta.label} ${index + 1}${title ? `: ${title}` : ''}`}
     >
-      {!readOnly && (
-        <div className="block-actions nb-chrome" role="group" aria-label={`Acciones de ${meta.label.toLowerCase()} ${index + 1}`}>
-          <span className="block-kind" title={meta.label}>
-            <Icon name={meta.icon} size={15} />
-          </span>
-          <button type="button" className="icon-btn" aria-label="Subir bloque" disabled={index === 0} onClick={() => onMove(-1)}>
-            <Icon name="arrow-up" size={14} />
-          </button>
-          <button type="button" className="icon-btn" aria-label="Bajar bloque" disabled={index === count - 1} onClick={() => onMove(1)}>
-            <Icon name="arrow-down" size={14} />
-          </button>
-          <button type="button" className="icon-btn" aria-label="Duplicar bloque" onClick={onDuplicate}>
-            <Icon name="copy" size={14} />
-          </button>
-          <button type="button" className="icon-btn danger" aria-label="Eliminar bloque" onClick={onRemove}>
-            <Icon name="trash" size={14} />
-          </button>
-        </div>
+      {(!isText || !readOnly) && (
+        <header className={`block-head${isText ? ' text' : ''}`}>
+          {!isText && (
+            <>
+              <span className="block-kind" title={meta.label}>
+                <Icon name={meta.icon} size={15} />
+              </span>
+              <input
+                className="block-title"
+                aria-label={`Título de ${meta.label.toLowerCase()} ${index + 1}`}
+                placeholder={meta.label}
+                readOnly={readOnly}
+                value={title}
+                onChange={(event) => onTitle(event.target.value)}
+              />
+              {collapsed && <span className="block-summary">{summary}</span>}
+            </>
+          )}
+          <span className="spacer" />
+          {!readOnly && (
+            <div className="block-tools nb-chrome">
+              {!isText && (
+                <button
+                  type="button"
+                  className="icon-btn"
+                  aria-label={collapsed ? `Expandir ${meta.label.toLowerCase()} ${index + 1}` : `Plegar ${meta.label.toLowerCase()} ${index + 1}`}
+                  aria-expanded={!collapsed}
+                  onClick={onToggleCollapse}
+                >
+                  <Icon name={collapsed ? 'chevron-right' : 'chevron-down'} size={15} />
+                </button>
+              )}
+              <Menu
+                label={`Acciones de ${meta.label.toLowerCase()} ${index + 1}`}
+                align="end"
+                triggerClassName="icon-btn"
+                trigger={<Icon name="more" />}
+                items={[
+                  { label: 'Subir', icon: 'arrow-up', disabled: index === 0, onSelect: () => onMove(-1) },
+                  { label: 'Bajar', icon: 'arrow-down', disabled: index === count - 1, onSelect: () => onMove(1) },
+                  { label: 'Duplicar', icon: 'copy', onSelect: onDuplicate },
+                  ...(onExport ? [{ label: 'Exportar este bloque…', icon: 'export' as const, onSelect: onExport }] : []),
+                  { separator: true as const },
+                  { label: 'Eliminar bloque', icon: 'trash', danger: true, onSelect: onRemove },
+                ]}
+              />
+            </div>
+          )}
+        </header>
       )}
-      {block.kind !== 'text' && (!readOnly || title) && (
-        <input
-          className="block-title"
-          aria-label={`Título de ${meta.label.toLowerCase()} ${index + 1}`}
-          placeholder={`${meta.label} sin título`}
-          readOnly={readOnly}
-          value={title}
-          onChange={(event) => onTitle(event.target.value)}
-        />
-      )}
-      {children}
+      {!collapsed && <div className="block-body">{children}</div>}
       {!readOnly && (
         <div className="add-between nb-chrome">
           <AddBlockMenu label={`Agregar bloque después del bloque ${index + 1}`} triggerClassName="add-between-btn" onAdd={onAddAfter}>

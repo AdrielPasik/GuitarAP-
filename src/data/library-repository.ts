@@ -1,5 +1,8 @@
-import type { DocumentType, LibraryNode, MusicalDocument, NotebookContent } from '@/core/model';
+import type { DocumentType, FretboardContent, LibraryNode, MusicalDocument, NotebookContent } from '@/core/model';
+
+export type MaterialTemplate = 'scale' | 'triad' | 'riff' | 'empty' | 'study' | 'text';
 import { createFretboardContent, createTablatureContent } from '@/core/model';
+import { newBlock } from '@/core/notebook';
 import { db } from '@/data/database';
 import { activeOwnerId, belongsToOwner, libraryScope } from '@/data/library-scope';
 
@@ -25,6 +28,37 @@ export class LibraryRepository {
     const document: MusicalDocument = {
       id: crypto.randomUUID(), nodeId, songId, type, title: title.trim() || (type === 'tablature' ? 'Nueva tablatura' : 'Nuevo mapa'),
       content: type === 'tablature' ? createTablatureContent() : createFretboardContent(), rev: 1, createdAt, updatedAt: createdAt, ownerId: (await activeOwnerId()) ?? undefined,
+    };
+    await db.documents.add(document);
+    return document;
+  }
+
+  /**
+   * Starts a material from a template. A material is a notebook of blocks, so a template only decides
+   * which blocks exist at the start; nothing is created that was not asked for, and any block can be removed.
+   */
+  async createFromTemplate(template: MaterialTemplate, nodeId: string | null = null, songId: string | null = null) {
+    if (template === 'scale') return this.createDocument('fretboard', 'Nueva escala', nodeId, songId);
+    if (template === 'riff') return this.createDocument('tablature', 'Nuevo riff', nodeId, songId);
+    if (template === 'triad') {
+      const document = await this.createDocument('fretboard', 'Nueva tríada', nodeId, songId);
+      const content = document.content as FretboardContent;
+      content.view = { labels: 'both', emphasis: ['root', 'third', 'fifth'] };
+      await db.documents.put({ ...document, content });
+      return { ...document, content };
+    }
+    const blocks: NotebookContent['blocks'] =
+      template === 'empty' ? [] : template === 'text' ? [newBlock('text', 'note')] : [newBlock('map'), newBlock('tablature')];
+    const title = template === 'empty' ? 'Nuevo cuaderno' : template === 'text' ? 'Nueva nota' : 'Nuevo cuaderno de estudio';
+    return this.createNotebook(title, blocks, nodeId, songId);
+  }
+
+  private async createNotebook(title: string, blocks: NotebookContent['blocks'], nodeId: string | null, songId: string | null) {
+    const createdAt = now();
+    const content: NotebookContent = { kind: 'notebook', version: 1, blocks };
+    const document: MusicalDocument = {
+      id: crypto.randomUUID(), nodeId, songId, type: 'tablature', title,
+      content, rev: 1, createdAt, updatedAt: createdAt, ownerId: (await activeOwnerId()) ?? undefined,
     };
     await db.documents.add(document);
     return document;
@@ -80,6 +114,12 @@ export class LibraryRepository {
     const result: string[] = [id];
     const visit = async (parentId: string) => { const children = await db.nodes.where('parentId').equals(parentId).toArray(); for (const child of children) { result.push(child.id); await visit(child.id); } };
     await visit(id); return result;
+  }
+
+  /** Moves a folder or song. A folder can never be placed inside itself or one of its own subfolders. */
+  async moveNode(id: string, parentId: string | null) {
+    if (parentId && (await this.descendants(id)).includes(parentId)) throw new Error('No se puede mover una carpeta dentro de sí misma.');
+    await this.updateNode(id, { parentId });
   }
 
   async trashDocument(id: string) { const current = await db.documents.get(id); if (current) await db.documents.update(id, { deletedAt: now(), rev: current.rev + 1, updatedAt: now() }); }
