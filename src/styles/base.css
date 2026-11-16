@@ -1,7 +1,8 @@
 /* GuitarAP design system — tokens, reset and shared controls.
    Direction: a musician's notebook. Warm paper, ink, one ember accent. No cards, no gradients. */
 
-:root {
+:root,
+[data-theme='light'] {
   color-scheme: light;
   --bg: #f4efe6;
   --surface: #faf7f0;
@@ -37,6 +38,12 @@
   --fb-note: #2a2620;
   --fb-note-ink: #fbf7ee;
   --fb-hover: rgb(181 68 26 / 0.16);
+  /* Harmonic functions: the same four colors everywhere (neck, legend, practice, exports). */
+  --h-root: #1d5fd1;
+  --h-third: #8a3fc2;
+  --h-fifth: #0a7d62;
+  --h-seventh: #c2410c;
+  --h-ink: #ffffff;
   --g0: #2b5d79;
   --g1: #38753f;
   --g2: #7a4789;
@@ -50,7 +57,8 @@
   --topbar-h: 52px;
 }
 
-:root[data-theme='dark'] {
+:root[data-theme='dark'],
+[data-theme='dark'] {
   color-scheme: dark;
   --bg: #141311;
   --surface: #1b1a17;
@@ -86,6 +94,11 @@
   --fb-note: #efeadf;
   --fb-note-ink: #1b1a17;
   --fb-hover: rgb(240 138 80 / 0.2);
+  --h-root: #7aa8ff;
+  --h-third: #c797f2;
+  --h-fifth: #45d3ab;
+  --h-seventh: #ff905f;
+  --h-ink: #14120f;
   --g0: #7bb6d6;
   --g1: #85c98f;
   --g2: #c99bd9;
@@ -246,13 +259,17 @@ kbd {
   opacity: 0.45;
 }
 .btn-primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--on-accent);
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--surface);
   font-weight: 600;
 }
 .btn-primary:hover:not(:disabled) {
-  background: var(--accent);
+  background: var(--ink);
+  filter: brightness(1.25);
+}
+.btn-danger:hover:not(:disabled) {
+  background: var(--danger);
   filter: brightness(0.92);
 }
 .btn-outline {
@@ -531,6 +548,9 @@ kbd {
 }
 .dialog-lg {
   max-width: 660px;
+}
+.dialog-xl {
+  max-width: 1080px;
 }
 .dialog-head {
   display: flex;

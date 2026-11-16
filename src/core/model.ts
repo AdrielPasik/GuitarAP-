@@ -1,3 +1,4 @@
+import type { Role } from '@/core/harmony';
 import { STANDARD_TUNING } from '@/core/music';
 
 export type DocumentType = 'tablature' | 'fretboard';
@@ -53,6 +54,21 @@ export type TablatureContent = {
 
 export type FretNote = { string: number; fret: number; finger?: 1 | 2 | 3 | 4; root?: boolean };
 export type FretPosition = { id: string; name: string; notes: FretNote[]; comments?: string };
+/**
+ * How a map is read. Purely visual: none of it adds, removes or moves a note.
+ * Every field is optional so maps saved by earlier versions keep working.
+ */
+export type FretboardView = {
+  /** What each point says. Falls back to `notation` for older maps. */
+  labels?: 'notes' | 'intervals' | 'both';
+  /** Harmonic functions kept in full color; the rest are softened. Absent = all. */
+  emphasis?: Role[];
+  /** Compact legend under the neck (default on). */
+  legend?: boolean;
+  /** Name the degrees 9, 11 and 13 instead of 2, 4 and 6. */
+  extensions?: boolean;
+};
+
 /** A spatial map: points on the instrument, with no order and no time. */
 export type FretboardContent = {
   tuning: string[];
@@ -65,6 +81,7 @@ export type FretboardContent = {
   positions: FretPosition[];
   baseNotes: FretNote[];
   selectedPositionId: string;
+  view?: FretboardView;
 };
 
 export type TextBlockStyle = 'heading' | 'note';

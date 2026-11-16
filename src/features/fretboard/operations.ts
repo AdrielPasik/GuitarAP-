@@ -1,4 +1,4 @@
-import type { FretNote, FretPosition, FretboardContent } from '@/core/model';
+import type { FretNote, FretPosition, FretboardContent, FretboardView } from '@/core/model';
 import { scalePositions, type ScaleName } from '@/core/music';
 
 export const noteKey = (note: Pick<FretNote, 'string' | 'fret'>) => `${note.string}:${note.fret}`;
@@ -148,4 +148,26 @@ export function setRange(content: FretboardContent, minFret: number, maxFret: nu
   const max = Math.max(1, Math.min(24, Math.round(maxFret)));
   const min = Math.max(0, Math.min(Math.round(minFret), max - 1));
   return { ...content, minFret: min, maxFret: max };
+}
+
+/** Reading preferences with the defaults older maps get. */
+export function resolvedView(content: FretboardContent): Required<Pick<FretboardView, 'labels' | 'legend' | 'extensions'>> & Pick<FretboardView, 'emphasis'> {
+  return {
+    labels: content.view?.labels ?? (content.notation === 'intervals' ? 'intervals' : 'notes'),
+    emphasis: content.view?.emphasis,
+    legend: content.view?.legend ?? true,
+    extensions: content.view?.extensions ?? false,
+  };
+}
+
+/** Changes how the map is read. Never touches a note. */
+export function setView(content: FretboardContent, patch: Partial<FretboardView>): FretboardContent {
+  const view: FretboardView = { ...content.view, ...patch };
+  if ('emphasis' in patch && patch.emphasis === undefined) delete view.emphasis;
+  return {
+    ...content,
+    view,
+    // Older versions only know notes | intervals.
+    notation: patch.labels ? (patch.labels === 'intervals' ? 'intervals' : 'notes') : content.notation,
+  };
 }
