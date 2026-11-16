@@ -1,4 +1,6 @@
-# Validación segura de Supabase real
+# Validación remota opcional de Supabase
+
+Esta herramienta **no es necesaria para iniciar GuitarAP ni para usar una única cuenta personal**. La aplicación sólo necesita las dos variables públicas de `.env.local`, iniciar sesión y confirmar el backup antes del primer sincronizado.
 
 ## Requisito previo
 
@@ -6,7 +8,7 @@ El proyecto que ya recibió `0001` a `0005` debe ejecutar una vez, desde **SQL E
 
 La migración no actualiza ni elimina filas. Sustituye los dos RPC vigentes, restringe su ejecución a usuarios autenticados, deshabilita RPC antiguos que no escribían el change log y valida referencias entre carpetas, canciones, documentos y versiones.
 
-## Crear las cuentas aisladas
+## Sólo para una auditoría avanzada entre dos usuarios
 
 1. En **Authentication → Users**, creá dos cuentas exclusivas para QA, por ejemplo `guitarap-qa-a` y `guitarap-qa-b`. No uses tu cuenta personal.
 2. Creá localmente `.env.sync-test.local`. El patrón `.env.*` ya está ignorado por Git.
@@ -18,15 +20,18 @@ GUITARAP_TEST_USER_A_PASSWORD=
 GUITARAP_TEST_USER_B_EMAIL=
 GUITARAP_TEST_USER_B_PASSWORD=
 GUITARAP_REMOTE_TEST_CONFIRM=isolated-test-users
+GUITARAP_REMOTE_TEST_ENABLED=1
 ```
 
 La URL y la clave pública se leen de `.env.local`; no dupliques una clave secreta ni agregues `service_role`.
 
-## Ejecutar
+## Ejecutar opcionalmente
 
 ```text
 npm run test:supabase
 ```
+
+Si no existe `.env.sync-test.local` con dos cuentas QA, confirmación explícita y `GUITARAP_REMOTE_TEST_ENABLED=1`, el comando informa que fue omitido y termina correctamente. Si las credenciales QA son inválidas, muestra un mensaje corto sin stack trace, emails, contraseñas, claves ni tokens.
 
 El script genera UUID y títulos exclusivos, nunca enumera ni modifica documentos preexistentes y no imprime emails, contraseñas, claves o tokens. Valida:
 

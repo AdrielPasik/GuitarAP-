@@ -2,18 +2,13 @@
 
 GuitarAP genera un build estático en `dist/`. Las rutas se cargan en bloques independientes y el service worker incluye todos los bloques necesarios para seguir abriendo la aplicación offline.
 
-## Configuración inicial manual
+## Configuración inicial mínima
 
-1. En Cloudflare Dashboard, abrí **Workers & Pages → Create application → Pages → Connect to Git** y seleccioná el repositorio `AdrielPasik/GuitarAP-`.
-2. Elegí `main` como rama de producción y habilitá despliegues automáticos para nuevos commits de esa rama.
-3. Usá una versión actual de Node compatible con el `package-lock.json` (Node 24 recomendado).
-4. Configurá **Build command**: `npm run build`.
-5. Configurá **Build output directory**: `dist`.
-6. Dejá **Root directory** vacío y **Framework preset** en `None` o `Vite`.
-7. En **Settings → Environment variables**, agregá para Production únicamente `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY`. La segunda puede ser la clave pública `sb_publishable_...`; nunca agregues la contraseña PostgreSQL, una clave secret ni `service_role`.
-8. Después del primer despliegue copiá la URL `https://<proyecto>.pages.dev`.
-9. En Supabase abrí **Authentication → URL Configuration**: establecé esa URL HTTPS como **Site URL** y agregala también a **Redirect URLs**. Si luego usás un dominio propio, agregalo sin retirar `pages.dev` hasta terminar la transición.
-10. Abrí la aplicación publicada, iniciá sesión con una cuenta de prueba, verificá una sincronización y luego comprobá el shell PWA en modo offline.
+1. En Cloudflare Dashboard, abrí **Workers & Pages → Create application → Pages → Connect to Git** y seleccioná `AdrielPasik/GuitarAP-`.
+2. Elegí `main`, **Build command** `npm run build` y **Build output directory** `dist`.
+3. En **Settings → Environment variables → Production**, agregá sólo `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY`. La segunda puede ser `sb_publishable_...`; nunca agregues contraseña PostgreSQL, claves secretas ni `service_role`.
+4. Desplegá. Copiá la URL `https://<proyecto>.pages.dev` resultante.
+5. En Supabase → **Authentication → URL Configuration**, pegá esa URL como **Site URL** y en **Redirect URLs**.
 
 `public/_redirects` preserva las rutas SPA en Pages. `wrangler.toml` declara el directorio de salida para herramientas compatibles; el despliegue conectado a Git queda deliberadamente gestionado por Pages.
 

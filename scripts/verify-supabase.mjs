@@ -1,6 +1,28 @@
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 
+let failureReported = false;
+function reportFailure(error) {
+  if (failureReported) return;
+  failureReported = true;
+  const message = error instanceof Error ? error.message : String(error);
+  let publicMessage =
+    'La validación remota opcional no se completó. Revisá la conectividad y las migraciones.';
+  if (/invalid_credentials/i.test(message)) {
+    publicMessage =
+      'Supabase rechazó el inicio de sesión de una cuenta de prueba. Revisá sus credenciales o eliminá la configuración QA si no vas a usar esta prueba opcional.';
+  } else if (/owner mismatch|permission denied|42501/i.test(message)) {
+    publicMessage =
+      'Supabase rechazó la operación por permisos. Confirmá que aplicaste la migración 0006.';
+  } else if (/timeout|fetch failed|network/i.test(message)) {
+    publicMessage = 'No se pudo conectar con Supabase. Tus datos locales no fueron modificados.';
+  }
+  console.error(`Prueba remota opcional: ${publicMessage}`);
+  process.exitCode = 1;
+}
+process.on('uncaughtException', reportFailure);
+process.on('unhandledRejection', reportFailure);
+
 function parseEnv(raw) {
   return Object.fromEntries(
     raw
@@ -38,22 +60,31 @@ function assert(condition, message) {
 }
 
 const env = await localEnvironment();
-const required = [
-  'VITE_SUPABASE_URL',
-  'VITE_SUPABASE_ANON_KEY',
+const requiredApplicationConfig = ['VITE_SUPABASE_URL', 'VITE_SUPABASE_ANON_KEY'];
+const missingApplicationConfig = requiredApplicationConfig.filter((name) => !env[name]);
+if (missingApplicationConfig.length) {
+  console.log(
+    'Prueba remota opcional omitida: faltan variables públicas de Supabase en .env.local. GuitarAP puede seguir usándose localmente.',
+  );
+  process.exit(0);
+}
+
+const requiredQaCredentials = [
   'GUITARAP_TEST_USER_A_EMAIL',
   'GUITARAP_TEST_USER_A_PASSWORD',
   'GUITARAP_TEST_USER_B_EMAIL',
   'GUITARAP_TEST_USER_B_PASSWORD',
 ];
-const missing = required.filter((name) => !env[name]);
-if (missing.length) {
-  throw new Error(`Faltan variables para la prueba remota aislada: ${missing.join(', ')}.`);
-}
-if (env.GUITARAP_REMOTE_TEST_CONFIRM !== 'isolated-test-users') {
-  throw new Error(
-    'Definí GUITARAP_REMOTE_TEST_CONFIRM=isolated-test-users únicamente después de crear dos cuentas exclusivas para QA.',
+const missingQaCredentials = requiredQaCredentials.filter((name) => !env[name]);
+if (
+  missingQaCredentials.length ||
+  env.GUITARAP_REMOTE_TEST_CONFIRM !== 'isolated-test-users' ||
+  env.GUITARAP_REMOTE_TEST_ENABLED !== '1'
+) {
+  console.log(
+    'Prueba remota opcional omitida. GuitarAP no necesita cuentas QA para iniciar ni para usar sincronización con una sola cuenta personal.',
   );
+  process.exit(0);
 }
 assert(
   env.GUITARAP_TEST_USER_A_EMAIL !== env.GUITARAP_TEST_USER_B_EMAIL,
