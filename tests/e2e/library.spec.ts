@@ -88,7 +88,7 @@ test('an empty library offers the three real starting points', async ({ page }) 
   await expect(page.getByRole('heading', { name: 'Tu cuaderno está vacío' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Escribir una tablatura' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Marcar una escala' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Armar un material de estudio' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Empezar un cuaderno vacío' })).toBeVisible();
 });
 
 test('a library with hundreds of materials stays responsive and searchable', async ({ page }) => {

@@ -11,7 +11,8 @@ export async function openLibrary(page: Page) {
 /** Creates a material from the "Nuevo" menu and waits for the editor. */
 export async function createMaterial(page: Page, kind: 'Tablatura' | 'Mapa de escala' | 'Material de estudio', title: string) {
   await page.getByRole('button', { name: 'Nuevo', exact: true }).click();
-  await page.getByRole('menuitem', { name: kind }).click();
+  const entry = { Tablatura: 'Riff o tablatura', 'Mapa de escala': 'Mapa de escala', 'Material de estudio': 'Cuaderno vacío' }[kind];
+  await page.getByRole('menuitem', { name: entry }).click();
   await page.waitForURL(/\/material\//);
   const input = page.getByLabel('Título del material');
   await input.fill(title);

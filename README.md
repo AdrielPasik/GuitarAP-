@@ -5,7 +5,7 @@ Cuaderno musical para guitarristas, como aplicación web progresiva local-first.
 estudio**. Conserva los datos en IndexedDB, sincroniza opcionalmente con tu cuenta, y ofrece backups JSON,
 historial de versiones, Práctica con metrónomo y exportación PNG/PDF.
 
-- [Auditoría previa al rediseño](docs/audit-v0.2.md) · [Dirección de diseño](docs/design/direction.md) ·
+- [Auditoría v0.3](docs/audit-v0.3.md) · [Sistema armónico](docs/design/harmony.md) · [Auditoría v0.2](docs/audit-v0.2.md) · [Dirección de diseño](docs/design/direction.md) ·
   [Arquitectura de experiencia](docs/ux-architecture.md) · [Evidencia visual](docs/evidence/README.md)
 
 ## Desarrollo

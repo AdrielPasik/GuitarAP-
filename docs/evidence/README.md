@@ -28,3 +28,24 @@ La autenticación y la sincronización se responden localmente: no se usa ningun
 | 18 / 18a–c | Sincronización y copias de seguridad |
 | 19–21 | Tablet y móvil |
 | 22 / 23 | Sitio publicado (guitarap.pages.dev): primera visita y diálogo de inicio de sesión con el formulario de correo y contraseña (nube conectada; `/build-info.json` lo confirma). |
+
+## v0.3
+
+- `v0.2/` — línea base antes de v0.3: capturas de v0.2 y tres tomas nuevas con contenido real. Incluye
+  `v02-export-png-resultado.png`, la exportación de v0.2 con el mástil negro.
+- `v0.3/` — v0.3. Se regenera con `CAPTURE_EVIDENCE=1 npx playwright test tests/e2e/visual-evidence.spec.ts`
+  (junto con los archivos exportados reales: `14a-archivo-*.png` y `14b-archivo-*.pdf`).
+
+| # | Captura |
+|---|---|
+| 01 / 02 | Biblioteca de Escalas / carpeta anidada (Escalas ▸ Modos) |
+| 03 / 04 / 05 | Do jónico con solo un mapa / cuaderno vacío / menú de bloques |
+| 06 / 07 / 08 | Mapa en notas / intervalos / ambos |
+| 09 / 10 | Tríada resaltada / séptima resaltada |
+| 11 | Posiciones (vista conjunta) |
+| 12 / 13 | Diálogo de exportación / vista previa |
+| 14a / 14b | Archivo PNG y PDF exportados (reales) |
+| 15 | Cuaderno con mapa y tablatura |
+| 16 / 17 | Práctica con intervalos / modo foco |
+| 18 / 19 / 20 / 21 | Configuración / tema claro / tema oscuro / exportación en tema oscuro |
+

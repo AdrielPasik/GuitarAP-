@@ -1,155 +1,147 @@
-import { mkdir } from 'node:fs/promises';
+import { copyFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
-import { expect, test, type Page } from '@playwright/test';
-import { cell, createFolder, createMaterial, mockServer, neck, openLibrary, settleSave } from './helpers';
+import { test, type Page } from '@playwright/test';
+import { cell, createFolder, mockServer, neck, openLibrary, settleSave } from './helpers';
 
 /**
  * Visual evidence for design review. It only runs on demand:
  *   CAPTURE_EVIDENCE=1 npx playwright test tests/e2e/visual-evidence.spec.ts
- * Screenshots go to docs/evidence/after. Auth and sync are answered locally; no real account is used.
+ * Screenshots and the exported files go to docs/evidence/v0.3. No real account is used.
  */
 const enabled = Boolean(process.env.CAPTURE_EVIDENCE);
-const out = path.resolve('docs/evidence/after');
+const out = path.resolve('docs/evidence/v0.3');
 const shot = async (page: Page, name: string, fullPage = false) => {
-  await page.waitForTimeout(250);
+  await page.waitForTimeout(350);
   await page.screenshot({ path: path.join(out, `${name}.png`), fullPage });
 };
-const back = (page: Page) => page.getByRole('link', { name: /Volver a la biblioteca/ }).click();
+const row = (page: Page, text: string) => page.locator('.lib-row', { hasText: text });
+const highlight = (page: Page, name: string) => page.getByRole('group', { name: 'Resaltar' }).getByRole('button', { name, exact: true });
 
-test.describe('evidence', () => {
+async function newMaterial(page: Page, entry: string, title: string) {
+  await page.getByRole('button', { name: 'Nuevo', exact: true }).click();
+  await page.getByRole('menuitem', { name: entry }).click();
+  await page.waitForURL(/\/material\//);
+  await page.getByLabel('Título del material').fill(title);
+}
+async function generateScale(page: Page, scale: string) {
+  await page.getByRole('button', { name: 'Generar escala' }).click();
+  await page.getByLabel('Tipo de escala').selectOption(scale);
+  await page.getByRole('button', { name: 'Agregar a la posición' }).click();
+}
+
+test.describe('evidence v0.3', () => {
   test.skip(!enabled, 'set CAPTURE_EVIDENCE=1 to capture');
-  test.setTimeout(240_000);
+  test.setTimeout(300_000);
 
-  test('captures the redesigned product', async ({ page }) => {
+  test('captures the refined product', async ({ page }) => {
     await mkdir(out, { recursive: true });
     await page.setViewportSize({ width: 1440, height: 900 });
     await mockServer(page);
     await openLibrary(page);
-    await shot(page, '00-primera-visita-biblioteca-vacia');
 
-    // A believable library.
+    // Escalas / Modos, with realistic scale materials.
     await createFolder(page, 'Escalas');
-    await createFolder(page, 'Covers');
-    await page.getByRole('button', { name: 'Nuevo', exact: true }).click();
-    await page.getByRole('menuitem', { name: 'Canción' }).click();
-    await page.getByRole('dialog').getByLabel('Nombre').fill('Comfortably Numb');
-    await page.getByRole('dialog').getByRole('button', { name: 'Crear' }).click();
-
-    // 3 — a new material, empty.
-    await createMaterial(page, 'Material de estudio', 'Pentatónica menor de La');
-    await shot(page, '03-nuevo-documento');
-
-    // 9 — one string, many notes.
-    await page.getByRole('button', { name: 'Mapa del mástil' }).click();
-    await page.getByRole('button', { name: /^Tónica/ }).click();
+    await row(page, 'Escalas').locator('.lib-open').click();
+    await createFolder(page, 'Modos');
+    await newMaterial(page, 'Mapa de escala', 'Do jónico');
+    await generateScale(page, 'Mayor');
+    await page.getByRole('button', { name: 'Agregar posición' }).click();
+    for (const [s, f] of [[5, 8], [5, 10], [5, 12], [4, 8], [4, 10], [3, 7], [3, 9], [3, 10], [2, 7], [2, 9], [1, 8], [1, 10], [0, 8], [0, 10], [0, 12]]) await neck(page).pick(s, f);
+    await page.getByRole('tab', { name: 'Posición 2' }).dblclick();
+    await page.getByLabel('Nombre de la posición').fill('Posición 8-12');
+    await page.keyboard.press('Enter');
+    await page.getByRole('tab', { name: 'Posición 1' }).click();
+    await settleSave(page);
+    const doJonico = page.url();
+    await page.getByRole('link', { name: /Volver a la biblioteca/ }).click();
+    await newMaterial(page, 'Mapa de escala', 'Pentatónica menor');
+    await page.getByRole('button', { name: /^Tónica: / }).click();
     await page.getByRole('menuitemradio', { name: 'La', exact: true }).click();
-    for (const fret of [0, 3, 5, 7, 10, 12]) await neck(page).pick(5, fret);
-    for (const [string, fret] of [[4, 0], [4, 2], [4, 5], [4, 7], [3, 0], [3, 2], [3, 5], [3, 7], [2, 0], [2, 2], [1, 0], [1, 3], [0, 0], [0, 3], [0, 5]]) {
-      await neck(page).pick(string, fret);
-    }
-    await shot(page, '09-mapa-multiples-notas-misma-cuerda');
+    await generateScale(page, 'Pentatónica menor');
+    await settleSave(page);
+    await page.getByRole('link', { name: /Volver a la biblioteca/ }).click();
+    await shot(page, '01-biblioteca-escalas');
+    await row(page, 'Modos').locator('.lib-open').click();
+    await newMaterial(page, 'Cuaderno vacío', 'Dórico');
+    await page.getByRole('button', { name: 'Agregar mapa' }).click();
+    await settleSave(page);
+    await page.getByRole('link', { name: /Volver a la biblioteca/ }).click();
+    await shot(page, '02-carpeta-anidada');
 
-    // 10 — map + tablature + notes in one material.
+    // The notebook: a single map, and an empty one.
+    await page.goto(doJonico);
+    await shot(page, '03-cuaderno-do-jonico-un-mapa');
+    await page.goto('/biblioteca');
+    await newMaterial(page, 'Cuaderno vacío', 'Cuaderno nuevo');
+    await shot(page, '04-cuaderno-vacio');
+    await page.getByRole('button', { name: 'Agregar mapa' }).click();
     await page.getByRole('button', { name: 'Agregar bloque', exact: true }).first().click();
-    await page.getByRole('menuitem', { name: 'Título de sección' }).click();
-    await page.getByLabel('Título de sección').fill('Frase sobre la escala');
-    await page.getByRole('button', { name: 'Agregar bloque', exact: true }).first().click();
-    await page.getByRole('menuitem', { name: 'Tablatura' }).click();
+    await shot(page, '05-menu-agregar-bloques');
+    await page.keyboard.press('Escape');
+
+    // Reading the map: notes, intervals, both, colors, triad, seventh.
+    await page.goto(doJonico);
+    await page.getByRole('button', { name: 'Notas', exact: true }).click();
+    await shot(page, '06-mapa-notas');
+    await page.getByRole('button', { name: 'Intervalos', exact: true }).click();
+    await shot(page, '07-mapa-intervalos');
+    await page.getByRole('button', { name: 'Ambos' }).click();
+    await shot(page, '08-mapa-notas-e-intervalos');
+    await highlight(page, 'Tríada').click();
+    await shot(page, '09-mapa-triada-resaltada');
+    await highlight(page, 'Séptima').click();
+    await shot(page, '10-mapa-septima-resaltada');
+    await highlight(page, 'Todo').click();
+    await page.getByRole('button', { name: 'Conjunta' }).click();
+    await shot(page, '11-posiciones-conjunta');
+    await page.getByRole('button', { name: 'Individual' }).click();
+
+    // Export: dialog, preview, files.
+    await page.getByRole('button', { name: 'Exportar', exact: true }).click();
+    await shot(page, '12-dialogo-exportar');
+    await page.getByRole('dialog').locator('.export-preview').screenshot({ path: path.join(out, '13-vista-previa-png.png') });
+    const png = page.waitForEvent('download');
+    await page.getByRole('dialog').getByRole('button', { name: 'Descargar PNG' }).click();
+    const pngFile = await png;
+    await copyFile((await pngFile.path())!, path.join(out, `14a-archivo-${pngFile.suggestedFilename()}`));
+    await page.getByRole('button', { name: 'Exportar', exact: true }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Documento PDF' }).click();
+    await page.getByRole('dialog').getByLabel(/Qué exportar de/).selectOption({ label: 'Solo «Posición 1»' });
+    const pdf = page.waitForEvent('download');
+    await page.getByRole('dialog').getByRole('button', { name: 'Descargar PDF' }).click();
+    const pdfFile = await pdf;
+    await copyFile((await pdfFile.path())!, path.join(out, `14b-archivo-${pdfFile.suggestedFilename()}`));
+
+    // A mixed notebook, practice and settings.
+    await page.goto('/biblioteca');
+    await newMaterial(page, 'Escala y frase', 'Pentatónica y lick');
+    for (const fret of [5, 8, 10, 12]) await neck(page).pick(5, fret);
     await cell(page, 1, 1).click();
-    for (const key of '5 7 8 7 5 12 10 8'.split(' ')) await page.keyboard.press(key.length > 1 ? key[0] : key);
-    await cell(page, 1, 1).click();
-    await page.keyboard.press('h');
+    for (const key of '578787') await page.keyboard.press(key);
     await page.getByRole('button', { name: 'Agregar bloque', exact: true }).first().click();
     await page.getByRole('menuitem', { name: 'Nota de estudio' }).click();
     await page.getByLabel('Nota de estudio').fill('Alternate picking a 60 BPM. Subir de a 4 BPM cuando salga limpio.');
     await settleSave(page);
-    await page.mouse.move(5, 5);
-    await shot(page, '10-documento-mapa-y-tablatura', true);
-
-    // 11–13 — positions.
-    await page.getByRole('button', { name: 'Agregar posición' }).click();
-    for (const [string, fret] of [[5, 5], [5, 8], [4, 5], [4, 7], [3, 5], [3, 7], [2, 5], [2, 7], [1, 8], [1, 10], [0, 5], [0, 8]]) await neck(page).pick(string, fret);
-    await shot(page, '11-posiciones-individuales');
-    await page.getByRole('button', { name: 'Conjunta' }).click();
-    await shot(page, '12-posiciones-conjuntas', true);
-    await page.getByRole('button', { name: 'Completa' }).click();
-    await shot(page, '13-mapa-completo');
-    await page.getByRole('button', { name: 'Individual' }).click();
-    await settleSave(page);
-    const study = page.url();
-
-    // A tablature written from the neck.
-    await page.goto('/biblioteca');
-    await createMaterial(page, 'Tablatura', 'Solo de prueba');
-    await cell(page, 1, 1).click();
-    for (const key of '5787537535'.split('')) await page.keyboard.press(key);
-    await shot(page, '06-editor-secuencial');
-    await page.getByRole('button', { name: 'Mástil', exact: true }).click();
-    await page.getByRole('button', { name: 'Melodía' }).click();
-    for (const fret of [5, 7, 8, 7, 5]) await page.getByTestId('tab-neck').getByTestId(`fret-0-${fret}`).click();
-    await shot(page, '07-escritura-por-mastil');
-    await cell(page, 1, 13).click().catch(() => undefined);
-    await cell(page, 1, 12).click();
-    await shot(page, '08-vista-combinada');
-    await settleSave(page);
-    const tabUrl = page.url();
-
-    // Another map for the library list, then the library in both themes.
-    await page.goto('/biblioteca');
-    await createMaterial(page, 'Mapa de escala', 'Do mayor');
-    for (const fret of [0, 1, 3, 5, 7, 8]) await neck(page).pick(5, fret);
-    await settleSave(page);
-    await back(page);
-    await shot(page, '01-biblioteca-clara');
-    await page.getByRole('button', { name: 'Activar modo oscuro' }).click();
-    await shot(page, '02-biblioteca-oscura');
-    await page.goto(study);
-    await shot(page, '10b-documento-oscuro', true);
-    await page.getByRole('button', { name: 'Activar modo claro' }).click();
-
-    // 4 — sign in.
-    await page.goto('/biblioteca');
-    await page.getByRole('banner').getByRole('button', { name: 'Iniciar sesión' }).click();
-    await shot(page, '04-inicio-de-sesion');
-    await page.getByRole('dialog').getByLabel('Correo').fill('prueba@guitarap.test');
-    await page.getByRole('dialog').getByLabel('Contraseña', { exact: true }).fill('clave-de-prueba');
-    await page.getByRole('dialog').getByRole('button', { name: 'Iniciar sesión' }).click();
-    await expect(page.getByRole('dialog', { name: /Protegé tu biblioteca/ })).toBeVisible();
-    await shot(page, '18a-proteger-biblioteca');
-    await page.getByRole('button', { name: 'Descargar copia de seguridad' }).click();
-    await page.getByLabel(/Confirmo que el archivo se guardó/).check();
-    await shot(page, '18b-confirmar-copia');
-    await page.getByRole('button', { name: 'Vincular y sincronizar' }).click();
-    await expect(page.getByRole('banner').getByText('Todo sincronizado')).toBeVisible({ timeout: 15000 });
-    await page.getByRole('banner').getByRole('button', { name: 'Cuenta y sincronización' }).click();
-    await shot(page, '05-usuario-conectado');
-    await page.keyboard.press('Escape');
-
-    // 14–16 — practice.
-    await page.goto(tabUrl.replace('/material/', '/practica/'));
-    await shot(page, '14-practica-tablatura');
-    await page.goto(study.replace('/material/', '/practica/'));
-    await shot(page, '15-practica-mapa');
+    await page.mouse.move(2, 2);
+    await shot(page, '15-cuaderno-mapa-y-tablatura', true);
+    await page.goto(doJonico.replace('/material/', '/practica/'));
+    await page.getByRole('button', { name: 'Ambos' }).click();
+    await highlight(page, 'Tríada').click();
+    await shot(page, '16-practica-con-intervalos');
     await page.getByRole('button', { name: 'Modo foco' }).click();
-    await shot(page, '16-modo-foco');
+    await shot(page, '17-practica-modo-foco');
     await page.keyboard.press('Escape');
-
-    // 17–18 — settings.
     await page.goto('/configuracion/cuenta');
-    await shot(page, '17-configuracion');
-    await page.goto('/configuracion/sincronizacion');
-    await shot(page, '18-sincronizacion');
-    await page.goto('/configuracion/copias');
-    await shot(page, '18c-copias-de-seguridad');
-
-    // Other sizes.
-    await page.setViewportSize({ width: 820, height: 1180 });
-    await page.goto(study);
-    await shot(page, '19-tablet-documento');
-    await page.setViewportSize({ width: 390, height: 844 });
+    await shot(page, '18-configuracion');
     await page.goto('/biblioteca');
-    await shot(page, '20-movil-biblioteca');
-    await page.goto(study);
-    await shot(page, '21-movil-documento');
+    await shot(page, '19-tema-claro');
+    await page.goto(doJonico);
+    await page.getByRole('button', { name: 'Activar modo oscuro' }).click();
+    await page.getByRole('button', { name: 'Ambos' }).click();
+    await shot(page, '20-tema-oscuro');
+    await page.getByRole('button', { name: 'Exportar', exact: true }).click();
+    await page.getByRole('dialog').getByRole('button', { name: /Presentación/ }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Oscuro' }).click();
+    await shot(page, '21-exportar-tema-oscuro');
   });
 });

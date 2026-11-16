@@ -12,7 +12,7 @@ const sizes = [
 async function seed(page: Page) {
   await openLibrary(page);
   await createMaterial(page, 'Material de estudio', 'Responsive');
-  await page.getByRole('button', { name: 'Mapa del mástil' }).click();
+  await page.getByRole('button', { name: 'Agregar mapa' }).click();
   for (const fret of [0, 1, 3, 5, 7, 8]) await neck(page).pick(5, fret);
   await page.getByRole('button', { name: 'Agregar bloque', exact: true }).first().click();
   await page.getByRole('menuitem', { name: 'Tablatura' }).click();

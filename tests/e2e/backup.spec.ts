@@ -5,7 +5,7 @@ import { cell, createMaterial, neck, openLibrary, settleSave } from './helpers';
 test('Test 9 — a backup holds the notebook structure and restores into an isolated, empty browser', async ({ page, browser }, testInfo) => {
   await openLibrary(page);
   await createMaterial(page, 'Material de estudio', 'Para respaldar');
-  await page.getByRole('button', { name: 'Mapa del mástil' }).click();
+  await page.getByRole('button', { name: 'Agregar mapa' }).click();
   await neck(page).pick(5, 3);
   await neck(page).pick(5, 5);
   await page.getByRole('button', { name: 'Agregar bloque', exact: true }).first().click();

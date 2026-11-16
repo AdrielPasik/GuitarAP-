@@ -139,3 +139,58 @@ test('adding a block to an old material upgrades it without losing the original,
   );
   expect(versions.some((version) => version.content.kind === undefined)).toBe(true);
 });
+
+test('Escenario I — un cuaderno de v0.2 sin preferencias de lectura abre, se edita, se exporta y se recarga íntegro', async ({ page }) => {
+  await seed(page);
+  // A v0.2 notebook: blocks, but none of the reading preferences added in v0.3.
+  const v02 = {
+    id: 'v02-notebook',
+    nodeId: null,
+    type: 'tablature',
+    title: 'Cuaderno v0.2',
+    rev: 3,
+    createdAt: 1000,
+    updatedAt: 4000,
+    content: {
+      kind: 'notebook',
+      version: 1,
+      blocks: [
+        { id: 'b-text', kind: 'text', style: 'heading', text: 'Escala de Do' },
+        { id: 'b-map', kind: 'map', content: { ...legacyMap().content, root: 0, positions: [{ id: 'p', name: 'Posición 1', notes: [{ string: 5, fret: 8 }, { string: 5, fret: 12 }] }], baseNotes: [{ string: 5, fret: 8 }, { string: 5, fret: 12 }], selectedPositionId: 'p' } },
+      ],
+    },
+  };
+  await page.evaluate(
+    (doc) =>
+      new Promise<void>((resolve, reject) => {
+        const request = indexedDB.open('guitarap');
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => {
+          const tx = request.result.transaction('documents', 'readwrite');
+          tx.objectStore('documents').put(doc);
+          tx.oncomplete = () => {
+            request.result.close();
+            resolve();
+          };
+          tx.onerror = () => reject(tx.error);
+        };
+      }),
+    v02,
+  );
+  await page.goto('/material/v02-notebook');
+  await expect(page.getByRole('button', { name: 'Notas', exact: true })).toHaveAttribute('aria-pressed', 'true'); // default reading
+  await expect(neck(page).marker(5, 8)).toHaveAttribute('data-role', 'root');
+  await expect(neck(page).marker(5, 12)).toHaveAttribute('data-role', 'third');
+  await page.getByRole('button', { name: 'Intervalos', exact: true }).click();
+  await neck(page).pick(5, 3);
+  await settleSave(page);
+  const saved = await stored(page, 'v02-notebook');
+  expect(saved.content.kind).toBe('notebook');
+  expect((saved.content.blocks as Array<{ kind: string }>).map((block) => block.kind)).toEqual(['text', 'map']);
+  await page.getByRole('button', { name: 'Exportar', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Exportar' }).locator('.export-sheet .fb-svg')).toHaveCount(1);
+  await page.keyboard.press('Escape');
+  await page.reload();
+  await expect(neck(page).marker(5, 3)).toContainText('5');
+  await expect(page.getByLabel('Título de sección')).toHaveValue('Escala de Do');
+});

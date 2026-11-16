@@ -113,54 +113,6 @@
   position: relative;
   min-width: 0;
 }
-.block-actions {
-  position: absolute;
-  left: -48px;
-  top: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  opacity: 0;
-  transition: opacity 0.12s;
-}
-.block:hover > .block-actions,
-.block:focus-within > .block-actions {
-  opacity: 1;
-}
-.block-kind {
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 26px;
-  color: var(--ink-3);
-}
-.block-actions .icon-btn {
-  width: 32px;
-  height: 28px;
-  background: var(--bg);
-}
-.block-title {
-  display: block;
-  width: 100%;
-  margin-bottom: 8px;
-  padding: 2px 6px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  font: 600 1.2rem var(--font-display);
-}
-.block-title::placeholder {
-  color: var(--ink-3);
-  font-weight: 400;
-  font-style: italic;
-}
-.block-title:hover:not(:read-only) {
-  background: var(--sunken);
-}
-.block-title:focus {
-  background: var(--raised);
-  outline: 2px solid var(--accent);
-}
 .add-between {
   display: flex;
   justify-content: center;
@@ -569,7 +521,6 @@
 .fb-marker.g5 .dot {
   fill: var(--g5);
 }
-.fb-marker.tone-root .dot,
 .fb-marker.tone-active .dot {
   fill: var(--accent);
 }
@@ -578,21 +529,73 @@
   stroke: var(--accent);
   stroke-width: 2.2;
 }
+.fb-marker.role-root .dot {
+  fill: var(--h-root);
+}
+.fb-marker.role-third .dot {
+  fill: var(--h-third);
+}
+.fb-marker.role-fifth .dot {
+  fill: var(--h-fifth);
+}
+.fb-marker.role-seventh .dot {
+  fill: var(--h-seventh);
+}
+.fb-marker.role-root .halo {
+  stroke: var(--h-root);
+}
+.fb-marker[class*='role-']:not(.role-other) .mark-label,
+.fb-marker[class*='role-']:not(.role-other) .mark-sub {
+  fill: var(--h-ink);
+}
+.fb-marker .alt {
+  fill: none;
+  stroke: var(--fb-note);
+  stroke-width: 1.6;
+  stroke-dasharray: 2.5 2.5;
+}
+.fb-marker.role-third .alt {
+  stroke: var(--h-third);
+}
+.fb-marker.role-fifth .alt {
+  stroke: var(--h-fifth);
+}
+.fb-marker.role-seventh .alt {
+  stroke: var(--h-seventh);
+}
+.fb-marker.dim {
+  opacity: 0.36;
+}
+.fb-marker .mark-label.two {
+  font-size: 11px;
+}
+.fb-marker .mark-sub {
+  fill: var(--fb-note-ink);
+  font: 600 9px var(--font-ui);
+  text-anchor: middle;
+  dominant-baseline: central;
+  opacity: 0.95;
+}
+.fb-marker {
+  transition: opacity 0.15s;
+}
+.fb-marker .dot {
+  transition: fill 0.15s;
+}
 .fb-marker.tone-active .halo {
   fill: var(--accent-soft);
   stroke: var(--accent);
   stroke-width: 1.5;
 }
-.fb-marker.tone-root .mark-label,
 .fb-marker.tone-active .mark-label {
   fill: var(--on-accent);
 }
 .fb-marker.tone-ghost .dot {
   fill: none;
   stroke: var(--fb-note);
-  stroke-width: 1.6;
-  stroke-dasharray: 3 3;
-  opacity: 0.5;
+  stroke-width: 1.3;
+  stroke-dasharray: 2.5 3.5;
+  opacity: 0.28;
 }
 .fb-cursor {
   fill: none;
@@ -736,24 +739,8 @@
 }
 
 @media (max-width: 1260px) {
-  .block-actions {
-    left: auto;
-    right: 0;
-    top: -2px;
-    flex-direction: row;
-    z-index: 5;
-  }
-  .block-kind {
-    display: none;
-  }
-  .block-title {
-    padding-right: 150px;
-  }
 }
 @media (max-width: 760px) {
-  .block-actions {
-    opacity: 1;
-  }
   .doc-title {
     font-size: 1.4rem;
   }
@@ -768,4 +755,364 @@
 .text-note.static {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+/* Harmonic legend ------------------------------------------------------------ */
+.harmony-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  margin-top: 10px;
+}
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 28px;
+  padding: 0 11px 0 4px;
+  border: 1px solid var(--line-2);
+  border-radius: 14px;
+  color: var(--ink-2);
+  font-size: 0.88rem;
+}
+.legend-item:hover {
+  background: var(--sunken);
+  color: var(--ink);
+}
+.legend-item[aria-pressed='true'] {
+  border-color: var(--ink);
+  color: var(--ink);
+  font-weight: 650;
+}
+.legend-item.off {
+  opacity: 0.55;
+}
+.legend-dot {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 4px;
+  border-radius: 10px;
+  background: var(--fb-note);
+  color: var(--fb-note-ink);
+  font: 700 0.72rem var(--font-ui);
+  font-style: normal;
+}
+.legend-dot.role-root {
+  background: var(--h-root);
+  color: var(--h-ink);
+}
+.legend-dot.role-third {
+  background: var(--h-third);
+  color: var(--h-ink);
+}
+.legend-dot.role-fifth {
+  background: var(--h-fifth);
+  color: var(--h-ink);
+}
+.legend-dot.role-seventh {
+  background: var(--h-seventh);
+  color: var(--h-ink);
+}
+
+/* Harmonic legend ------------------------------------------------------------ */
+.harmony-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  margin-top: 10px;
+}
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 28px;
+  padding: 0 11px 0 4px;
+  border: 1px solid var(--line-2);
+  border-radius: 14px;
+  color: var(--ink-2);
+  font-size: 0.88rem;
+}
+.legend-item:hover {
+  background: var(--sunken);
+  color: var(--ink);
+}
+.legend-item[aria-pressed='true'] {
+  border-color: var(--ink);
+  color: var(--ink);
+  font-weight: 650;
+}
+.legend-item.off {
+  opacity: 0.55;
+}
+.legend-dot {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 4px;
+  border-radius: 10px;
+  background: var(--fb-note);
+  color: var(--fb-note-ink);
+  font: 700 0.72rem var(--font-ui);
+  font-style: normal;
+}
+.legend-dot.role-root {
+  background: var(--h-root);
+  color: var(--h-ink);
+}
+.legend-dot.role-third {
+  background: var(--h-third);
+  color: var(--h-ink);
+}
+.legend-dot.role-fifth {
+  background: var(--h-fifth);
+  color: var(--h-ink);
+}
+.legend-dot.role-seventh {
+  background: var(--h-seventh);
+  color: var(--h-ink);
+}
+
+/* Block frame ------------------------------------------------------------------ */
+.block {
+  padding-left: 14px;
+  border-left: 2px solid transparent;
+  transition: border-color 0.15s;
+}
+.block.active {
+  border-left-color: var(--accent);
+}
+.block-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  margin-bottom: 6px;
+}
+.block-head.text {
+  min-height: 0;
+  margin: 0;
+  height: 0;
+  justify-content: flex-end;
+}
+.block-head.text .block-tools {
+  position: relative;
+  z-index: 2;
+  top: 14px;
+  opacity: 0;
+}
+.block:hover .block-head.text .block-tools,
+.block:focus-within .block-head.text .block-tools {
+  opacity: 1;
+}
+.block-kind {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  color: var(--ink-3);
+}
+.block-title {
+  flex: 0 1 420px;
+  min-width: 0;
+  padding: 3px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  font: 600 1.15rem var(--font-display);
+}
+.block-title::placeholder {
+  color: var(--ink-3);
+  font-style: italic;
+  font-weight: 400;
+}
+.block-title:hover:not(:read-only) {
+  background: var(--sunken);
+}
+.block-title:focus {
+  background: var(--raised);
+  outline: 2px solid var(--accent);
+}
+.block-summary {
+  color: var(--ink-3);
+  font-size: 0.88rem;
+}
+.block-tools {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.block.collapsed {
+  opacity: 0.92;
+}
+.block.collapsed .block-head {
+  margin-bottom: 0;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+.menu-desc {
+  display: block;
+  color: var(--ink-3);
+  font-size: 0.8rem;
+  font-weight: 400;
+  line-height: 1.25;
+}
+.menu-item:has(.menu-desc) {
+  height: auto;
+  min-height: 44px;
+  padding-block: 6px;
+}
+.empty-notebook {
+  padding: 36px 0 24px;
+}
+.empty-notebook h2 {
+  font: 600 1.5rem var(--font-display);
+  margin-bottom: 4px;
+}
+
+/* Export ---------------------------------------------------------------------- */
+.export-layout {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: 20px;
+  min-height: 420px;
+}
+.export-controls {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+}
+.ex-group {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.ex-group legend {
+  padding: 0;
+  margin-bottom: 8px;
+  font-weight: 650;
+}
+.ex-blocks {
+  display: grid;
+  gap: 8px;
+}
+.ex-block-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.ex-scope {
+  width: calc(100% - 24px);
+  margin: 4px 0 0 24px;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--line-2);
+  border-radius: 6px;
+  background: var(--raised);
+  font-size: 0.88rem;
+}
+.ex-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.ex-toggle {
+  justify-self: start;
+}
+.ex-filename {
+  color: var(--ink-2);
+  font-size: 0.88rem;
+}
+.ex-filename code {
+  font-family: var(--font-mono);
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.export-preview {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-width: 0;
+}
+.ex-preview-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+.ex-preview-frame {
+  max-height: 58vh;
+  overflow: auto;
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  background: var(--sunken);
+}
+.ex-preview-frame.checker {
+  background: repeating-conic-gradient(#d8d8d8 0 25%, #ffffff 0 50%) 0 0 / 16px 16px;
+}
+.ex-preview-scale {
+  overflow: hidden;
+}
+
+/* The sheet is themed on its own, independent of the app theme. */
+.export-sheet {
+  box-sizing: border-box;
+  padding: 36px 40px 40px;
+  background: var(--raised);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  line-height: 1.45;
+}
+.export-sheet[data-bg='white'] {
+  background: #ffffff;
+}
+.export-sheet[data-bg='transparent'] {
+  background: transparent;
+}
+.ex-title {
+  margin-bottom: 22px;
+  font: 600 2rem var(--font-display);
+}
+.ex-heading {
+  margin: 18px 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--line);
+  font: 600 1.45rem var(--font-display);
+}
+.ex-item {
+  margin-bottom: 26px;
+}
+.ex-caption {
+  margin-bottom: 6px;
+  font: 600 1.15rem var(--font-display);
+}
+.ex-note {
+  margin: 8px 0 18px;
+  padding: 8px 12px;
+  border-left: 3px solid var(--line-2);
+  background: var(--sunken);
+  white-space: pre-wrap;
+}
+.ex-note.small {
+  margin: 6px 0 0;
+  font-size: 0.9rem;
+}
+.export-sheet .harmony-legend {
+  margin-top: 8px;
+}
+.export-sheet .legend-item {
+  cursor: default;
+}
+.export-sheet .fb-scroll {
+  overflow: visible;
+}
+
+@media (max-width: 860px) {
+  .export-layout {
+    grid-template-columns: 1fr;
+  }
 }

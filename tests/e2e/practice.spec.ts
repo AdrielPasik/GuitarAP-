@@ -4,7 +4,7 @@ import { cell, createMaterial, neck, openLibrary, settleSave } from './helpers';
 async function seedStudyMaterial(page: Page) {
   await openLibrary(page);
   await createMaterial(page, 'Material de estudio', 'Pentatónica menor de La');
-  await page.getByRole('button', { name: 'Mapa del mástil' }).click();
+  await page.getByRole('button', { name: 'Agregar mapa' }).click();
   for (const fret of [5, 8]) await neck(page).pick(5, fret);
   await page.getByRole('button', { name: 'Agregar bloque', exact: true }).first().click();
   await page.getByRole('menuitem', { name: 'Título de sección' }).click();

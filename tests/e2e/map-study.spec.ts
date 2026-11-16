@@ -44,9 +44,9 @@ test('latin note names are right, including Do, and the tonic is distinguished b
 test('Test 2 — one study material holds a scale map, a phrase and a note, and reopens intact', async ({ page }) => {
   await openLibrary(page);
   await createMaterial(page, 'Material de estudio', 'Pentatónica menor de La');
-  await expect(page.getByRole('heading', { name: 'Este material está vacío' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Empezá tu material' })).toBeVisible();
 
-  await page.getByRole('button', { name: 'Mapa del mástil' }).click();
+  await page.getByRole('button', { name: 'Agregar mapa' }).click();
   const board = neck(page);
   for (const fret of [5, 8, 10, 12]) await board.pick(5, fret);
 
