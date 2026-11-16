@@ -27,4 +27,4 @@ La autenticación y la sincronización se responden localmente: no se usa ningun
 | 17 | Configuración |
 | 18 / 18a–c | Sincronización y copias de seguridad |
 | 19–21 | Tablet y móvil |
-| 22 / 23 | Sitio publicado (guitarap.pages.dev): primera visita y diálogo de inicio de sesión. El build público aún no tiene `VITE_SUPABASE_*`, por eso el diálogo avisa que la nube no está conectada |
+| 22 / 23 | Sitio publicado (guitarap.pages.dev): primera visita y diálogo de inicio de sesión con el formulario de correo y contraseña (nube conectada; `/build-info.json` lo confirma). |
