@@ -12,6 +12,18 @@ GuitarAP genera un build estático en `dist/`. Las rutas se cargan en bloques in
 
 `public/_redirects` preserva las rutas SPA en Pages. `wrangler.toml` declara el directorio de salida para herramientas compatibles; el despliegue conectado a Git queda deliberadamente gestionado por Pages.
 
+## Variables de entorno del build
+
+`VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY` se **incorporan al JavaScript durante el build** (Vite las lee al
+compilar, no al ejecutar). Si faltan en Cloudflare Pages → Settings → Environment variables → **Production** en el
+momento del build, la aplicación publicada funciona solo en modo local y el diálogo «Iniciar sesión» avisa que
+esta versión no tiene la nube conectada.
+
+Cómo comprobarlo después de desplegar: abrí la URL pública, hacé clic en **Iniciar sesión**. Si aparece el
+formulario de correo y contraseña, el build tiene la configuración; si aparece el aviso «todavía no tiene la nube
+conectada», agregá las dos variables en Production y **reintentá el despliegue** (cambiar variables no
+recompila por sí solo). La clave `anon`/`publishable` es pública por diseño; jamás cargues `service_role`.
+
 ## Comprobaciones posteriores
 
 - Las rutas `/biblioteca`, `/practica` y `/configuracion` deben responder con la aplicación; `public/_redirects` aplica el fallback SPA.

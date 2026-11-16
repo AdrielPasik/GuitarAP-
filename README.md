@@ -1,6 +1,12 @@
 # GuitarAP
 
-Aplicación web progresiva local-first para biblioteca, tablaturas y diapasones de guitarra. Conserva los datos en IndexedDB y ofrece backups JSON, historial de versiones, Práctica y exportación PNG/PDF.
+Cuaderno musical para guitarristas, como aplicación web progresiva local-first. En un mismo material podés combinar
+**tablaturas** (secuencias), **mapas del mástil** (escalas con varias posiciones y notas libres) y **notas de
+estudio**. Conserva los datos en IndexedDB, sincroniza opcionalmente con tu cuenta, y ofrece backups JSON,
+historial de versiones, Práctica con metrónomo y exportación PNG/PDF.
+
+- [Auditoría previa al rediseño](docs/audit-v0.2.md) · [Dirección de diseño](docs/design/direction.md) ·
+  [Arquitectura de experiencia](docs/ux-architecture.md) · [Evidencia visual](docs/evidence/README.md)
 
 ## Desarrollo
 
