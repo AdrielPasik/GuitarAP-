@@ -7,7 +7,8 @@ const storageKey = 'guitarap.theme';
 
 function readInitialTheme(): Theme {
   const storedTheme = window.localStorage.getItem(storageKey);
-  return storedTheme === 'dark' || storedTheme === 'light' ? storedTheme : 'light';
+  if (storedTheme === 'dark' || storedTheme === 'light') return storedTheme;
+  return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {

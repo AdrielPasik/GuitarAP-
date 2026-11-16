@@ -1,228 +1,362 @@
-import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import type { DocumentType, LibraryNode, MusicalDocument } from '@/core/model';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import type { LibraryNode, MusicalDocument } from '@/core/model';
+import { documentKind, type DocumentKind } from '@/core/notebook';
+import { usePref } from '@/core/prefs';
 import { Dialog } from '@/components/ui/Dialog';
+import { Icon, type IconName } from '@/components/ui/Icon';
+import { Menu } from '@/components/ui/Popover';
+import { useToast } from '@/components/ui/toast-context';
 import { libraryRepository } from '@/data/library-repository';
+import { ancestry, pathOf } from '@/data/paths';
 import { useLibrary } from '@/data/use-library';
+import { useAccount } from '@/features/account/account-context';
 
-type Modal =
-  | null
-  | { kind: 'create'; type?: DocumentType | 'folder' | 'song' }
-  | { kind: 'rename'; node: LibraryNode }
-  | { kind: 'move'; document: MusicalDocument };
-function destinationName(node?: LibraryNode) {
-  return node ? (node.kind === 'song' ? `Canción · ${node.name}` : node.name) : 'Biblioteca raíz';
+type Naming = { mode: 'folder' | 'song' | 'rename-node' | 'rename-doc'; id?: string; initial?: string } | null;
+
+const kindInfo: Record<DocumentKind | 'folder' | 'song', { icon: IconName; label: string }> = {
+  tablature: { icon: 'tab', label: 'Tablatura' },
+  map: { icon: 'map', label: 'Mapa de escala' },
+  mixed: { icon: 'mixed', label: 'Material de estudio' },
+  folder: { icon: 'folder', label: 'Carpeta' },
+  song: { icon: 'song', label: 'Canción' },
+};
+
+function Glyph({ kind }: { kind: keyof typeof kindInfo }) {
+  return (
+    <span className={`glyph kind-${kind}`} aria-hidden="true">
+      <Icon name={kindInfo[kind].icon} size={16} />
+    </span>
+  );
 }
+
+const when = (time: number) => {
+  const days = Math.floor((Date.now() - time) / 86_400_000);
+  if (days <= 0) return 'Hoy';
+  if (days === 1) return 'Ayer';
+  return new Date(time).toLocaleDateString('es-AR', { day: 'numeric', month: 'short' });
+};
 
 export function LibraryScreen() {
   const { nodes, documents } = useLibrary();
+  const account = useAccount();
   const navigate = useNavigate();
+  const toast = useToast();
+  const search = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState('');
-  const [folderId, setFolderId] = useState<string | null>(null);
+  const [params, setParams] = useSearchParams();
+  const folderId = params.get('c');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const [modal, setModal] = useState<Modal>(null);
-  const selectedNode = nodes.find((node) => node.id === folderId);
-  const matches = useMemo(() => {
-    const text = query.trim().toLocaleLowerCase();
-    const scoped =
-      selectedNode?.kind === 'song'
-        ? documents.filter((item) => item.songId === selectedNode.id)
-        : folderId
-          ? documents.filter((item) => item.nodeId === folderId)
-          : documents;
-    return text ? scoped.filter((item) => item.title.toLocaleLowerCase().includes(text)) : scoped;
-  }, [documents, folderId, query, selectedNode]);
-  const open = (document: MusicalDocument) =>
-    navigate(`/${document.type === 'tablature' ? 'tablaturas' : 'diapason'}/${document.id}`);
-  async function create(
-    type: DocumentType | 'folder' | 'song',
-    name: string,
-    location: string | null,
-  ) {
-    if (type === 'folder' || type === 'song') {
-      await libraryRepository.createNode(name, type, location);
-      return;
-    }
-    const locationNode = nodes.find((node) => node.id === location);
-    const document = await libraryRepository.createDocument(
-      type,
-      name,
-      locationNode?.kind === 'song' ? locationNode.parentId : location,
-      locationNode?.kind === 'song' ? locationNode.id : null,
+  const [naming, setNaming] = useState<Naming>(null);
+  const [moving, setMoving] = useState<MusicalDocument | null>(null);
+  const [sort, setSort] = usePref<'recent' | 'name'>('library-sort', 'recent');
+  const [bannerHidden, setBannerHidden] = usePref('local-banner-hidden', false);
+  const current = nodes.find((node) => node.id === folderId) ?? null;
+  const trail = useMemo(() => ancestry(nodes, folderId), [nodes, folderId]);
+  const open_ = useMemo(() => new Set([...expanded, ...trail.map((node) => node.id)]), [expanded, trail]);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement;
+      if (event.key === '/' && !['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) {
+        event.preventDefault();
+        search.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  const text = query.trim().toLocaleLowerCase();
+  const items = useMemo(() => {
+    const scoped = text
+      ? documents.filter(
+          (item) =>
+            item.title.toLocaleLowerCase().includes(text) ||
+            pathOf(nodes, item.songId ?? item.nodeId).toLocaleLowerCase().includes(text),
+        )
+      : current?.kind === 'song'
+        ? documents.filter((item) => item.songId === current.id)
+        : documents.filter((item) => (item.songId ? false : (item.nodeId ?? null) === folderId));
+    return [...scoped].sort((a, b) =>
+      sort === 'name' ? a.title.localeCompare(b.title, 'es') : b.updatedAt - a.updatedAt,
     );
-    open(document);
+  }, [current, documents, folderId, nodes, sort, text]);
+  const children = text ? [] : nodes.filter((node) => node.parentId === folderId);
+  const countIn = (node: LibraryNode) =>
+    documents.filter((item) => item.nodeId === node.id || item.songId === node.id).length;
+  const everything = documents.length + nodes.length;
+
+  async function createMaterial(kind: 'tablature' | 'map' | 'study') {
+    const song = current?.kind === 'song' ? current : null;
+    const nodeId = song ? song.parentId : folderId;
+    const songId = song?.id ?? null;
+    const created =
+      kind === 'study'
+        ? await libraryRepository.createStudyMaterial('', nodeId, songId)
+        : await libraryRepository.createDocument(kind === 'map' ? 'fretboard' : 'tablature', '', nodeId, songId);
+    navigate(`/material/${created.id}`);
   }
-  const toggleExpanded = (id: string) =>
-    setExpanded((current) => {
-      const next = new Set(current);
+  const open = (item: MusicalDocument) => navigate(`/material/${item.id}`);
+  const toggle = (id: string) =>
+    setExpanded((value) => {
+      const next = new Set(value);
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
     });
+  function goTo(id: string | null) {
+    setParams(id ? { c: id } : {});
+    setQuery('');
+  }
+
+  const createMenu = (
+    <Menu
+      label="Nuevo"
+      align="end"
+      triggerClassName="btn btn-primary"
+      trigger={
+        <>
+          <Icon name="plus" size={14} /> Nuevo
+        </>
+      }
+      items={[
+        { label: 'Tablatura', icon: 'tab', onSelect: () => void createMaterial('tablature') },
+        { label: 'Mapa de escala', icon: 'map', onSelect: () => void createMaterial('map') },
+        { label: 'Material de estudio', icon: 'mixed', onSelect: () => void createMaterial('study') },
+        { separator: true },
+        { label: 'Canción', icon: 'song', onSelect: () => setNaming({ mode: 'song' }) },
+        { label: 'Carpeta', icon: 'folder', onSelect: () => setNaming({ mode: 'folder' }) },
+      ]}
+    />
+  );
+
   return (
-    <section className="library-shell">
-      <div className="page-heading">
-        <div>
-          <p className="eyebrow">Tu libreta musical</p>
-          <h1>Biblioteca</h1>
-          <p className="subtle">{destinationName(selectedNode)} · guardado en este dispositivo.</p>
+    <div className="library">
+      <aside className="lib-tree" aria-label="Carpetas">
+        <button type="button" className={`tree-row root${folderId === null ? ' selected' : ''}`} aria-current={folderId === null} onClick={() => goTo(null)}>
+          <Icon name="home" size={15} /> Toda la biblioteca
+        </button>
+        <Tree
+          nodes={nodes}
+          parentId={null}
+          depth={0}
+          selectedId={folderId}
+          expanded={open_}
+          onToggle={toggle}
+          onSelect={goTo}
+          onMenu={(node) => setNaming({ mode: 'rename-node', id: node.id, initial: node.name })}
+        />
+        <Link className="tree-row trash-link" to="/configuracion/recuperacion">
+          <Icon name="trash" size={15} /> Papelera
+        </Link>
+      </aside>
+
+      <section className="lib-main">
+        <div className="lib-head">
+          <nav className="crumbs" aria-label="Ubicación">
+            <h1>
+              <button type="button" onClick={() => goTo(null)} aria-current={folderId === null ? 'page' : undefined}>
+                Biblioteca
+              </button>
+            </h1>
+            {trail.map((node, index) => (
+              <span key={node.id}>
+                <Icon name="chevron-right" size={12} />
+                <button type="button" onClick={() => goTo(node.id)} aria-current={index === trail.length - 1 ? 'page' : undefined}>
+                  {node.name}
+                </button>
+              </span>
+            ))}
+          </nav>
+          <label className="search">
+            <Icon name="search" size={15} />
+            <input
+              ref={search}
+              type="search"
+              aria-label="Buscar en la biblioteca"
+              placeholder="Buscar materiales  ( / )"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+            />
+          </label>
+          <Menu
+            label="Ordenar"
+            align="end"
+            triggerClassName="btn btn-ghost"
+            trigger={
+              <>
+                {sort === 'recent' ? 'Recientes' : 'Nombre'} <Icon name="chevron-down" size={12} />
+              </>
+            }
+            items={[
+              { label: 'Más recientes primero', checked: sort === 'recent', onSelect: () => setSort('recent') },
+              { label: 'Por nombre', checked: sort === 'name', onSelect: () => setSort('name') },
+            ]}
+          />
+          {createMenu}
         </div>
-        <div className="action-row">
-          <button className="control" onClick={() => setModal({ kind: 'create', type: 'folder' })}>
-            Nueva carpeta
-          </button>
-          <button className="control" onClick={() => setModal({ kind: 'create', type: 'song' })}>
-            Nueva canción
-          </button>
-          <button className="control-primary" onClick={() => setModal({ kind: 'create' })}>
-            Nuevo material
-          </button>
-        </div>
-      </div>
-      <div className="library-grid">
-        <aside className="library-tree">
-          <div className="tree-heading">
-            <span>Ubicaciones</span>
-            <button
-              className="icon-button"
-              aria-label="Nueva subcarpeta"
-              onClick={() => setModal({ kind: 'create', type: 'folder' })}
-            >
-              +
+
+        {account.status.kind === 'local' && !bannerHidden && (
+          <p className="local-note" role="note">
+            <Icon name="cloud-off" size={15} />
+            <span>
+              Tus materiales se guardan solo en este dispositivo.{' '}
+              <button type="button" className="btn btn-link" onClick={() => account.openDialog('sign-in')}>
+                Iniciá sesión
+              </button>{' '}
+              para sincronizarlos con tu cuenta.
+            </span>
+            <button type="button" className="icon-btn" aria-label="Ocultar este aviso" onClick={() => setBannerHidden(true)}>
+              <Icon name="close" size={14} />
+            </button>
+          </p>
+        )}
+
+        {current?.kind === 'song' && (
+          <div className="song-head">
+            <Glyph kind="song" />
+            <div>
+              <strong>{current.name}</strong>
+              <span className="muted small">Canción · {countIn(current)} partes</span>
+            </div>
+            <button type="button" className="btn" onClick={() => void createMaterial('tablature')}>
+              <Icon name="plus" size={14} /> Agregar parte
             </button>
           </div>
-          <button
-            className={`tree-root ${!folderId ? 'selected' : ''}`}
-            onClick={() => setFolderId(null)}
-          >
-            ⌂ Toda la biblioteca
-          </button>
-          <Tree
-            nodes={nodes}
-            parentId={null}
-            depth={0}
-            selectedId={folderId}
-            expanded={expanded}
-            onToggle={toggleExpanded}
-            onSelect={setFolderId}
-            onMenu={(node) => setModal({ kind: 'rename', node })}
-          />
-        </aside>
-        <main className="library-content">
-          <div className="content-toolbar">
-            <label className="search-field">
-              <span>⌕</span>
-              <input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Buscar en esta ubicación"
-                aria-label="Buscar documentos"
-              />
-            </label>
-            <span className="subtle">{matches.length} materiales</span>
-          </div>
-          {selectedNode?.kind === 'song' && (
-            <div className="song-strip">
-              <span>♫</span>
-              <div>
-                <strong>{selectedNode.name}</strong>
-                <p>Partes, riffs, solos y diagramas de esta canción.</p>
-              </div>
-              <button className="control" onClick={() => setModal({ kind: 'create' })}>
-                Agregar parte
+        )}
+
+        {everything === 0 && !text ? (
+          <div className="lib-empty">
+            <h2>Tu cuaderno está vacío</h2>
+            <p>Empezá por lo que quieras tocar hoy.</p>
+            <div className="empty-actions">
+              <button type="button" className="btn btn-primary" onClick={() => void createMaterial('tablature')}>
+                <Icon name="tab" size={14} /> Escribir una tablatura
+              </button>
+              <button type="button" className="btn" onClick={() => void createMaterial('map')}>
+                <Icon name="map" size={14} /> Marcar una escala
+              </button>
+              <button type="button" className="btn" onClick={() => void createMaterial('study')}>
+                <Icon name="mixed" size={14} /> Armar un material de estudio
               </button>
             </div>
-          )}
-          <div className="document-grid">
-            {matches.map((document) => (
-              <article key={document.id} className="document-card">
-                <button className="document-open" onClick={() => open(document)}>
-                  <span className={`document-icon ${document.type}`}>
-                    {document.type === 'tablature' ? 'TAB' : '◉'}
+          </div>
+        ) : (
+          <ul className="lib-list" aria-label={text ? 'Resultados de la búsqueda' : 'Contenido'}>
+            {children.map((node) => (
+              <li key={node.id} className="lib-row">
+                <button type="button" className="lib-open" onClick={() => goTo(node.id)}>
+                  <Glyph kind={node.kind} />
+                  <span className="lib-title">{node.name}</span>
+                  <span className="lib-meta">
+                    {kindInfo[node.kind].label} · {countIn(node)} {countIn(node) === 1 ? 'elemento' : 'elementos'}
                   </span>
-                  <span>
-                    <strong>{document.title}</strong>
-                    <small>
-                      {document.type === 'tablature'
-                        ? 'Tablatura · secuencia musical'
-                        : 'Mapa de notas · escala o posición'}{' '}
-                      · {new Date(document.updatedAt).toLocaleDateString('es-AR')}
-                    </small>
-                  </span>
+                  <span className="lib-date">{when(node.updatedAt)}</span>
                 </button>
-                <div className="card-actions">
-                  <button onClick={() => setModal({ kind: 'move', document })}>Mover a…</button>
-                  <button onClick={() => void libraryRepository.duplicateDocument(document.id)}>
-                    Duplicar
-                  </button>
-                  <button
-                    className="danger"
-                    onClick={() => void libraryRepository.trashDocument(document.id)}
-                  >
-                    Eliminar
-                  </button>
-                </div>
-              </article>
+                <Menu
+                  label={`Opciones de ${node.name}`}
+                  align="end"
+                  triggerClassName="icon-btn row-menu"
+                  trigger={<Icon name="more" />}
+                  items={[
+                    { label: 'Abrir', icon: 'folder', onSelect: () => goTo(node.id) },
+                    { label: 'Renombrar', icon: 'pencil', onSelect: () => setNaming({ mode: 'rename-node', id: node.id, initial: node.name }) },
+                    { label: 'Duplicar', icon: 'copy', onSelect: () => void libraryRepository.duplicateNode(node.id) },
+                    {
+                      label: 'Enviar a la papelera',
+                      icon: 'trash',
+                      danger: true,
+                      onSelect: () => void libraryRepository.trashNode(node.id).then(() => toast.show(`«${node.name}» está en la papelera.`, { label: 'Deshacer', onAction: () => void libraryRepository.restoreNode(node.id) })),
+                    },
+                  ]}
+                />
+              </li>
             ))}
-          </div>
-          {!matches.length && (
-            <div className="empty-library">
-              <span>♫</span>
-              <h2>{query ? 'No encontramos material' : 'Empezá una idea nueva'}</h2>
-              <p>
-                {query
-                  ? 'Probá otro nombre o ubicación.'
-                  : `Creá una tablatura o un mapa de notas en ${destinationName(selectedNode).toLocaleLowerCase()}.`}
-              </p>
-              <button className="control-primary" onClick={() => setModal({ kind: 'create' })}>
-                Crear material
-              </button>
-            </div>
-          )}
-        </main>
-      </div>
-      {modal?.kind === 'create' && (
-        <CreateDialog
-          nodes={nodes}
-          initialType={modal.type}
-          initialLocation={folderId}
-          onClose={() => setModal(null)}
-          onCreate={async (type, name, location) => {
-            await create(type, name, location);
-            setModal(null);
+            {items.map((item) => {
+              const kind = documentKind(item);
+              return (
+                <li key={item.id} className="lib-row">
+                  <button type="button" className="lib-open" onClick={() => open(item)}>
+                    <Glyph kind={kind} />
+                    <span className="lib-title">{item.title || 'Sin título'}</span>
+                    <span className="lib-meta">
+                      {kindInfo[kind].label}
+                      {text || current === null ? (pathOf(nodes, item.songId ?? item.nodeId) ? ` · ${pathOf(nodes, item.songId ?? item.nodeId)}` : '') : ''}
+                    </span>
+                    <span className="lib-date">{when(item.updatedAt)}</span>
+                  </button>
+                  <Menu
+                    label={`Opciones de ${item.title || 'material sin título'}`}
+                    align="end"
+                    triggerClassName="icon-btn row-menu"
+                    trigger={<Icon name="more" />}
+                    items={[
+                      { label: 'Abrir', icon: 'pencil', onSelect: () => open(item) },
+                      { label: 'Practicar', icon: 'practice', onSelect: () => navigate(`/practica/${item.id}`) },
+                      { label: 'Renombrar', onSelect: () => setNaming({ mode: 'rename-doc', id: item.id, initial: item.title }) },
+                      { label: 'Duplicar', icon: 'copy', onSelect: () => void libraryRepository.duplicateDocument(item.id) },
+                      { label: 'Mover a…', onSelect: () => setMoving(item) },
+                      {
+                        label: 'Enviar a la papelera',
+                        icon: 'trash',
+                        danger: true,
+                        onSelect: () => void libraryRepository.trashDocument(item.id).then(() => toast.show(`«${item.title || 'Material'}» está en la papelera.`, { label: 'Deshacer', onAction: () => void libraryRepository.restoreDocument(item.id) })),
+                      },
+                    ]}
+                  />
+                </li>
+              );
+            })}
+            {!children.length && !items.length && (
+              <li className="lib-none">
+                {text ? 'No encontramos materiales con ese nombre.' : 'Todavía no hay nada acá.'}
+                {!text && (
+                  <span className="empty-actions inline">
+                    <button type="button" className="btn btn-link" onClick={() => void createMaterial('tablature')}>
+                      Escribir una tablatura
+                    </button>
+                    <button type="button" className="btn btn-link" onClick={() => void createMaterial('map')}>
+                      Marcar una escala
+                    </button>
+                  </span>
+                )}
+              </li>
+            )}
+          </ul>
+        )}
+      </section>
+
+      {naming && (
+        <NameDialog
+          naming={naming}
+          onClose={() => setNaming(null)}
+          onSubmit={async (name) => {
+            if (naming.mode === 'folder' || naming.mode === 'song') {
+              const parent = current?.kind === 'song' ? current.parentId : folderId;
+              await libraryRepository.createNode(name, naming.mode, parent);
+            } else if (naming.mode === 'rename-node' && naming.id) {
+              await libraryRepository.updateNode(naming.id, { name });
+            } else if (naming.mode === 'rename-doc' && naming.id) {
+              const target = documents.find((item) => item.id === naming.id);
+              if (target) await libraryRepository.saveDocument({ ...target, title: name }, 'manual');
+            }
+            setNaming(null);
           }}
         />
       )}
-      {modal?.kind === 'rename' && (
-        <NodeDialog
-          node={modal.node}
-          onClose={() => setModal(null)}
-          onRename={async (name) => {
-            await libraryRepository.updateNode(modal.node.id, { name });
-            setModal(null);
-          }}
-          onDuplicate={() => {
-            void libraryRepository.duplicateNode(modal.node.id);
-            setModal(null);
-          }}
-          onTrash={() => {
-            void libraryRepository.trashNode(modal.node.id);
-            setModal(null);
-          }}
-        />
-      )}
-      {modal?.kind === 'move' && (
+      {moving && (
         <MoveDialog
           nodes={nodes}
-          document={modal.document}
-          onClose={() => setModal(null)}
+          document={moving}
+          onClose={() => setMoving(null)}
           onMove={async (location) => {
-            await libraryRepository.moveDocument(modal.document.id, location);
-            setModal(null);
+            await libraryRepository.moveDocument(moving.id, location);
+            setMoving(null);
           }}
         />
       )}
-    </section>
+    </div>
   );
 }
 
@@ -246,184 +380,77 @@ function Tree({
   onMenu: (node: LibraryNode) => void;
 }) {
   return (
-    <div>
+    <ul className="tree" role={depth === 0 ? 'tree' : 'group'}>
       {nodes
         .filter((node) => node.parentId === parentId)
         .map((node) => {
-          const children = nodes.some((item) => item.parentId === node.id);
+          const hasChildren = nodes.some((item) => item.parentId === node.id);
           const opened = expanded.has(node.id);
           return (
-            <div key={node.id}>
-              <div
-                className={`tree-row ${selectedId === node.id ? 'selected' : ''}`}
-                style={{ paddingLeft: `${8 + depth * 14}px` }}
-              >
-                {children ? (
-                  <button
-                    className="tree-toggle"
-                    aria-label={`${opened ? 'Contraer' : 'Expandir'} ${node.name}`}
-                    onClick={() => onToggle(node.id)}
-                  >
-                    {opened ? '⌄' : '›'}
+            <li key={node.id} role="treeitem" aria-expanded={hasChildren ? opened : undefined} aria-selected={selectedId === node.id}>
+              <div className={`tree-row${selectedId === node.id ? ' selected' : ''}`} style={{ paddingLeft: `${6 + depth * 14}px` }}>
+                {hasChildren ? (
+                  <button type="button" className="tree-toggle" aria-label={`${opened ? 'Contraer' : 'Expandir'} ${node.name}`} onClick={() => onToggle(node.id)}>
+                    <Icon name={opened ? 'chevron-down' : 'chevron-right'} size={12} />
                   </button>
                 ) : (
                   <span className="tree-spacer" />
                 )}
-                <button className="tree-name" onClick={() => onSelect(node.id)}>
-                  {node.kind === 'song' ? '♫' : '⌁'} {node.name}
+                <button type="button" className="tree-name" onClick={() => onSelect(node.id)}>
+                  <Icon name={node.kind === 'song' ? 'song' : 'folder'} size={14} />
+                  <span>{node.name}</span>
                 </button>
-                <button
-                  className="tree-menu"
-                  aria-label={`Opciones de ${node.name}`}
-                  onClick={() => onMenu(node)}
-                >
-                  •••
+                <button type="button" className="tree-menu" aria-label={`Renombrar ${node.name}`} onClick={() => onMenu(node)}>
+                  <Icon name="pencil" size={12} />
                 </button>
               </div>
-              {children && opened && (
-                <Tree
-                  nodes={nodes}
-                  parentId={node.id}
-                  depth={depth + 1}
-                  selectedId={selectedId}
-                  expanded={expanded}
-                  onToggle={onToggle}
-                  onSelect={onSelect}
-                  onMenu={onMenu}
-                />
+              {hasChildren && opened && (
+                <Tree nodes={nodes} parentId={node.id} depth={depth + 1} selectedId={selectedId} expanded={expanded} onToggle={onToggle} onSelect={onSelect} onMenu={onMenu} />
               )}
-            </div>
+            </li>
           );
         })}
-    </div>
+    </ul>
   );
 }
 
-function CreateDialog({
-  nodes,
-  initialType,
-  initialLocation,
+function NameDialog({
+  naming,
   onClose,
-  onCreate,
+  onSubmit,
 }: {
-  nodes: LibraryNode[];
-  initialType?: DocumentType | 'folder' | 'song';
-  initialLocation: string | null;
+  naming: NonNullable<Naming>;
   onClose: () => void;
-  onCreate: (
-    type: DocumentType | 'folder' | 'song',
-    name: string,
-    location: string | null,
-  ) => Promise<void>;
+  onSubmit: (name: string) => Promise<void>;
 }) {
-  const [type, setType] = useState<DocumentType | 'folder' | 'song'>(initialType ?? 'tablature');
-  const [name, setName] = useState('');
-  const [location, setLocation] = useState(initialLocation ?? '');
+  const [name, setName] = useState(naming.initial ?? '');
+  const titles = { folder: 'Nueva carpeta', song: 'Nueva canción', 'rename-node': 'Cambiar nombre', 'rename-doc': 'Cambiar nombre' };
   return (
-    <Dialog title="Crear en la biblioteca" onClose={onClose}>
+    <Dialog title={titles[naming.mode]} onClose={onClose} size="sm">
       <form
-        className="dialog-form"
+        className="stack"
         onSubmit={(event) => {
           event.preventDefault();
-          if (name.trim()) void onCreate(type, name, location || null);
+          if (name.trim()) void onSubmit(name.trim());
         }}
       >
-        <label>
-          Tipo
-          <select value={type} onChange={(event) => setType(event.target.value as typeof type)}>
-            <option value="tablature">Tablatura · riff, solo o canción</option>
-            <option value="fretboard">Mapa de notas · escala o posición</option>
-            <option value="folder">Carpeta</option>
-            <option value="song">Canción</option>
-          </select>
-        </label>
-        {(type === 'tablature' || type === 'fretboard') && (
-          <p className="creation-type-hint">
-            {type === 'tablature'
-              ? 'Secuencia temporal: escribí notas, acordes, técnicas y secciones en orden.'
-              : 'Mapa espacial: marcá libremente todas las posiciones que quieras sobre el mástil.'}
-          </p>
-        )}
-        <label>
-          Nombre
-          <input
-            autoFocus
-            required
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            placeholder="Ej. Do mayor"
-          />
-        </label>
-        <label>
-          Ubicación
-          <select value={location} onChange={(event) => setLocation(event.target.value)}>
-            <option value="">Biblioteca raíz</option>
-            {nodes.map((node) => (
-              <option key={node.id} value={node.id}>
-                {node.kind === 'song' ? '♫ ' : ''}
-                {node.name}
-              </option>
-            ))}
-          </select>
+        <label className="field">
+          <span>Nombre</span>
+          <input autoFocus value={name} placeholder={naming.mode === 'song' ? 'Ej. Comfortably Numb' : 'Ej. Escalas'} onChange={(event) => setName(event.target.value)} />
         </label>
         <div className="dialog-actions">
-          <button type="button" className="control" onClick={onClose}>
+          <button type="button" className="btn" onClick={onClose}>
             Cancelar
           </button>
-          <button className="control-primary">Crear</button>
+          <button type="submit" className="btn btn-primary" disabled={!name.trim()}>
+            {naming.mode.startsWith('rename') ? 'Guardar' : 'Crear'}
+          </button>
         </div>
       </form>
     </Dialog>
   );
 }
-function NodeDialog({
-  node,
-  onClose,
-  onRename,
-  onDuplicate,
-  onTrash,
-}: {
-  node: LibraryNode;
-  onClose: () => void;
-  onRename: (name: string) => Promise<void>;
-  onDuplicate: () => void;
-  onTrash: () => void;
-}) {
-  const [renaming, setRenaming] = useState(false);
-  const [name, setName] = useState(node.name);
-  return (
-    <Dialog title={renaming ? 'Cambiar nombre' : node.name} onClose={onClose}>
-      {renaming ? (
-        <form
-          className="dialog-form"
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (name.trim()) void onRename(name);
-          }}
-        >
-          <label>
-            Nombre
-            <input autoFocus value={name} onChange={(event) => setName(event.target.value)} />
-          </label>
-          <div className="dialog-actions">
-            <button type="button" className="control" onClick={() => setRenaming(false)}>
-              Volver
-            </button>
-            <button className="control-primary">Guardar</button>
-          </div>
-        </form>
-      ) : (
-        <div className="menu-actions">
-          <button onClick={() => setRenaming(true)}>Renombrar</button>
-          <button onClick={onDuplicate}>Duplicar</button>
-          <button className="danger" onClick={onTrash}>
-            Enviar a papelera
-          </button>
-        </div>
-      )}
-    </Dialog>
-  );
-}
+
 function MoveDialog({
   nodes,
   document,
@@ -437,33 +464,35 @@ function MoveDialog({
 }) {
   const [location, setLocation] = useState(document.nodeId ?? '');
   return (
-    <Dialog title={`Mover “${document.title}”`} onClose={onClose}>
+    <Dialog title={`Mover «${document.title || 'Sin título'}»`} onClose={onClose} size="sm">
       <form
-        className="dialog-form"
+        className="stack"
         onSubmit={(event) => {
           event.preventDefault();
           void onMove(location || null);
         }}
       >
-        <p className="subtle">El contenido y su historial se conservan.</p>
-        <label>
-          Carpeta de destino
+        <label className="field">
+          <span>Carpeta de destino</span>
           <select autoFocus value={location} onChange={(event) => setLocation(event.target.value)}>
-            <option value="">Biblioteca raíz</option>
+            <option value="">Biblioteca (raíz)</option>
             {nodes
               .filter((node) => node.kind === 'folder')
               .map((node) => (
                 <option key={node.id} value={node.id}>
-                  {node.name}
+                  {pathOf(nodes, node.id)}
                 </option>
               ))}
           </select>
         </label>
+        <p className="muted small">El contenido y su historial se conservan.</p>
         <div className="dialog-actions">
-          <button type="button" className="control" onClick={onClose}>
+          <button type="button" className="btn" onClick={onClose}>
             Cancelar
           </button>
-          <button className="control-primary">Mover aquí</button>
+          <button type="submit" className="btn btn-primary">
+            Mover aquí
+          </button>
         </div>
       </form>
     </Dialog>

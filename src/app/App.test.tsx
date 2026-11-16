@@ -8,22 +8,29 @@ describe('App', () => {
     window.history.pushState({}, '', '/biblioteca');
   });
 
-  it('renders the application shell and initial section', async () => {
+  it('renders the shell with identity, navigation and the metronome', async () => {
     render(<App />);
 
     expect(screen.getByRole('banner')).toHaveTextContent('GuitarAP');
     expect(await screen.findByRole('heading', { name: 'Biblioteca' })).toBeVisible();
-    expect(screen.getByText(/Guardado local · sin nube configurada|Sincronización disponible en Configuración/)).toBeVisible();
     expect(screen.getByLabelText('BPM')).toBeVisible();
+    expect(screen.getByRole('link', { name: /^Práctica/ })).toBeVisible();
   });
 
-  it('opens practice from the compact primary navigation', async () => {
+  it('always shows how to sign in and says the work is only on this device', async () => {
+    render(<App />);
+
+    expect(await screen.findByRole('button', { name: /Iniciar sesión/ })).toBeVisible();
+    expect(screen.getAllByText('Solo en este dispositivo').length).toBeGreaterThan(0);
+  });
+
+  it('opens practice from the primary navigation', async () => {
     const user = userEvent.setup();
     render(<App />);
 
     await user.click(screen.getByRole('link', { name: /^Práctica/ }));
 
-    expect(await screen.findByRole('heading', { name: 'Modo Práctica' })).toBeVisible();
+    expect(await screen.findByRole('region', { name: 'Modo Práctica' })).toBeVisible();
   });
 
   it('changes theme and persists the preference', async () => {

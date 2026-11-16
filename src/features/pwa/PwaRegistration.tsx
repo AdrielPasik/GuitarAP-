@@ -9,11 +9,11 @@ export function PwaUpdateBanner({ needsRefresh, updateServiceWorker }: PwaUpdate
   if (!needsRefresh) return null;
 
   return (
-    <div className="fixed inset-x-4 bottom-4 z-20 mx-auto flex max-w-md items-center justify-between gap-4 rounded-xl bg-slate-900 px-4 py-3 text-sm text-white shadow-xl">
+    <div className="update-banner">
       <span>Hay una actualización lista.</span>
       <button
         type="button"
-        className="rounded-lg bg-teal-500 px-3 py-1.5 font-semibold hover:bg-teal-400"
+        className="btn btn-primary"
         onClick={() => void updateServiceWorker(true)}
       >
         Actualizar

@@ -1,8 +1,7 @@
-import { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { MetronomeContext as Context } from '@/features/metronome/metronome-context';
 import type { ReactNode } from 'react';
 
-type Metro = { running: boolean; bpm: number; beat: number; volume: number; beatsPerMeasure: number; setBpm: (value: number) => void; setVolume: (value: number) => void; setBeatsPerMeasure: (value: number) => void; toggle: () => void; tap: () => void };
-const Context = createContext<Metro | null>(null);
 
 export function MetronomeProvider({ children }: { children: ReactNode }) {
   const [running, setRunning] = useState(false); const [bpm, setBpm] = useState(96); const [beat, setBeat] = useState(0); const [volume, setVolume] = useState(.45); const [beatsPerMeasure, setBeatsPerMeasure] = useState(4); const audio = useRef<AudioContext | null>(null); const timer = useRef<number | undefined>(undefined); const next = useRef(0); const count = useRef(0); const taps = useRef<number[]>([]);
@@ -10,4 +9,3 @@ export function MetronomeProvider({ children }: { children: ReactNode }) {
   function tap() { const time = performance.now(); taps.current = [...taps.current.filter((item) => time - item < 2200), time]; if (taps.current.length > 1) { const pairs = taps.current.slice(1).map((item, index) => item - taps.current[index]); setBpm(Math.round(60000 / (pairs.reduce((sum, item) => sum + item, 0) / pairs.length))); } }
   return <Context value={{ running, bpm, beat, volume, beatsPerMeasure, setBpm: (value) => setBpm(Math.max(30, Math.min(280, value))), setVolume: (value) => setVolume(Math.max(0, Math.min(1, value))), setBeatsPerMeasure: (value) => setBeatsPerMeasure(Math.max(2, Math.min(12, value))), toggle: () => setRunning((value) => !value), tap }}>{children}</Context>;
 }
-export function MetronomeControl() { const metro = useContext(Context); if (!metro) throw new Error('MetronomeProvider ausente'); return <div className="flex items-center gap-1 rounded-lg border border-stone-200 px-2 py-1 dark:border-white/10"><button aria-label={metro.running ? 'Detener metrónomo' : 'Iniciar metrónomo'} onClick={metro.toggle}>{metro.running ? '■' : '▶'}</button><input aria-label="BPM" className="w-11 bg-transparent text-center text-sm" type="number" value={metro.bpm} onChange={(event) => metro.setBpm(Number(event.target.value))} /><span className="text-xs">BPM</span><button className="text-xs" onClick={metro.tap}>Tap</button><select aria-label="Acento cada" className="bg-transparent text-xs" value={metro.beatsPerMeasure} onChange={(event) => metro.setBeatsPerMeasure(Number(event.target.value))}>{[2, 3, 4, 5, 6, 7, 8, 12].map((beats) => <option key={beats} value={beats}>{beats}/4</option>)}</select><input aria-label="Volumen del metrónomo" className="w-14" type="range" min="0" max="1" step="0.05" value={metro.volume} onChange={(event) => metro.setVolume(Number(event.target.value))} /><i aria-label={`Pulso ${metro.beat + 1} de ${metro.beatsPerMeasure}`} className={`size-2 rounded-full ${metro.running ? 'bg-amber-500' : 'bg-stone-300'}`} /></div>; }

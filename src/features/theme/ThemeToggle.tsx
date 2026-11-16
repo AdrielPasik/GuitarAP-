@@ -1,4 +1,5 @@
 import { useContext } from 'react';
+import { Icon } from '@/components/ui/Icon';
 import { ThemeContext } from '@/features/theme/theme-context';
 
 export function ThemeToggle() {
@@ -12,10 +13,11 @@ export function ThemeToggle() {
       type="button"
       aria-label={`Activar modo ${nextTheme}`}
       aria-pressed={context.theme === 'dark'}
-      className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-teal-300 hover:text-teal-800 dark:border-white/15 dark:text-slate-200 dark:hover:border-teal-400 dark:hover:text-teal-200"
+      title={`Modo ${nextTheme}`}
+      className="icon-btn"
       onClick={context.toggleTheme}
     >
-      {context.theme === 'light' ? 'Oscuro' : 'Claro'}
+      <Icon name={context.theme === 'light' ? 'moon' : 'sun'} />
     </button>
   );
 }
