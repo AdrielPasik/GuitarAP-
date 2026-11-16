@@ -10,7 +10,9 @@ GuitarAP genera un build estático en `dist/`. Las rutas se cargan en bloques in
 4. Desplegá. Copiá la URL `https://<proyecto>.pages.dev` resultante.
 5. En Supabase → **Authentication → URL Configuration**, pegá esa URL como **Site URL** y en **Redirect URLs**.
 
-`public/_redirects` preserva las rutas SPA en Pages. `wrangler.toml` declara el directorio de salida para herramientas compatibles; el despliegue conectado a Git queda deliberadamente gestionado por Pages.
+Las rutas SPA no necesitan `_redirects`: sin un `404.html` de nivel superior, Pages asume una SPA y sirve `index.html` para cualquier ruta que no sea un archivo. (La regla `/* /index.html 200` además generaba la advertencia de bucle infinito, por eso se eliminó.) `public/_headers` evita que el navegador cachee `sw.js`, `index.html` y `build-info.json`.
+
+**No agregues un `wrangler.toml` con `pages_build_output_dir`**: Cloudflare lo convierte en la fuente de verdad del proyecto y las variables del dashboard pueden dejar de aplicarse al build (ver más abajo).
 
 ## Variables de entorno del build
 
@@ -24,9 +26,23 @@ formulario de correo y contraseña, el build tiene la configuración; si aparece
 conectada», agregá las dos variables en Production y **reintentá el despliegue** (cambiar variables no
 recompila por sí solo). La clave `anon`/`publishable` es pública por diseño; jamás cargues `service_role`.
 
+### Diagnóstico verificable
+
+Cada build imprime `[build-diagnostics]` con **solo booleanos** (nunca valores): si Cloudflare estaba construyendo, si es
+Production o Preview (por rama), si cada variable llegó al entorno del build, si Vite la va a incorporar, y si el
+artefacto final contiene la URL pública del proyecto. Además publica `/build-info.json` con esos mismos datos:
+
+```bash
+curl https://guitarap.pages.dev/build-info.json
+```
+
+`artifact.supabaseUrlEmbedded: true` significa que el sitio publicado tiene la nube conectada. El build **falla** si
+detecta una clave `service_role` o `sb_secret_` en la salida. Production (rama `main`) y Preview (otras ramas) tienen
+conjuntos de variables **separados** en Cloudflare: el diagnóstico dice cuál estaba construyendo.
+
 ## Comprobaciones posteriores
 
-- Las rutas `/biblioteca`, `/practica` y `/configuracion` deben responder con la aplicación; `public/_redirects` aplica el fallback SPA.
+- Las rutas `/biblioteca`, `/practica` y `/configuracion` deben responder con la aplicación (fallback SPA automático de Pages).
 - La página debe servirse por HTTPS y no debe mostrar contenido mixto.
 - En DevTools → Network no debe existir ninguna clave `service_role`, contraseña ni token dentro de archivos JavaScript. El JWT del usuario sí aparece en solicitudes autenticadas y no debe copiarse a logs.
 - Después de una primera visita online, recargá offline y comprobá que abre el shell. La sincronización debe informar estado offline y conservar los cambios locales.

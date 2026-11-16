@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite",
     "clean": "node ./scripts/clean.mjs",
+    "prebuild": "node ./scripts/build-diagnostics.mjs pre",
     "build": "npm run clean && tsc -b && vite build",
+    "postbuild": "node ./scripts/build-diagnostics.mjs post",
     "preview": "vite preview",
     "typecheck": "tsc -b --pretty false",
     "lint": "eslint .",
