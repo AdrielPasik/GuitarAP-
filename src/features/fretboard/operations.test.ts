@@ -7,6 +7,8 @@ import {
   duplicateSpatialPosition,
   generatedScaleNotes,
   removeSpatialPosition,
+  resolvedView,
+  setView,
   setNoteFinger,
   setRange,
   toggleNoteIn,
@@ -93,5 +95,17 @@ describe('spatial fretboard semantics', () => {
     content = setRange(content, 0, 5);
     expect(content.maxFret).toBe(5);
     expect(content.positions[0].notes).toHaveLength(1);
+  });
+});
+
+describe('scale guide preference', () => {
+  it('is on for maps saved before the option, off for new ones, and never touches notes', () => {
+    const legacy = { ...createFretboardContent(), view: undefined };
+    expect(resolvedView(legacy).guide).toBe(true);
+    expect(resolvedView(createFretboardContent()).guide).toBe(false);
+    const withNote = toggleSpatialNote(createFretboardContent(), 5, 3);
+    const toggled = setView(setView(withNote, { guide: true }), { guide: false });
+    expect(toggled.positions).toEqual(withNote.positions);
+    expect(toggled.baseNotes).toEqual(withNote.baseNotes);
   });
 });

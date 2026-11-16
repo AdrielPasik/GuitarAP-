@@ -125,7 +125,7 @@ export function MapBlock({
   ];
   const singleMarkers = [
     // Other positions' notes show as faint outlines while editing; reading keeps only what matters.
-    ...(readOnly
+    ...(readOnly || !saved.guide
       ? []
       : content.baseNotes
           .filter((note) => !active.notes.some((own) => own.string === note.string && own.fret === note.fret))
@@ -249,6 +249,19 @@ export function MapBlock({
             { value: 'seventh', label: 'Séptima', title: 'Tríada más la séptima' },
           ]}
         />
+        {!readOnly && (
+          <button
+            type="button"
+            role="switch"
+            aria-checked={saved.guide}
+            className="switch-chip"
+            title="Muestra las notas sugeridas de la escala sin agregarlas a tu mapa"
+            onClick={() => changeReading({ guide: !saved.guide })}
+          >
+            <span className="switch-track" aria-hidden="true"><span className="switch-thumb" /></span>
+            Ayuda de escala
+          </button>
+        )}
         {show === 'fingers' && !readOnly && (
           <div className="finger-tool" role="group" aria-label="Dedo para las próximas notas">
             {([null, 1, 2, 3, 4] as const).map((value) => (

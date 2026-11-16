@@ -67,6 +67,8 @@ export type FretboardView = {
   legend?: boolean;
   /** Name the degrees 9, 11 and 13 instead of 2, 4 and 6. */
   extensions?: boolean;
+  /** Dashed hints of the scale's notes (default on for maps saved before this option). */
+  guide?: boolean;
 };
 
 /** A spatial map: points on the instrument, with no order and no time. */
@@ -144,5 +146,7 @@ export function createFretboardContent(): FretboardContent {
     positions: [position],
     baseNotes: [],
     selectedPositionId: position.id,
+    // A new map starts without hints so the scale can be found by ear; older maps keep theirs.
+    view: { guide: false },
   };
 }

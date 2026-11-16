@@ -151,8 +151,9 @@ export function setRange(content: FretboardContent, minFret: number, maxFret: nu
 }
 
 /** Reading preferences with the defaults older maps get. */
-export function resolvedView(content: FretboardContent): Required<Pick<FretboardView, 'labels' | 'legend' | 'extensions'>> & Pick<FretboardView, 'emphasis'> {
+export function resolvedView(content: FretboardContent): Required<Pick<FretboardView, 'labels' | 'legend' | 'extensions' | 'guide'>> & Pick<FretboardView, 'emphasis'> {
   return {
+    guide: content.view?.guide ?? true,
     labels: content.view?.labels ?? (content.notation === 'intervals' ? 'intervals' : 'notes'),
     emphasis: content.view?.emphasis,
     legend: content.view?.legend ?? true,
