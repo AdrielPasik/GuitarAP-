@@ -77,7 +77,7 @@ export function ChordsBlock({
 
   return (
     <div className="chords-block" onFocusCapture={onActivate} onPointerDownCapture={onActivate}>
-      <div className="player-row nb-chrome">
+      <div className="player-row">
         <PlayerBar
           player={player}
           label="progresión"

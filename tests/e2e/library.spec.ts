@@ -30,7 +30,7 @@ test('Test 7 — folders, songs and materials: create, rename, duplicate, move, 
   // A song groups its parts; a standalone tablature does not need one.
   await page.getByRole('button', { name: 'Biblioteca', exact: true }).click();
   await page.getByRole('button', { name: 'Nuevo', exact: true }).click();
-  await page.getByRole('menuitem', { name: 'Canción' }).click();
+  await page.getByRole('menuitem', { name: 'Canción', exact: true }).click();
   await page.getByRole('dialog').getByLabel('Nombre').fill('Canción 01');
   await page.getByRole('dialog').getByRole('button', { name: 'Crear' }).click();
   await row(page, 'Canción 01').locator('.lib-open').click();
@@ -85,7 +85,7 @@ test('Test 7 — folders, songs and materials: create, rename, duplicate, move, 
 
 test('an empty library offers the three real starting points', async ({ page }) => {
   await openLibrary(page);
-  await expect(page.getByRole('heading', { name: 'Tu cuaderno está vacío' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Tu estudio está vacío' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Escribir una tablatura' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Marcar una escala' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Empezar un cuaderno vacío' })).toBeVisible();

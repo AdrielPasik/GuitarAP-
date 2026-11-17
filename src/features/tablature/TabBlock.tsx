@@ -339,7 +339,7 @@ export function TabBlock({
 
   return (
     <div className="tab-block" onFocusCapture={onActivate} onPointerDownCapture={onActivate}>
-      <div className="player-row nb-chrome">
+      <div className="player-row">
         <PlayerBar
           player={player}
           label="tablatura"

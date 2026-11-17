@@ -180,7 +180,7 @@ export function MelodyBlock({
 
   return (
     <div className="melody-block" onFocusCapture={onActivate} onPointerDownCapture={onActivate}>
-      <div className="player-row nb-chrome">
+      <div className="player-row">
         <PlayerBar
           player={player}
           label="melodía"
