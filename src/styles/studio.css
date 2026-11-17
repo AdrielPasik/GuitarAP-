@@ -1318,3 +1318,314 @@
   justify-content: flex-end;
   gap: 8px;
 }
+
+/* ================= v0.5: sharing, guest view, shared projects ================= */
+
+/* ---- share dialog ---- */
+.share {
+  display: grid;
+  gap: 16px;
+}
+.share-note,
+.share-error,
+.share-banner {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--line-2);
+  background: var(--sunken);
+}
+.share-note p {
+  margin: 6px 0 0;
+}
+.share-error {
+  border-color: var(--danger);
+  background: var(--danger-soft);
+  color: var(--ink);
+}
+.share-status {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--h-fifth) 11%, var(--raised));
+  border: 1px solid color-mix(in srgb, var(--h-fifth) 35%, var(--line));
+}
+.share-status[data-state='Privado'] {
+  background: var(--sunken);
+  border-color: var(--line-2);
+}
+.share-refresh {
+  margin-left: auto;
+}
+.share-section {
+  display: grid;
+  gap: 10px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.share-section h3,
+.share-section summary {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.12rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+.share-section > p {
+  margin: 0;
+}
+.share-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--raised);
+}
+.share-row select {
+  height: 32px;
+  border: 1px solid var(--line-2);
+  border-radius: 6px;
+  background: var(--raised);
+  color: var(--ink);
+  padding: 0 8px;
+}
+.share-form {
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+}
+.share-advanced {
+  display: grid;
+  gap: 10px;
+  padding: 10px 12px;
+  border-left: 3px solid var(--line-2);
+}
+.share-fresh {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--accent);
+  background: var(--accent-soft);
+}
+.share-copy {
+  display: flex;
+  gap: 8px;
+}
+.share-copy input {
+  flex: 1;
+  min-width: 0;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  background: var(--raised);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+}
+.share-scope {
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--raised);
+}
+.share-scope summary {
+  cursor: pointer;
+  font-weight: 650;
+}
+.share-scope ul {
+  margin: 8px 0 4px;
+  padding-left: 20px;
+}
+.share-danger {
+  padding-top: 14px;
+  border-top: 1px dashed var(--danger);
+}
+.share-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.share-confirm p {
+  flex: 1 1 100%;
+  margin: 0;
+}
+.activity {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+.activity li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--line);
+}
+.lib-shared {
+  display: inline-grid;
+  place-items: center;
+  margin-left: 6px;
+  color: var(--h-fifth);
+  vertical-align: -2px;
+}
+
+/* ---- guest view: a small presentation of the song ---- */
+.guest {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
+.guest-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px clamp(16px, 4vw, 40px);
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+.guest-main {
+  flex: 1;
+  width: min(1100px, 100%);
+  margin: 0 auto;
+  padding: 24px clamp(16px, 4vw, 40px) 48px;
+  outline: none;
+}
+.guest-card {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  max-width: 640px;
+  margin: 6vh auto 0;
+  padding: 36px clamp(20px, 5vw, 44px);
+  border: 1px solid var(--line-2);
+  border-radius: 20px;
+  background: linear-gradient(180deg, var(--raised), var(--surface));
+}
+.guest-card > *:not(.studio-scene) {
+  position: relative;
+  z-index: 1;
+}
+.guest-card h1 {
+  margin: 4px 0 10px;
+  font-family: var(--font-display);
+  font-size: clamp(1.6rem, 3vw, 2.2rem);
+  line-height: 1.1;
+}
+.guest-form {
+  display: grid;
+  gap: 12px;
+  max-width: 340px;
+}
+.guest-hero {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  padding: 28px 28px 24px;
+  margin-bottom: 18px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background:
+    radial-gradient(120% 140% at 100% 0%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 60%),
+    linear-gradient(180deg, var(--raised), var(--surface));
+}
+.guest-hero > *:not(.studio-scene) {
+  position: relative;
+  z-index: 1;
+}
+.guest-doc {
+  margin: 28px 0;
+}
+.guest-doc-title {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  margin: 0 0 6px;
+}
+.guest-foot {
+  text-align: center;
+  padding: 18px;
+  border-top: 1px solid var(--line);
+}
+.guest .practice-stage {
+  zoom: 1.05;
+}
+
+/* ---- shared projects ---- */
+.shared-head h1 {
+  font-family: var(--font-display);
+  margin: 0 0 4px;
+}
+.shared-title {
+  border: none;
+  background: transparent;
+}
+.share-banner {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0 14px;
+}
+.share-banner.danger {
+  border-color: var(--danger);
+  background: var(--danger-soft);
+}
+.share-banner p {
+  margin: 0;
+}
+.share-note-line {
+  margin: 4px 0 8px;
+}
+.activity-pop {
+  position: relative;
+}
+.activity-pop summary {
+  list-style: none;
+  cursor: pointer;
+}
+.activity-pop summary::-webkit-details-marker {
+  display: none;
+}
+.activity-pop .popover-panel {
+  right: 0;
+  min-width: 300px;
+  position: absolute;
+  top: calc(100% + 6px);
+  z-index: 30;
+}
+@media (max-width: 720px) {
+  .share-row {
+    grid-template-columns: 1fr;
+  }
+  .guest-hero {
+    padding: 20px 18px;
+  }
+}
+
+/* ---- small polish found in the visual review ---- */
+.guest-form {
+  margin-top: 16px;
+}
+.guest-hero {
+  min-height: 190px;
+}
+.settings-body h3 {
+  font-family: var(--font-display);
+  margin: 18px 0 6px;
+}

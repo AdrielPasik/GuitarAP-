@@ -33,7 +33,8 @@ export function SongBar({
   const keyValue = meta.key ? `${meta.key.tonic}:${meta.key.mode}` : '';
 
   if (readOnly) {
-    const parts = [meta.key && keyTitle(meta.key as KeyRef, style), meta.bpm && `${meta.bpm} BPM`, meta.status && STATUS[meta.status]].filter(Boolean);
+    // The status (idea, in progress…) is the author's own organisation: readers see the key and the tempo.
+    const parts = [meta.key && keyTitle(meta.key as KeyRef, style), meta.bpm && `${meta.bpm} BPM`].filter(Boolean);
     return parts.length ? <p className="song-bar static muted small">{parts.join(' · ')}</p> : null;
   }
 

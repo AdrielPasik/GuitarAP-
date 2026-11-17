@@ -10,6 +10,11 @@ import { useSoundPrefs } from '@/audio/useBlockPlayer';
 import { setMasterVolume } from '@/audio/webaudio-backend';
 import { useNoteStyle } from '@/features/melody/note-style';
 import { useFxPrefs } from '@/features/theme/fx-prefs';
+import { useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import { useLibrary } from '@/data/use-library';
+import { collabApi } from '@/features/share/collab-api';
+import { useCollabState, useGateway } from '@/features/share/use-collab';
 import { Dialog } from '@/components/ui/Dialog';
 import { Icon } from '@/components/ui/Icon';
 import { Segmented } from '@/components/ui/Segmented';
@@ -26,6 +31,7 @@ import { ThemeContext } from '@/features/theme/theme-context';
 const sections = [
   { id: 'cuenta', label: 'Cuenta', icon: 'user' as const },
   { id: 'sincronizacion', label: 'Sincronización', icon: 'sync' as const },
+  { id: 'colaboracion', label: 'Colaboración', icon: 'users' as const },
   { id: 'apariencia', label: 'Apariencia', icon: 'sun' as const },
   { id: 'sonido', label: 'Sonido', icon: 'play' as const },
   { id: 'musica', label: 'Preferencias musicales', icon: 'melody' as const },
@@ -335,6 +341,73 @@ function RecoverySection() {
   );
 }
 
+function CollaborationSection() {
+  const state = useCollabState();
+  const gateway = useGateway();
+  const account = useAccount();
+  const { documents, nodes } = useLibrary();
+  const [mine, setMine] = useState<Array<{ kind: string; id: string; links: number; members: number; invites: number }> | null>(null);
+  useEffect(() => {
+    if (state !== 'ready' || !gateway?.accessToken) return;
+    let live = true;
+    collabApi.sharedByMe(gateway).then((value) => live && setMine(value)).catch(() => live && setMine([]));
+    return () => {
+      live = false;
+    };
+  }, [state, gateway]);
+  const titleOf = (kind: string, id: string) => (kind === 'document' ? documents.find((item) => item.id === id)?.title : nodes.find((item) => item.id === id)?.name) || 'Material sin sincronizar';
+  return (
+    <>
+      <h2>Colaboración</h2>
+      <p className="muted">Compartí una canción o una carpeta por enlace de lectura, o invitá a otra persona a comentar o editar. Todo es privado hasta que vos lo compartís.</p>
+      <div className="stack">
+        {state === 'unconfigured' && <p className="share-note">Esta versión no tiene la nube conectada.</p>}
+        {state === 'checking' && <p role="status">Comprobando la nube…</p>}
+        {state === 'unavailable' && (
+          <div className="share-note" role="alert">
+            <strong>Compartir todavía no está activado en tu proyecto de Supabase.</strong>
+            <p>Hace falta aplicar una migración (<code>0007_sharing.sql</code>) con tu autorización. Hasta entonces nada se comparte y todo sigue privado. Los pasos están en <code>docs/sharing-activation.md</code>.</p>
+          </div>
+        )}
+        {state === 'offline' && <p className="share-note" role="alert">No hay conexión con la nube.</p>}
+        {state === 'ready' && !account.session && (
+          <div className="share-note">
+            <p>Iniciá sesión para compartir y para ver lo que te compartieron.</p>
+            <button type="button" className="btn btn-primary" onClick={() => account.openDialog('sign-in')}>Iniciar sesión</button>
+          </div>
+        )}
+        {state === 'ready' && account.session && (
+          <>
+            <div className="share-row">
+              <span><strong>Compartidos conmigo</strong><span className="muted small block">Proyectos de otras personas a los que tenés acceso.</span></span>
+              <Link className="btn" to="/compartidos">Abrir</Link>
+            </div>
+            <h3>Lo que compartís vos</h3>
+            {mine === null && <p className="muted small">Cargando…</p>}
+            {mine?.length === 0 && <p className="muted small">No estás compartiendo nada: todo es privado.</p>}
+            {mine?.map((item) => (
+              <div key={item.id} className="share-row">
+                <span>
+                  <strong>{titleOf(item.kind, item.id)}</strong>
+                  <span className="muted small block">{item.kind === 'node' ? 'Carpeta' : 'Canción'} · {item.links} {item.links === 1 ? 'enlace' : 'enlaces'} · {item.members} {item.members === 1 ? 'colaborador' : 'colaboradores'}{item.invites ? ` · ${item.invites} invitación pendiente` : ''}</span>
+                </span>
+                {item.kind === 'document' ? <Link className="btn" to={`/material/${item.id}`}>Abrir y gestionar</Link> : <Link className="btn" to={`/biblioteca?c=${item.id}`}>Abrir carpeta</Link>}
+              </div>
+            ))}
+          </>
+        )}
+        <h3>Cómo se protege lo que compartís</h3>
+        <ul className="muted">
+          <li>Los enlaces son largos y aleatorios; el servidor guarda solo una huella, nunca el enlace.</li>
+          <li>Una contraseña se verifica en el servidor y se guarda cifrada. Cinco intentos fallidos bloquean el enlace 15 minutos.</li>
+          <li>Los permisos (lector, comentarista, editor) los aplica la base de datos, no la pantalla.</li>
+          <li>Revocar corta el acceso futuro de inmediato. No puede borrar copias que alguien ya descargó o exportó.</li>
+        </ul>
+      </div>
+    </>
+  );
+}
+
 function AppearanceSection() {
   const theme = useContext(ThemeContext);
   const fx = useFxPrefs();
@@ -509,6 +582,7 @@ const views = {
   sincronizacion: SyncSection,
   copias: BackupSection,
   recuperacion: RecoverySection,
+  colaboracion: CollaborationSection,
   apariencia: AppearanceSection,
   sonido: SoundSection,
   musica: MusicSection,

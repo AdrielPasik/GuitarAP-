@@ -174,7 +174,10 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   );
 
   const signOut = useCallback(() => {
-    // Signing out only stops syncing: nothing is hidden or deleted from this device.
+    // Signing out only stops syncing: nothing of yours is hidden or deleted from this device. Copies of OTHER
+    // people's songs that you were only reading are dropped (they are not yours to keep on a shared computer);
+    // anything you wrote there and had not uploaded stays, and only your own account can ever reopen it.
+    void import('@/data/database').then(({ db }) => db.shared.filter((copy) => !copy.dirty).delete()).catch(() => undefined);
     signOutRequest();
     setSession(null);
     setLinked(false);
