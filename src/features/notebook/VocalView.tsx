@@ -51,10 +51,10 @@ export function VocalView({
         )}
       </header>
       <div className="vocal-grid">
-        <div className="vocal-pane vocal-lyrics" aria-label="Letra">
+        <div className="vocal-pane vocal-lyrics" aria-label="Panel de la letra">
           {renderBody(lyrics, index)}
         </div>
-        <div className="vocal-pane vocal-melody" aria-label="Melodía">
+        <div className="vocal-pane vocal-melody" aria-label="Panel de la melodía">
           {renderBody(melody, index)}
         </div>
       </div>

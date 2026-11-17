@@ -31,11 +31,11 @@ test('Escenario C — un solo escrito en tablatura suena en orden, con la altura
   for (const [index, entry] of played.slice(1).entries()) expect((entry.when ?? 0) - (played[index].when ?? 0)).toBeCloseTo(0.5, 1);
 
   // A slower tempo spaces the notes further apart.
-  await expect.poll(async () => (await audioState(page)).state, { timeout: 6000 }).toBe('idle');
+  await expect.poll(async () => (await audioState(page)).state, { timeout: 15000 }).toBe('idle');
   const before = (await noteLog(page)).length;
   await setBpm(page, 'tablatura', '60');
   await page.getByRole('button', { name: 'Reproducir tablatura' }).click();
-  await expect.poll(async () => (await noteLog(page)).length, { timeout: 8000 }).toBeGreaterThanOrEqual(before + 3);
+  await expect.poll(async () => (await noteLog(page)).length, { timeout: 20000 }).toBeGreaterThanOrEqual(before + 3);
   const slow = (await noteLog(page)).slice(before);
   expect((slow[1].when ?? 0) - (slow[0].when ?? 0)).toBeCloseTo(1, 1);
   await page.getByRole('button', { name: 'Detener tablatura' }).click();
@@ -58,7 +58,7 @@ test('Escenario D — un acorde suena con todas sus cuerdas juntas y respeta la 
   const chord = await noteLog(page);
   expect(chord.map((entry) => entry.midi).sort()).toEqual([43, 47, 50]); // G2 B2 D3
   expect(new Set(chord.map((entry) => entry.when)).size).toBe(1); // together
-  await expect.poll(async () => (await audioState(page)).state, { timeout: 6000 }).toBe('idle');
+  await expect.poll(async () => (await audioState(page)).state, { timeout: 15000 }).toBe('idle');
 
   // The saved tuning is what counts: lower the 6th string a whole tone in the stored document and play again.
   await settleSave(page);

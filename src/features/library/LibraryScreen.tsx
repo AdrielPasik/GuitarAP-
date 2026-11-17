@@ -5,6 +5,7 @@ import { documentKind, toNotebook, type DocumentKind } from '@/core/notebook';
 import { usePref } from '@/core/prefs';
 import { Dialog } from '@/components/ui/Dialog';
 import { StudioScene } from '@/components/art/Art';
+import { NewSongDialog } from '@/features/library/NewSongDialog';
 import { Icon, type IconName } from '@/components/ui/Icon';
 import { Menu } from '@/components/ui/Popover';
 import { useToast } from '@/components/ui/toast-context';
@@ -53,6 +54,7 @@ export function LibraryScreen() {
   const folderId = params.get('c');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [naming, setNaming] = useState<Naming>(null);
+  const [newSong, setNewSong] = useState(false);
   const [moving, setMoving] = useState<{ kind: 'doc' | 'node'; id: string; title: string; from: string | null } | null>(null);
   const [sort, setSort] = usePref<'recent' | 'name'>('library-sort', 'recent');
   const [bannerHidden, setBannerHidden] = usePref('local-banner-hidden', false);
@@ -129,6 +131,8 @@ export function LibraryScreen() {
         </>
       }
       items={[
+        { label: 'Nueva canción…', icon: 'song', description: 'Nombre, BPM y tonalidad, y empezás', onSelect: () => setNewSong(true) },
+        { separator: true },
         { label: 'Canción con letra', icon: 'lyrics', description: 'Empezá por lo que querés decir', onSelect: () => void createFrom('song-lyrics') },
         { label: 'Canción con melodía', icon: 'melody', description: 'Empezá por lo que escuchás', onSelect: () => void createFrom('song-melody') },
         { label: 'Melodía', icon: 'melody', description: 'Escribí notas y escuchalas', onSelect: () => void createFrom('melody') },
@@ -222,7 +226,7 @@ export function LibraryScreen() {
             </h2>
             <p className="hero-sub">Escribí una melodía, guardá una letra o estudiá una escala. Todo lo que hagas queda en tu biblioteca.</p>
             <div className="hero-actions">
-              <button type="button" className="btn btn-primary" onClick={() => void createFrom('composition')}>
+              <button type="button" className="btn btn-primary" onClick={() => setNewSong(true)}>
                 <Icon name="song" size={14} /> Nueva canción
               </button>
               <button type="button" className="btn" onClick={() => void createFrom('melody')}>
@@ -395,6 +399,16 @@ export function LibraryScreen() {
         )}
       </section>
 
+      {newSong && (
+        <NewSongDialog
+          onClose={() => setNewSong(false)}
+          onCreate={(input) => {
+            const song = current?.kind === 'song' ? current : null;
+            void libraryRepository.createSong(input, song ? song.parentId : folderId, song?.id ?? null).then((created) => navigate(`/material/${created.id}`));
+            setNewSong(false);
+          }}
+        />
+      )}
       {naming && (
         <NameDialog
           naming={naming}

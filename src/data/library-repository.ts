@@ -1,5 +1,6 @@
 import type { DocumentType, FretboardContent, LibraryNode, MusicalDocument, NotebookContent } from '@/core/model';
 
+export type SongTemplate = 'empty' | 'lyrics' | 'melody' | 'chords' | 'structure';
 export type MaterialTemplate = 'scale' | 'triad' | 'riff' | 'empty' | 'study' | 'text' | 'melody' | 'song-lyrics' | 'song-melody' | 'chords' | 'composition';
 import { createFretboardContent, createTablatureContent } from '@/core/model';
 import { newBlock } from '@/core/notebook';
@@ -59,6 +60,32 @@ export class LibraryRepository {
     };
     const plan = plans[template] ?? plans.study;
     return this.createNotebook(plan.title, plan.blocks, nodeId, songId, plan.meta);
+  }
+
+  /** A song from the minimal form: a name, an optional BPM and key, and how to start. Never imposes a structure. */
+  async createSong(
+    input: { title: string; bpm?: number; key?: { tonic: string; mode: 'major' | 'minor' }; template: SongTemplate },
+    nodeId: string | null = null,
+    songId: string | null = null,
+  ) {
+    const section = (title: string) => ({ ...newBlock('section'), title }) as NotebookContent['blocks'][number];
+    let blocks: NotebookContent['blocks'] = [];
+    if (input.template === 'lyrics') blocks = [newBlock('lyrics')];
+    else if (input.template === 'melody') blocks = [newBlock('melody')];
+    else if (input.template === 'chords') blocks = [newBlock('chords')];
+    else if (input.template === 'structure') {
+      const pair = (title: string) => {
+        const lyrics = newBlock('lyrics');
+        const melody = newBlock('melody');
+        if (melody.kind === 'melody') melody.content.lyricsBlockId = lyrics.id;
+        return [section(title), lyrics, melody];
+      };
+      blocks = [...pair('Verso 1'), ...pair('Estribillo')];
+    }
+    const meta: NonNullable<NotebookContent['meta']> = { status: 'idea' };
+    if (input.bpm) meta.bpm = input.bpm;
+    if (input.key) meta.key = input.key;
+    return this.createNotebook(input.title.trim() || 'Nueva canción', blocks, nodeId, songId, meta);
   }
 
   private async createNotebook(title: string, blocks: NotebookContent['blocks'], nodeId: string | null, songId: string | null, meta?: NotebookContent['meta']) {

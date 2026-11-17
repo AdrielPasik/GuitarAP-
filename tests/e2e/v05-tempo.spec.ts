@@ -112,6 +112,7 @@ test('Escenario D — bajar el tempo para practicar no cambia la canción, y se 
   await settleSave(page);
 
   await page.getByRole('link', { name: 'Practicar' }).click();
+  await expect(page.getByRole('region', { name: 'Modo Práctica' })).toBeVisible(); // the route loads on demand
   await expect(bpmOf(page, 'melodía')).toHaveValue('120');
   await bpmOf(page, 'melodía').fill('80');
   await bpmOf(page, 'melodía').press('Enter');
@@ -128,7 +129,7 @@ test('Escenario D — bajar el tempo para practicar no cambia la canción, y se 
   await expect(page.getByRole('status').filter({ hasText: 'Práctica a 80 BPM' })).toBeVisible();
   await page.waitForTimeout(1200);
   expect((await notebookOf(page)).meta?.bpm).toBe(120);
-  await page.getByRole('button', { name: 'Volver a 120' }).click();
+  await page.getByRole('button', { name: 'Volver a 120', exact: true }).click();
   await expect(bpmOf(page, 'melodía')).toHaveValue('120');
   expect((await notebookOf(page)).meta?.bpm).toBe(120);
 });
@@ -147,7 +148,7 @@ test('Escenario E — el metrónomo sigue el tempo de la canción abierta y camb
   await page.getByRole('button', { name: 'Iniciar metrónomo' }).click();
   await expect(page.getByRole('button', { name: 'Detener metrónomo' })).toBeVisible();
 
-  await page.goto('/biblioteca');
+  await page.getByRole('link', { name: /Volver a la biblioteca/ }).click(); // in-app navigation: the metronome keeps running
   await createFromMenu(page, 'Cuaderno de composición', 'Segunda');
   await setSongBpm(page, '140');
   await expect(metro).toHaveValue('140');
