@@ -5,6 +5,7 @@ import type { InstrumentId, Sequence } from '@/audio/types';
 import { useMetronome } from '@/features/metronome/metronome-context';
 import { useNotebookInfo } from '@/features/notebook/notebook-context';
 import { usePref } from '@/core/prefs';
+import { setMasterVolume } from '@/audio/webaudio-backend';
 
 export type PlayerOptions = {
   /** Block id: the transport belongs to one block at a time. */
@@ -20,7 +21,8 @@ export function useSoundPrefs() {
   const [click, setClick] = usePref<boolean>('sound.click', false);
   const [loop, setLoop] = usePref<boolean>('sound.loop', false);
   const [preview, setPreview] = usePref<boolean>('sound.preview', false);
-  return { instrument, setInstrument, click, setClick, loop, setLoop, preview, setPreview };
+  const [volume, setVolume] = usePref<number>('sound.volume', 0.7);
+  return { instrument, setInstrument, click, setClick, loop, setLoop, preview, setPreview, volume, setVolume };
 }
 
 /**
@@ -38,8 +40,9 @@ export function useBlockPlayer({ owner, sequence, blockBpm, instrument }: Player
   const state = mine ? snapshot.state : 'idle';
 
   const play = useCallback(
-    (fromBeat = 0) =>
-      transport.play({
+    (fromBeat = 0) => {
+      setMasterVolume(prefs.volume);
+      return transport.play({
         owner,
         sequence,
         bpm: tempo.bpm,
@@ -48,8 +51,9 @@ export function useBlockPlayer({ owner, sequence, blockBpm, instrument }: Player
         loop: prefs.loop,
         click: prefs.click,
         beatsPerBar: metro.beatsPerMeasure,
-      }),
-    [owner, sequence, tempo.bpm, chosen, prefs.loop, prefs.click, metro.beatsPerMeasure],
+      });
+    },
+    [owner, sequence, tempo.bpm, chosen, prefs.loop, prefs.click, prefs.volume, metro.beatsPerMeasure],
   );
 
   // Editing the sequence while it sounds would desynchronise it: stop instead of playing stale notes.

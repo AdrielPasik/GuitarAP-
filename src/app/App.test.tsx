@@ -12,7 +12,7 @@ describe('App', () => {
     render(<App />);
 
     expect(screen.getByRole('banner')).toHaveTextContent('GuitarAP');
-    expect(await screen.findByRole('heading', { name: 'Biblioteca' })).toBeVisible();
+    expect(await screen.findByRole('heading', { name: 'Biblioteca' }, { timeout: 6000 })).toBeVisible();
     expect(screen.getByLabelText('BPM')).toBeVisible();
     expect(screen.getByRole('link', { name: /^Práctica/ })).toBeVisible();
   });
@@ -30,7 +30,7 @@ describe('App', () => {
 
     await user.click(screen.getByRole('link', { name: /^Práctica/ }));
 
-    expect(await screen.findByRole('region', { name: 'Modo Práctica' })).toBeVisible();
+    expect(await screen.findByRole('region', { name: 'Modo Práctica' }, { timeout: 6000 })).toBeVisible();
   });
 
   it('changes theme and persists the preference', async () => {

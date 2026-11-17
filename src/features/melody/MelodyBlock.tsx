@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
+import { usePref } from '@/core/prefs';
 import { melodyToSequence } from '@/audio/plan';
 import { previewNote } from '@/audio/preview';
 import { useBlockPlayer } from '@/audio/useBlockPlayer';
@@ -43,6 +44,7 @@ export function MelodyBlock({
   onExportMidi?: () => void;
 }) {
   const [style, setStyle] = useNoteStyle();
+  const [defaultOctave] = usePref<number>('default-octave', 4);
   const sequence = useMemo(() => melodyToSequence(content), [content]);
   const player = useBlockPlayer({ owner: blockId, sequence, blockBpm: content.bpm, instrument: content.instrument });
   const comments = useComments();
@@ -53,6 +55,7 @@ export function MelodyBlock({
   const [keyboard, setKeyboard] = useState(false);
   const [showLyrics, setShowLyrics] = useState(Boolean(content.phrase) || content.events.some((event) => event.lyric));
   const [syllables, setSyllables] = useState('');
+  const [fromSelected, setFromSelected] = useState(false);
   const strip = useRef<HTMLDivElement>(null);
 
   const events = content.events;
@@ -70,15 +73,16 @@ export function MelodyBlock({
     const id = ids.at(-1);
     if (id) document.getElementById(`mel-${id}`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }
-  function add(newEvents: MelodyEvent[]) {
+  /** Adds notes after the selection. The last added note becomes the selection (a pasted group stays selected). */
+  function add(newEvents: MelodyEvent[], keepGroup = false) {
     if (!newEvents.length) return;
     const at = insertIndex;
     onChange((current) => insertEvents(current, newEvents, at));
-    select(newEvents.map((event) => event.id));
+    select(keepGroup ? newEvents.map((event) => event.id) : [newEvents[newEvents.length - 1].id]);
     const firstNote = newEvents.find((event) => event.midi !== undefined);
     if (firstNote?.midi !== undefined) hear(firstNote.midi);
   }
-  const referenceMidi = () => last?.midi ?? [...events].reverse().find((event) => event.midi !== undefined)?.midi ?? 60;
+  const referenceMidi = () => last?.midi ?? [...events].reverse().find((event) => event.midi !== undefined)?.midi ?? (defaultOctave + 1) * 12;
 
 
   function submitText() {
@@ -133,7 +137,7 @@ export function MelodyBlock({
   function paste() {
     const held = pastedEvents();
     if (readOnly || !held.length) return;
-    add(held.map((event) => ({ ...event, id: newId() })));
+    add(held.map((event) => ({ ...event, id: newId() })), true);
   }
 
   function onKeyDown(event: React.KeyboardEvent) {
@@ -431,13 +435,17 @@ export function MelodyBlock({
                   value={syllables}
                   onChange={(event) => setSyllables(event.target.value)}
                 />
+                <label className="check small">
+                  <input type="checkbox" checked={fromSelected} disabled={!last} onChange={(event) => setFromSelected(event.target.checked)} />
+                  Empezar en la nota seleccionada
+                </label>
                 <button
                   type="button"
                   className="btn"
                   disabled={!syllables.trim() || noteCount(content) === 0}
-                  title="Escribe una sílaba en cada nota, a partir de la seleccionada (o la primera). Las notas sin sílaba quedan sin letra."
+                  title="Escribe una sílaba en cada nota, en orden. Las notas que sobran quedan sin letra."
                   onClick={() => {
-                    onChange((current) => assignSyllables(current, splitSyllables(syllables), last?.id));
+                    onChange((current) => assignSyllables(current, splitSyllables(syllables), fromSelected ? last?.id : undefined));
                     setSyllables('');
                   }}
                 >

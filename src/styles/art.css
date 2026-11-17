@@ -267,3 +267,69 @@ html[data-motion='off'] .lib-hero .hero-actions {
     right: -6%;
   }
 }
+
+/* ---- settings header ---- */
+.settings-hero {
+  position: relative;
+  grid-column: 1 / -1;
+  min-height: 112px;
+  display: flex;
+  align-items: flex-end;
+  padding: 14px 4px 0;
+  border-bottom: 1px solid var(--line);
+  overflow: hidden;
+  isolation: isolate;
+}
+.settings-hero .settings-title {
+  position: relative;
+  z-index: 1;
+  border-bottom: none;
+  margin: 0;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.settings-hero .studio-scene.compact .scene-g1 {
+  height: 190px;
+  top: 4px;
+  right: 8%;
+}
+.block {
+  display: block;
+}
+small.block {
+  margin-top: 2px;
+}
+
+/* ---- practice: music is read from a distance ---- */
+.practice .lyrics-read {
+  font-size: 1.7rem;
+  line-height: 1.5;
+  max-width: 34ch;
+}
+.practice .lyric-section {
+  font-size: 0.9rem;
+}
+.practice .mel-chip {
+  --beat: 64px;
+  padding: 14px 12px 10px;
+}
+.practice .mel-name {
+  font-size: 1.7rem;
+}
+.practice .chord-btn b {
+  font-size: 1.9rem;
+}
+.practice .melody-strip,
+.practice .chord-strip {
+  background-image: none;
+}
+.practice .player-row {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--bg);
+}
+.mel-chip.playing,
+.chord-chip.playing .chord-btn {
+  scroll-margin: 40px;
+}

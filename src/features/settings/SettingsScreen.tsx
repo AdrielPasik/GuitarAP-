@@ -3,6 +3,13 @@ import { NavLink, useParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { APP_VERSION } from '@/core/app-info';
 import { usePref } from '@/core/prefs';
+import { StudioScene } from '@/components/art/Art';
+import { transport } from '@/audio/engine';
+import { progressionToSequence } from '@/audio/plan';
+import { useSoundPrefs } from '@/audio/useBlockPlayer';
+import { setMasterVolume } from '@/audio/webaudio-backend';
+import { useNoteStyle } from '@/features/melody/note-style';
+import { useFxPrefs } from '@/features/theme/fx-prefs';
 import { Dialog } from '@/components/ui/Dialog';
 import { Icon } from '@/components/ui/Icon';
 import { Segmented } from '@/components/ui/Segmented';
@@ -19,9 +26,11 @@ import { ThemeContext } from '@/features/theme/theme-context';
 const sections = [
   { id: 'cuenta', label: 'Cuenta', icon: 'user' as const },
   { id: 'sincronizacion', label: 'Sincronización', icon: 'sync' as const },
+  { id: 'apariencia', label: 'Apariencia', icon: 'sun' as const },
+  { id: 'sonido', label: 'Sonido', icon: 'play' as const },
+  { id: 'musica', label: 'Preferencias musicales', icon: 'melody' as const },
   { id: 'copias', label: 'Copias de seguridad', icon: 'export' as const },
-  { id: 'recuperacion', label: 'Recuperación', icon: 'history' as const },
-  { id: 'preferencias', label: 'Preferencias', icon: 'settings' as const },
+  { id: 'recuperacion', label: 'Historial y recuperación', icon: 'history' as const },
   { id: 'acerca', label: 'Acerca de', icon: 'pick' as const },
 ];
 
@@ -326,13 +335,13 @@ function RecoverySection() {
   );
 }
 
-function PreferencesSection() {
+function AppearanceSection() {
   const theme = useContext(ThemeContext);
-  const [advance, setAdvance] = usePref('tab-auto-advance', true);
+  const fx = useFxPrefs();
   const [, setBanner] = usePref('local-banner-hidden', false);
   return (
     <>
-      <h2>Preferencias</h2>
+      <h2>Apariencia</h2>
       <div className="stack">
         <div className="field">
           <span>Tema</span>
@@ -347,8 +356,18 @@ function PreferencesSection() {
           />
         </div>
         <label className="check">
-          <input type="checkbox" checked={advance} onChange={(event) => setAdvance(event.target.checked)} />
-          <span>En la tablatura, pasar al evento siguiente al escribir una nota</span>
+          <input type="checkbox" checked={fx.decor} onChange={(event) => fx.setDecor(event.target.checked)} />
+          <span>
+            Ilustraciones decorativas (guitarras, notas, cuerdas)
+            <small className="muted block">Solo aparecen en la Biblioteca y en los estados vacíos. Nunca detrás de la música que escribís.</small>
+          </span>
+        </label>
+        <label className="check">
+          <input type="checkbox" checked={fx.motion} disabled={!fx.decor} onChange={(event) => fx.setMotion(event.target.checked)} />
+          <span>
+            Movimiento suave en las ilustraciones
+            <small className="muted block">Se detiene solo cuando la pestaña no está visible o si tu sistema pide reducir el movimiento.</small>
+          </span>
         </label>
         <div>
           <button type="button" className="btn btn-ghost" onClick={() => setBanner(false)}>
@@ -360,11 +379,117 @@ function PreferencesSection() {
   );
 }
 
+function SoundSection() {
+  const sound = useSoundPrefs();
+  return (
+    <>
+      <h2>Sonido</h2>
+      <p className="muted">El sonido se genera en tu navegador: no se descarga ni se envía nada, y funciona sin conexión. Son sintetizadores simples: sirven para escuchar tus ideas, no imitan un piano ni una guitarra reales.</p>
+      <div className="stack">
+        <div className="field">
+          <span>Instrumento predeterminado</span>
+          <Segmented<'piano' | 'guitar'>
+            label="Instrumento predeterminado"
+            value={sound.instrument}
+            onChange={sound.setInstrument}
+            options={[
+              { value: 'piano', label: 'Piano sintetizado' },
+              { value: 'guitar', label: 'Guitarra (cuerda pulsada)' },
+            ]}
+          />
+        </div>
+        <label className="field">
+          <span>Volumen inicial: {Math.round(sound.volume * 100)}%</span>
+          <input
+            type="range"
+            aria-label="Volumen de la reproducción"
+            min="0.1"
+            max="1"
+            step="0.05"
+            value={sound.volume}
+            onChange={(event) => {
+              sound.setVolume(Number(event.target.value));
+              setMasterVolume(Number(event.target.value));
+            }}
+          />
+        </label>
+        <label className="check">
+          <input type="checkbox" checked={sound.preview} onChange={(event) => sound.setPreview(event.target.checked)} />
+          <span>Escuchar cada nota o acorde al elegirlo<small className="muted block">Apagado por defecto: nada suena si no lo pedís.</small></span>
+        </label>
+        <label className="check">
+          <input type="checkbox" checked={sound.click} onChange={(event) => sound.setClick(event.target.checked)} />
+          <span>Clic de metrónomo al reproducir</span>
+        </label>
+        <label className="check">
+          <input type="checkbox" checked={sound.loop} onChange={(event) => sound.setLoop(event.target.checked)} />
+          <span>Repetir al llegar al final</span>
+        </label>
+        <div>
+          <button
+            type="button"
+            className="btn"
+            onClick={() => {
+              setMasterVolume(sound.volume);
+              void transport.play({ owner: 'settings-test', sequence: progressionToSequence(['C', 'F', 'G', 'C'], 1.5), bpm: 100, instrument: sound.instrument });
+            }}
+          >
+            <Icon name="play" size={14} /> Probar el sonido
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function MusicSection() {
+  const [advance, setAdvance] = usePref('tab-auto-advance', true);
+  const [style, setStyle] = useNoteStyle();
+  const [octave, setOctave] = usePref<number>('default-octave', 4);
+  const [bpm, setBpm] = usePref<number>('default-bpm', 96);
+  return (
+    <>
+      <h2>Preferencias musicales</h2>
+      <p className="muted">Son preferencias de este dispositivo: cambian cómo se muestran y cómo se empieza a escribir, nunca las notas que ya guardaste.</p>
+      <div className="stack">
+        <div className="field">
+          <span>Nombres de las notas en las melodías</span>
+          <Segmented<'latin' | 'english'>
+            label="Nombres de las notas"
+            value={style}
+            onChange={setStyle}
+            options={[
+              { value: 'latin', label: 'Do Re Mi' },
+              { value: 'english', label: 'C D E' },
+            ]}
+          />
+        </div>
+        <label className="field">
+          <span>Octava con la que empieza una melodía nueva</span>
+          <select aria-label="Octava predeterminada" value={octave} onChange={(event) => setOctave(Number(event.target.value))}>
+            {[2, 3, 4, 5].map((value) => (
+              <option key={value} value={value}>Octava {value}{value === 4 ? ' (la de Do central)' : ''}</option>
+            ))}
+          </select>
+        </label>
+        <label className="field">
+          <span>Tempo predeterminado del metrónomo (BPM)</span>
+          <input type="number" aria-label="Tempo predeterminado" min={30} max={280} value={bpm} onChange={(event) => setBpm(Math.max(30, Math.min(280, Number(event.target.value) || 96)))} />
+        </label>
+        <label className="check">
+          <input type="checkbox" checked={advance} onChange={(event) => setAdvance(event.target.checked)} />
+          <span>En la tablatura, pasar al evento siguiente al escribir una nota</span>
+        </label>
+      </div>
+    </>
+  );
+}
+
 function AboutSection() {
   return (
     <>
       <h2>Acerca de GuitarAP</h2>
-      <p className="muted">Tu libreta para escribir, estudiar y practicar guitarra. Funciona sin conexión.</p>
+      <p className="muted">Tu estudio personal para componer, estudiar y escuchar tus ideas musicales. Funciona sin conexión.</p>
       <dl className="facts">
         <div>
           <dt>Versión</dt>
@@ -384,7 +509,10 @@ const views = {
   sincronizacion: SyncSection,
   copias: BackupSection,
   recuperacion: RecoverySection,
-  preferencias: PreferencesSection,
+  apariencia: AppearanceSection,
+  sonido: SoundSection,
+  musica: MusicSection,
+  preferencias: AppearanceSection,
   acerca: AboutSection,
 };
 
@@ -394,7 +522,10 @@ export function SettingsScreen() {
   const View = views[key];
   return (
     <div className="settings">
-      <h1 className="settings-title">Configuración</h1>
+      <header className="settings-hero">
+        <StudioScene variant="compact" />
+        <h1 className="settings-title">Tu estudio, a tu manera</h1>
+      </header>
       <nav className="settings-nav" aria-label="Secciones de configuración">
         {sections.map((item) => (
           <NavLink key={item.id} to={`/configuracion/${item.id}`} className={item.id === key ? 'active' : ''} aria-current={item.id === key ? 'page' : undefined}>
