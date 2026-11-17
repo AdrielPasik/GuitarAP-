@@ -50,6 +50,11 @@ export type TablatureContent = {
   annotations: string[];
   /** Optional for backwards compatibility with documents saved before links. */
   techniqueLinks?: TabTechniqueLink[];
+  /** Playback only. Absent = the document tempo (or the metronome's). */
+  bpm?: number;
+  /** Beats each column lasts when played. Absent = 1: a step is a beat unless said otherwise. */
+  stepBeats?: number;
+  instrument?: 'piano' | 'guitar';
 };
 
 export type FretNote = { string: number; fret: number; finger?: 1 | 2 | 3 | 4; root?: boolean };
@@ -87,12 +92,71 @@ export type FretboardContent = {
 };
 
 export type TextBlockStyle = 'heading' | 'note';
+
+/** One step of a melody: a pitched note or a rest. Pitch is a MIDI number (C4 = 60), never a display string. */
+export type MelodyEvent = {
+  id: string;
+  type: 'note' | 'rest';
+  /** MIDI pitch of a note. Absent for rests. */
+  midi?: number;
+  /** How the note is spelled when shown (Re♭ vs Do♯). Never changes the sound. */
+  accidental?: 'sharp' | 'flat';
+  /** Length in beats: 0.5 short, 1 normal, 2 long, 4 sustained. Any positive multiple of 0.25 is valid. */
+  beats: number;
+  /** Optional syllable sung on this note. "_" continues the previous syllable (melisma). */
+  lyric?: string;
+};
+/** A sequence of notes, independent of any instrument. Its look (names, colours) is a preference, not data. */
+export type MelodyContent = {
+  version: 1;
+  events: MelodyEvent[];
+  /** Own tempo. Absent = the notebook's, then the metronome's. */
+  bpm?: number;
+  instrument?: 'piano' | 'guitar';
+  /** Free text: the phrase sung over this melody, usable without aligning anything. */
+  phrase?: string;
+};
+export type ChordItem = { id: string; symbol: string; beats: number };
+export type ChordsContent = { version: 1; items: ChordItem[]; bpm?: number; instrument?: 'piano' | 'guitar' };
+/** Lyrics as plain text. A line starting with "# " is a section title; [Am] inside a line is a chord. */
+export type LyricsContent = { text: string; showChords?: boolean };
+
+/** A personal annotation. Targets are ids, never indexes, so they survive reordering. */
+export type NoteComment = {
+  id: string;
+  text: string;
+  createdAt: number;
+  updatedAt: number;
+  /** Absent = a note about the whole notebook. */
+  blockId?: string;
+  /** A musical event inside the block (melody note, chord). */
+  eventId?: string;
+};
+export type KeySignature = { tonic: string; mode: 'major' | 'minor' };
+export type SongMeta = {
+  key?: KeySignature;
+  bpm?: number;
+  timeSignature?: string;
+  status?: 'idea' | 'progress' | 'done';
+  tags?: string[];
+};
+
 /** A musical block inside a study notebook. Existing content models are reused as-is. */
 export type NotebookBlock =
   | { id: string; kind: 'tablature'; title?: string; content: TablatureContent }
   | { id: string; kind: 'map'; title?: string; content: FretboardContent }
+  | { id: string; kind: 'melody'; title?: string; content: MelodyContent }
+  | { id: string; kind: 'lyrics'; title?: string; content: LyricsContent }
+  | { id: string; kind: 'chords'; title?: string; content: ChordsContent }
   | { id: string; kind: 'text'; style: TextBlockStyle; text: string };
-export type NotebookContent = { kind: 'notebook'; version: 1; blocks: NotebookBlock[] };
+export type NotebookContent = {
+  kind: 'notebook';
+  version: 1;
+  blocks: NotebookBlock[];
+  /** Optional song context (key, tempo…). Reading it never changes the music. */
+  meta?: SongMeta;
+  comments?: NoteComment[];
+};
 
 export type MusicalDocument = {
   id: string;

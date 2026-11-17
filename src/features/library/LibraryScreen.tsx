@@ -18,6 +18,10 @@ const kindInfo: Record<DocumentKind | 'folder' | 'song', { icon: IconName; label
   tablature: { icon: 'tab', label: 'Tablatura' },
   map: { icon: 'map', label: 'Mapa de escala' },
   mixed: { icon: 'mixed', label: 'Material de estudio' },
+  melody: { icon: 'melody', label: 'Melodía' },
+  lyrics: { icon: 'lyrics', label: 'Letra' },
+  chords: { icon: 'chords', label: 'Acordes' },
+  composition: { icon: 'song', label: 'Composición' },
   folder: { icon: 'folder', label: 'Carpeta' },
   song: { icon: 'song', label: 'Canción' },
 };
@@ -117,10 +121,16 @@ export function LibraryScreen() {
         </>
       }
       items={[
+        { label: 'Canción con letra', icon: 'lyrics', description: 'Empezá por lo que querés decir', onSelect: () => void createFrom('song-lyrics') },
+        { label: 'Canción con melodía', icon: 'melody', description: 'Empezá por lo que escuchás', onSelect: () => void createFrom('song-melody') },
+        { label: 'Melodía', icon: 'melody', description: 'Escribí notas y escuchalas', onSelect: () => void createFrom('melody') },
+        { label: 'Progresión de acordes', icon: 'chords', description: 'C G Am F, con su tonalidad', onSelect: () => void createFrom('chords') },
+        { separator: true },
         { label: 'Mapa de escala', icon: 'map', description: 'Marcá notas, intervalos y posiciones', onSelect: () => void createFrom('scale') },
         { label: 'Acorde o tríada', icon: 'map', description: 'Un mapa con la tríada resaltada', onSelect: () => void createFrom('triad') },
         { label: 'Riff o tablatura', icon: 'tab', description: 'Escribí notas en orden', onSelect: () => void createFrom('riff') },
         { label: 'Cuaderno vacío', icon: 'mixed', description: 'Agregá solo los bloques que quieras', onSelect: () => void createFrom('empty') },
+        { label: 'Cuaderno de composición', icon: 'song', description: 'Letra, melodía, solos y comentarios juntos', onSelect: () => void createFrom('composition') },
         { label: 'Escala y frase', icon: 'mixed', description: 'Un mapa y una tablatura juntos', onSelect: () => void createFrom('study') },
         { separator: true },
         { label: 'Canción', icon: 'song', onSelect: () => setNaming({ mode: 'song' }) },

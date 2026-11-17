@@ -15,6 +15,12 @@ const paths = {
   'arrow-up': 'M8 13V3.5M4 7l4-4 4 4',
   'arrow-down': 'M8 3v9.5M4 9l4 4 4-4',
   play: 'M5.2 3.4v9.2l7.3-4.6z',
+  pause: 'M4.5 3.5h2.4v9H4.5zM9.1 3.5h2.4v9H9.1z',
+  melody: 'M2 12.5h3v-3h3v-3h3v-3h2.5',
+  lyrics: 'M3 3.8h10M3 7h6.5M3 10.2h10M3 13.2h5',
+  chords: 'M3.5 2.5v11M7 2.5v11M10.5 2.5v11M2.5 6.2h9M9.2 9.7h.01',
+  comment: 'M2.5 3.5h11v7H8.4l-3 2.8v-2.8H2.5z',
+  circle: 'M8 2.2a5.8 5.8 0 100 11.6A5.8 5.8 0 008 2.2zM8 2.2v2.6M12.7 5l-2.2 1.3M12.7 11l-2.2-1.3M8 13.8v-2.6M3.3 11l2.2-1.3M3.3 5l2.2 1.3',
   stop: 'M4.5 4.5h7v7h-7z',
   user: 'M8 8a2.6 2.6 0 100-5.2A2.6 2.6 0 008 8zM2.8 13.8c.4-2.5 2.4-3.9 5.2-3.9s4.8 1.4 5.2 3.9',
   check: 'M3.5 8.5l3 3 6-7',
@@ -58,7 +64,7 @@ export function Icon({ name, size = 16, ...rest }: { name: IconName; size?: numb
       </svg>
     );
   }
-  const filled = name === 'play' || name === 'stop';
+  const filled = name === 'play' || name === 'stop' || name === 'pause';
   return (
     <svg
       viewBox="0 0 16 16"

@@ -14,7 +14,7 @@ const ExportDialog = lazy(() => import('@/features/export/ExportDialog').then((m
 
 const ZOOM_MIN = 0.8;
 const ZOOM_MAX = 2.2;
-const kindIcon = { tablature: 'tab', map: 'map', mixed: 'mixed' } as const;
+const kindIcon = { tablature: 'tab', map: 'map', mixed: 'mixed', melody: 'melody', lyrics: 'lyrics', chords: 'chords', composition: 'song' } as const;
 
 function MaterialPicker({ documents, current, onPick }: { documents: MusicalDocument[]; current?: MusicalDocument; onPick: (id: string) => void }) {
   const [query, setQuery] = useState('');

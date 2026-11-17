@@ -1,6 +1,6 @@
 import type { DocumentType, FretboardContent, LibraryNode, MusicalDocument, NotebookContent } from '@/core/model';
 
-export type MaterialTemplate = 'scale' | 'triad' | 'riff' | 'empty' | 'study' | 'text';
+export type MaterialTemplate = 'scale' | 'triad' | 'riff' | 'empty' | 'study' | 'text' | 'melody' | 'song-lyrics' | 'song-melody' | 'chords' | 'composition';
 import { createFretboardContent, createTablatureContent } from '@/core/model';
 import { newBlock } from '@/core/notebook';
 import { db } from '@/data/database';
@@ -47,15 +47,23 @@ export class LibraryRepository {
       await db.documents.put({ ...document, content });
       return { ...document, content };
     }
-    const blocks: NotebookContent['blocks'] =
-      template === 'empty' ? [] : template === 'text' ? [newBlock('text', 'note')] : [newBlock('map'), newBlock('tablature')];
-    const title = template === 'empty' ? 'Nuevo cuaderno' : template === 'text' ? 'Nueva nota' : 'Nuevo cuaderno de estudio';
-    return this.createNotebook(title, blocks, nodeId, songId);
+    const plans: Record<string, { title: string; blocks: NotebookContent['blocks']; meta?: NotebookContent['meta'] }> = {
+      empty: { title: 'Nuevo cuaderno', blocks: [] },
+      text: { title: 'Nueva nota', blocks: [newBlock('text', 'note')] },
+      melody: { title: 'Nueva melodía', blocks: [newBlock('melody')] },
+      chords: { title: 'Nueva progresión', blocks: [newBlock('chords')] },
+      'song-lyrics': { title: 'Nueva canción', blocks: [newBlock('lyrics')], meta: { status: 'idea' } },
+      'song-melody': { title: 'Nueva canción', blocks: [newBlock('melody')], meta: { status: 'idea' } },
+      composition: { title: 'Nuevo cuaderno de composición', blocks: [], meta: { status: 'idea' } },
+      study: { title: 'Nuevo cuaderno de estudio', blocks: [newBlock('map'), newBlock('tablature')] },
+    };
+    const plan = plans[template] ?? plans.study;
+    return this.createNotebook(plan.title, plan.blocks, nodeId, songId, plan.meta);
   }
 
-  private async createNotebook(title: string, blocks: NotebookContent['blocks'], nodeId: string | null, songId: string | null) {
+  private async createNotebook(title: string, blocks: NotebookContent['blocks'], nodeId: string | null, songId: string | null, meta?: NotebookContent['meta']) {
     const createdAt = now();
-    const content: NotebookContent = { kind: 'notebook', version: 1, blocks };
+    const content: NotebookContent = { kind: 'notebook', version: 1, blocks, ...(meta ? { meta } : {}) };
     const document: MusicalDocument = {
       id: crypto.randomUUID(), nodeId, songId, type: 'tablature', title,
       content, rev: 1, createdAt, updatedAt: createdAt, ownerId: (await activeOwnerId()) ?? undefined,

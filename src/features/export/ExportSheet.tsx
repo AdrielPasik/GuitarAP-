@@ -4,6 +4,10 @@ import { FretboardCanvas } from '@/features/fretboard/FretboardCanvas';
 import { legendLabel, markersForAll, markersForPosition, rolesPresent } from '@/features/fretboard/map-markers';
 import { resolvedView, visibleRange } from '@/features/fretboard/operations';
 import { TabBlock } from '@/features/tablature/TabBlock';
+import { formatNote } from '@/core/theory/pitch';
+import { LyricsReading } from '@/features/lyrics/LyricsBlock';
+import { useNoteStyle } from '@/features/melody/note-style';
+import { intervalLabel, totalBeats } from '@/features/melody/operations';
 import type { ExportItem, ExportSettings } from '@/features/export/export-plan';
 
 export const SHEET_WIDTH = 1000;
@@ -15,6 +19,15 @@ export const SHEET_WIDTH = 1000;
  */
 export const ExportSheet = forwardRef<HTMLDivElement, { title: string; items: ExportItem[]; settings: ExportSettings }>(
   function ExportSheet({ title, items, settings }, ref) {
+    const [noteStyle] = useNoteStyle();
+    const commentsOf = (item: ExportItem) =>
+      settings.comments && item.comments?.length ? (
+        <ul className="ex-comments" data-export-unit>
+          {item.comments.map((comment) => (
+            <li key={comment.id}>{comment.text}</li>
+          ))}
+        </ul>
+      ) : null;
     return (
       <div
         ref={ref}
@@ -39,6 +52,54 @@ export const ExportSheet = forwardRef<HTMLDivElement, { title: string; items: Ex
               <p key={item.key} className="ex-note" data-export-unit>
                 {item.text.value}
               </p>
+            );
+          }
+          if (item.kind === 'melody' && item.melody) {
+            const melody = item.melody;
+            return (
+              <section key={item.key} className="ex-item ex-melody" data-export-unit>
+                {item.caption && <h3 className="ex-caption">{item.caption}</h3>}
+                <div className="ex-notes">
+                  {melody.events.map((event, index) => {
+                    const before = melody.events.slice(0, index).reverse().find((other) => other.midi !== undefined);
+                    return (
+                      <span key={event.id} className={`ex-note-chip${event.type === 'rest' ? ' rest' : ''}`} style={{ ['--beats' as string]: event.beats }}>
+                        <b>{event.type === 'rest' || event.midi === undefined ? 'silencio' : formatNote(event.midi, noteStyle, event.accidental ?? 'sharp')}</b>
+                        {event.beats !== 1 && <small>{event.beats} pulsos</small>}
+                        {event.lyric && <em>{event.lyric}</em>}
+                        {before?.midi !== undefined && event.midi !== undefined && settings.notes && <i hidden>{intervalLabel(before.midi, event.midi)}</i>}
+                      </span>
+                    );
+                  })}
+                </div>
+                <p className="muted small">{melody.events.filter((event) => event.type === 'note').length} notas · {totalBeats(melody)} pulsos</p>
+                {settings.notes && melody.phrase && <p className="ex-phrase">{melody.phrase}</p>}
+                {commentsOf(item)}
+              </section>
+            );
+          }
+          if (item.kind === 'lyrics' && item.lyrics) {
+            return (
+              <section key={item.key} className="ex-item ex-lyrics">
+                {item.caption && <h3 className="ex-caption" data-export-unit>{item.caption}</h3>}
+                <LyricsReading content={item.lyrics} />
+                {commentsOf(item)}
+              </section>
+            );
+          }
+          if (item.kind === 'chords' && item.chords) {
+            return (
+              <section key={item.key} className="ex-item ex-chords" data-export-unit>
+                {item.caption && <h3 className="ex-caption">{item.caption}</h3>}
+                <div className="ex-notes">
+                  {item.chords.items.map((chord) => (
+                    <span key={chord.id} className="ex-note-chip chord" style={{ ['--beats' as string]: chord.beats }}>
+                      <b>{chord.symbol}</b>
+                    </span>
+                  ))}
+                </div>
+                {commentsOf(item)}
+              </section>
             );
           }
           if (item.kind === 'tablature' && item.tab) {

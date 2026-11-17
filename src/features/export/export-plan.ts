@@ -1,4 +1,4 @@
-import type { FretboardContent, FretPosition, NotebookContent, TablatureContent, TextBlockStyle } from '@/core/model';
+import type { ChordsContent, FretboardContent, FretPosition, LyricsContent, MelodyContent, NoteComment, NotebookContent, TablatureContent, TextBlockStyle } from '@/core/model';
 
 /** What the person picked: which blocks, and for a map, which of its positions. */
 export type ExportSelection = {
@@ -10,11 +10,16 @@ export type ExportSelection = {
 export type ExportItem = {
   key: string;
   blockId: string;
-  kind: 'map' | 'tablature' | 'text';
+  kind: 'map' | 'tablature' | 'text' | 'melody' | 'lyrics' | 'chords';
   caption: string;
   map?: { content: FretboardContent; position?: FretPosition; positionIndex: number; complete: boolean };
   tab?: TablatureContent;
   text?: { style: TextBlockStyle; value: string };
+  melody?: MelodyContent;
+  lyrics?: LyricsContent;
+  chords?: ChordsContent;
+  /** Personal comments of this block (shown only if the person asks for them). */
+  comments?: NoteComment[];
 };
 
 export type ExportSettings = {
@@ -24,6 +29,8 @@ export type ExportSettings = {
   title: boolean;
   legend: boolean;
   notes: boolean;
+  /** Include the personal comments written on each block. */
+  comments: boolean;
   /** Pixel ratio of the image (1 = screen, 2 = sharp, 3 = print). */
   quality: 1 | 2 | 3;
 };
@@ -35,6 +42,7 @@ export const defaultSettings: ExportSettings = {
   title: true,
   legend: true,
   notes: true,
+  comments: false,
   quality: 2,
 };
 
@@ -51,8 +59,15 @@ export function planExport(notebook: NotebookContent, selection: ExportSelection
   const items: ExportItem[] = [];
   for (const block of notebook.blocks) {
     if (!selection.included.includes(block.id)) continue;
+    const comments = (notebook.comments ?? []).filter((comment) => comment.blockId === block.id);
     if (block.kind === 'tablature') {
-      items.push({ key: block.id, blockId: block.id, kind: 'tablature', caption: block.title?.trim() ?? '', tab: block.content });
+      items.push({ key: block.id, blockId: block.id, kind: 'tablature', caption: block.title?.trim() ?? '', tab: block.content, comments });
+    } else if (block.kind === 'melody') {
+      items.push({ key: block.id, blockId: block.id, kind: 'melody', caption: block.title?.trim() ?? '', melody: block.content, comments });
+    } else if (block.kind === 'lyrics') {
+      items.push({ key: block.id, blockId: block.id, kind: 'lyrics', caption: block.title?.trim() ?? '', lyrics: block.content, comments });
+    } else if (block.kind === 'chords') {
+      items.push({ key: block.id, blockId: block.id, kind: 'chords', caption: block.title?.trim() ?? '', chords: block.content, comments });
     } else if (block.kind === 'text') {
       if (block.text.trim()) items.push({ key: block.id, blockId: block.id, kind: 'text', caption: '', text: { style: block.style, value: block.text } });
     } else {
@@ -70,6 +85,7 @@ export function planExport(notebook: NotebookContent, selection: ExportSelection
             kind: 'map',
             caption: positions.length > 1 ? `${prefix}${position.name}` : (block.title?.trim() ?? ''),
             map: { content: block.content, position, positionIndex: positions.indexOf(position), complete: false },
+            comments,
           });
         }
       }
@@ -99,6 +115,9 @@ export function exportFileName(title: string, notebook: NotebookContent, selecti
   else if (included.length === 1) {
     const [block] = included;
     if (block.kind === 'tablature') what = 'tablatura';
+    else if (block.kind === 'melody') what = 'melodia';
+    else if (block.kind === 'lyrics') what = 'letra';
+    else if (block.kind === 'chords') what = 'acordes';
     else if (block.kind === 'text') what = 'nota';
     else {
       const scope = selection.scopes[block.id] ?? 'each';

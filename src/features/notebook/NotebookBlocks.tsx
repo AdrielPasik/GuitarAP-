@@ -1,7 +1,10 @@
 import { useState } from 'react';
 import type { NotebookContent } from '@/core/model';
 import {
+  addComment,
+  deleteComment,
   duplicateBlock,
+  editComment,
   insertBlock,
   moveBlock,
   removeBlock,
@@ -13,6 +16,14 @@ import { MapBlock } from '@/features/fretboard/MapBlock';
 import { AddBlockMenu, BlockFrame, TextBlock } from '@/features/notebook/blocks';
 import { blockFor, type NewBlockKind } from '@/features/notebook/block-meta';
 import { TabBlock } from '@/features/tablature/TabBlock';
+import { MelodyBlock } from '@/features/melody/MelodyBlock';
+import { LyricsBlock } from '@/features/lyrics/LyricsBlock';
+import { ChordsBlock } from '@/features/chords/ChordsBlock';
+import { CommentsContext, type CommentsApi } from '@/features/notebook/comments';
+import { NotebookInfoContext } from '@/features/notebook/notebook-context';
+import { SongBar } from '@/features/notebook/SongBar';
+import { melodyToMidi, downloadMidi } from '@/audio/midi';
+import { totalBeats as melodyBeats, noteCount } from '@/features/melody/operations';
 
 type Change = (update: (notebook: NotebookContent) => NotebookContent) => void;
 
@@ -26,6 +37,9 @@ function summaryOf(block: NotebookContent['blocks'][number]) {
     return `${notes} ${notes === 1 ? 'nota' : 'notas'} · ${block.content.positions.length} ${block.content.positions.length === 1 ? 'posición' : 'posiciones'}`;
   }
   if (block.kind === 'tablature') return `${block.content.columns.length} eventos`;
+  if (block.kind === 'melody') return `${noteCount(block.content)} notas · ${melodyBeats(block.content)} pulsos`;
+  if (block.kind === 'chords') return block.content.items.map((item) => item.symbol).join(' ').slice(0, 48) || 'Sin acordes';
+  if (block.kind === 'lyrics') return block.content.text.trim().split('\n').find((line) => line.trim() && !line.startsWith('#'))?.slice(0, 48) ?? 'Sin letra';
   return block.text.slice(0, 40);
 }
 
@@ -35,6 +49,7 @@ export function NotebookBlocks({
   undo,
   onExportBlock,
   onActiveChange,
+  onOpenTools,
   readOnly = false,
 }: {
   notebook: NotebookContent;
@@ -42,6 +57,7 @@ export function NotebookBlocks({
   undo?: () => void;
   onExportBlock?: (blockId: string) => void;
   onActiveChange?: (blockId: string) => void;
+  onOpenTools?: (context?: { chord?: string }) => void;
   readOnly?: boolean;
 }) {
   const toast = useToast();
@@ -61,8 +77,22 @@ export function NotebookBlocks({
     requestAnimationFrame(() => document.getElementById(`block-${block.id}`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }));
   }
 
+  const comments: CommentsApi = {
+    all: notebook.comments ?? [],
+    readOnly,
+    add: (target, text) => edit((current) => addComment(current, target, text).notebook),
+    edit: (id, text) => edit((current) => editComment(current, id, text)),
+    remove: (id) => {
+      edit((current) => deleteComment(current, id));
+      toast.show('Comentario eliminado.', undo ? { label: 'Deshacer', onAction: undo } : undefined);
+    },
+  };
+
   return (
+    <NotebookInfoContext value={{ docBpm: notebook.meta?.bpm, key: notebook.meta?.key, openTools: readOnly ? undefined : onOpenTools, readOnly }}>
+    <CommentsContext value={comments}>
     <div className="blocks">
+      <SongBar notebook={notebook} readOnly={readOnly} change={edit} />
       {notebook.blocks.map((block, index) => (
         <BlockFrame
           key={block.id}
@@ -114,6 +144,39 @@ export function NotebookBlocks({
               />
             </div>
           )}
+          {block.kind === 'melody' && (
+            <MelodyBlock
+              blockId={block.id}
+              content={block.content}
+              readOnly={readOnly}
+              onActivate={() => activate(block.id)}
+              onExportMidi={() => downloadMidi(melodyToMidi(block.content, block.content.bpm ?? notebook.meta?.bpm ?? 96), block.title?.trim() || 'melodia')}
+              onChange={(update) =>
+                edit((current) => updateBlock(current, block.id, (item) => (item.kind === 'melody' ? { ...item, content: update(item.content) } : item)))
+              }
+            />
+          )}
+          {block.kind === 'lyrics' && (
+            <LyricsBlock
+              blockId={block.id}
+              content={block.content}
+              readOnly={readOnly}
+              onChange={(update) =>
+                edit((current) => updateBlock(current, block.id, (item) => (item.kind === 'lyrics' ? { ...item, content: update(item.content) } : item)))
+              }
+            />
+          )}
+          {block.kind === 'chords' && (
+            <ChordsBlock
+              blockId={block.id}
+              content={block.content}
+              readOnly={readOnly}
+              onActivate={() => activate(block.id)}
+              onChange={(update) =>
+                edit((current) => updateBlock(current, block.id, (item) => (item.kind === 'chords' ? { ...item, content: update(item.content) } : item)))
+              }
+            />
+          )}
           {block.kind === 'text' && (
             <TextBlock
               block={block}
@@ -127,6 +190,12 @@ export function NotebookBlocks({
         <div className="empty-notebook">
           <h2>Empezá tu material</h2>
           <div className="empty-actions">
+            <button type="button" className="btn" onClick={() => addAfter(-1, 'melody')}>
+              <Icon name="melody" size={14} /> Agregar melodía
+            </button>
+            <button type="button" className="btn" onClick={() => addAfter(-1, 'lyrics')}>
+              <Icon name="lyrics" size={14} /> Agregar letra
+            </button>
             <button type="button" className="btn" onClick={() => addAfter(-1, 'map')}>
               <Icon name="map" size={14} /> Agregar mapa
             </button>
@@ -145,6 +214,8 @@ export function NotebookBlocks({
         </div>
       )}
     </div>
+    </CommentsContext>
+    </NotebookInfoContext>
   );
 }
 

@@ -200,6 +200,10 @@ export function ExportDialog({
                 <input type="checkbox" checked={settings.notes} onChange={(event) => patch({ notes: event.target.checked })} />
                 <span>Mostrar anotaciones</span>
               </label>
+              <label className="check">
+                <input type="checkbox" checked={settings.comments} onChange={(event) => patch({ comments: event.target.checked })} />
+                <span>Incluir mis comentarios</span>
+              </label>
               <div className="ex-row">
                 <span>Calidad</span>
                 <Segmented<'1' | '2' | '3'>

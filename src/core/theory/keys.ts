@@ -238,3 +238,12 @@ export function transposeKey(key: KeyRef, semitones: number): KeyRef {
   const list = key.mode === 'major' ? CIRCLE_MAJOR : CIRCLE_MINOR;
   return { tonic: list.find((tonic) => tonicPc(tonic) === target) ?? key.tonic, mode: key.mode };
 }
+
+const LATIN_LETTER: Record<string, string> = { C: 'Do', D: 'Re', E: 'Mi', F: 'Fa', G: 'Sol', A: 'La', B: 'Si' };
+/** "F#" -> "F♯" or "Fa♯", "Bb" -> "B♭" or "Si♭". */
+export function tonicName(tonic: string, style: NameStyle) {
+  const mark = tonic.slice(1).replace('#', '♯').replace('b', '♭');
+  return `${style === 'latin' ? LATIN_LETTER[tonic[0]] : tonic[0]}${mark}`;
+}
+export const keyTitle = (key: KeyRef, style: NameStyle) =>
+  `${tonicName(key.tonic, style)} ${key.mode === 'major' ? 'mayor' : 'menor'}`;

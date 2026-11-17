@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { tablatureToSequence } from '@/audio/plan';
+import { useBlockPlayer } from '@/audio/useBlockPlayer';
+import { PlayerBar } from '@/features/notebook/PlayerBar';
 import type { TablatureContent, Technique } from '@/core/model';
 import { stringName } from '@/core/music';
 import { usePref } from '@/core/prefs';
@@ -60,6 +63,8 @@ export function TabBlock({
   onActivate?: () => void;
 }) {
   const toast = useToast();
+  const sequence = useMemo(() => tablatureToSequence(content), [content]);
+  const player = useBlockPlayer({ owner: blockId, sequence, blockBpm: content.bpm, instrument: content.instrument });
   const [selected, setSelected] = useState<TabCursor>({ column: 0, string: 0 });
   const programmatic = useRef(false);
   // Selection is anchor → cursor: the anchor stays put while Shift+arrows move the cursor.
@@ -329,8 +334,40 @@ export function TabBlock({
     : [];
   const lastLabel = content.columns[selected.column]?.section ?? '';
 
+  const step = content.stepBeats && content.stepBeats > 0 ? content.stepBeats : 1;
+  const hasSound = sequence.events.length > 0;
+
   return (
     <div className="tab-block" onFocusCapture={onActivate} onPointerDownCapture={onActivate}>
+      <div className="player-row nb-chrome">
+        <PlayerBar
+          player={player}
+          label="tablatura"
+          disabled={!hasSound}
+          emptyHint="Escribí alguna nota para poder escucharla"
+          onBpm={readOnly ? undefined : (bpm) => onChange((current) => ({ ...current, bpm: Math.max(30, Math.min(280, Math.round(bpm))) }))}
+          onInstrument={readOnly ? undefined : (instrument) => onChange((current) => ({ ...current, instrument }))}
+        />
+        {!readOnly && (
+          <>
+            <label className="field inline compact">
+              <span>Cada paso dura</span>
+              <select
+                aria-label="Duración de cada paso"
+                value={step}
+                onChange={(event) => onChange((current) => ({ ...current, stepBeats: Number(event.target.value) }))}
+              >
+                <option value={0.5}>½ pulso</option>
+                <option value={1}>1 pulso</option>
+                <option value={2}>2 pulsos</option>
+              </select>
+            </label>
+            <button type="button" className="btn btn-ghost" disabled={!hasSound} onClick={() => void player.play(selected.column * step)}>
+              Desde la selección
+            </button>
+          </>
+        )}
+      </div>
       {!readOnly && (
         <div className={`block-bar nb-chrome${active ? '' : ' dim'}`}>
           <Segmented<'keyboard' | 'fretboard'>
@@ -456,7 +493,7 @@ export function TabBlock({
                   return (
                     <div
                       key={`${column.id}-${string}`}
-                      className={`tb-cell${isSelected ? ' sel' : ''}${inRange ? ' range' : ''}${inEvent ? ' event' : ''}${shown ? ' has' : ''}${isSelected && pending ? ' pending' : ''}`}
+                      className={`tb-cell${player.activeId === column.id ? ' playing' : ''}${isSelected ? ' sel' : ''}${inRange ? ' range' : ''}${inEvent ? ' event' : ''}${shown ? ' has' : ''}${isSelected && pending ? ' pending' : ''}`}
                     >
                       {string === 0 && column.section && <span className="tb-label">{column.section}</span>}
                       {readOnly ? (

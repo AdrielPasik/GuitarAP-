@@ -3,6 +3,7 @@ import type { NotebookBlock } from '@/core/model';
 import { Icon } from '@/components/ui/Icon';
 import { blockMeta, type NewBlockKind } from '@/features/notebook/block-meta';
 import { Menu } from '@/components/ui/Popover';
+import { CommentButton } from '@/features/notebook/comments';
 
 export function AddBlockMenu({
   onAdd,
@@ -28,6 +29,10 @@ export function AddBlockMenu({
         </>
       )}
       items={[
+        { label: 'Melodía', icon: 'melody', description: 'Notas con altura y duración', onSelect: () => onAdd('melody') },
+        { label: 'Letra', icon: 'lyrics', description: 'Versos, estribillo, acordes sobre la letra', onSelect: () => onAdd('lyrics') },
+        { label: 'Acordes', icon: 'chords', description: 'Una progresión: C G Am F', onSelect: () => onAdd('chords') },
+        { separator: true },
         { label: 'Tablatura', icon: 'tab', onSelect: () => onAdd('tablature') },
         { label: 'Mapa del mástil', icon: 'map', onSelect: () => onAdd('map') },
         { separator: true },
@@ -104,6 +109,7 @@ export function BlockFrame({
             </>
           )}
           <span className="spacer" />
+          {!isText && <CommentButton blockId={block.id} label={`${meta.label.toLowerCase()} ${index + 1}`} />}
           {!readOnly && (
             <div className="block-tools nb-chrome">
               {!isText && (
