@@ -74,6 +74,13 @@ export function TabBlock({
   const [rejected, setRejected] = useState(false);
   const [labeling, setLabeling] = useState(false);
   const [width, setWidth] = useState(960);
+  // The docked neck never takes more than about a third of the screen, so the toolbar and the sheet stay reachable.
+  const [viewportHeight, setViewportHeight] = useState(() => window.innerHeight);
+  useEffect(() => {
+    const onResize = () => setViewportHeight(window.innerHeight);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
   const [input, setInput] = usePref<'keyboard' | 'fretboard'>('tab-input', 'keyboard');
   const [entry, setEntry] = usePref<'melody' | 'chord'>('tab-entry', 'melody');
   const [autoAdvance, setAutoAdvance] = usePref('tab-auto-advance', true);
@@ -585,7 +592,7 @@ export function TabBlock({
             onPick={pickFromNeck}
             label="Mástil para escribir la tablatura"
             testId="tab-neck"
-            maxCell={visibleFrets <= 5 ? 110 : 80}
+            maxCell={Math.min(visibleFrets <= 5 ? 110 : 80, Math.max(44, Math.round((64 * 0.34 * viewportHeight) / 264)))}
           />
         </div>
       )}

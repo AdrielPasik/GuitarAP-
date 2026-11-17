@@ -11,7 +11,11 @@ import { HistoryDialog, ShortcutsDialog } from '@/features/notebook/dialogs';
 import { blockFor } from '@/features/notebook/block-meta';
 import { NotebookBlocks } from '@/features/notebook/NotebookBlocks';
 import { useNotebookDocument, type SaveState } from '@/features/notebook/useNotebookDocument';
-import { insertBlock, newBlock, setMeta, updateBlock } from '@/core/notebook';
+import { cloneBlocks, extractBlocks, insertBlock, newBlock, removeBlock, setMeta, updateBlock } from '@/core/notebook';
+import { appendBlocksToDocument, removeBlocksFromDocument } from '@/data/block-transfer';
+import { DocumentPickerDialog, type TransferMode } from '@/features/notebook/transfer-dialogs';
+import { NotebookOutline } from '@/features/notebook/NotebookOutline';
+import { usePref } from '@/core/prefs';
 import { applyNotes, generatedScaleNotes } from '@/features/fretboard/operations';
 import { keyTitle, tonicPc, type KeyRef } from '@/core/theory/keys';
 import { useNoteStyle } from '@/features/melody/note-style';
@@ -61,6 +65,8 @@ export function NotebookEditor({
   const [exportFor, setExportFor] = useState<ExportSelection | null>(null);
   const [activeBlock, setActiveBlock] = useState<string | null>(null);
   const [tools, setTools] = useState<ToolsContext | null>(null);
+  const [transfer, setTransfer] = useState<{ blockId: string; mode: TransferMode } | null>(null);
+  const [outline, setOutline] = usePref<boolean>('outline-open', false);
   const [style] = useNoteStyle();
   const chordsBlock = [...doc.notebook.blocks].reverse().find((block) => block.kind === 'chords' && block.id === activeBlock) ?? [...doc.notebook.blocks].reverse().find((block) => block.kind === 'chords');
   const addChords = (symbols: string[]) => {
@@ -72,6 +78,34 @@ export function NotebookEditor({
     );
     toast.show(symbols.length === 1 ? `Se agregó ${symbols[0]} a la progresión.` : `Se agregaron ${symbols.length} acordes a la progresión.`);
   };
+  /**
+   * Moves or copies a block to another song. The destination is written first, in one transaction; the block is
+   * removed here only after that succeeded, so a failure can leave a copy but never lose the block.
+   */
+  async function performTransfer(targetId: string, targetTitle: string) {
+    const request = transfer;
+    setTransfer(null);
+    if (!request) return;
+    const { blocks, comments } = request.mode === 'move' ? extractBlocks(doc.notebook, [request.blockId]) : cloneBlocks(doc.notebook, [request.blockId]);
+    if (!blocks.length) return;
+    try {
+      await appendBlocksToDocument(targetId, blocks, comments);
+    } catch (error) {
+      toast.show(`No se pudo ${request.mode === 'move' ? 'mover' : 'copiar'}: ${error instanceof Error ? error.message : 'error desconocido'} Tu bloque sigue en esta canción.`);
+      return;
+    }
+    const ids = blocks.map((block) => block.id);
+    if (request.mode === 'move') doc.change((current) => removeBlock(current, request.blockId));
+    toast.show(request.mode === 'move' ? `Se movió a «${targetTitle}».` : `Se copió a «${targetTitle}».`, {
+      label: request.mode === 'move' ? 'Deshacer movimiento' : 'Quitar la copia',
+      onAction: () => {
+        void removeBlocksFromDocument(targetId, ids).then(() => {
+          if (request.mode === 'move') doc.undo();
+          toast.show(request.mode === 'move' ? 'Movimiento deshecho: el bloque volvió a esta canción.' : 'Copia quitada.');
+        });
+      },
+    });
+  }
   const createScaleMap = (key: KeyRef) => {
     const block = newBlock('map');
     if (block.kind !== 'map') return;
@@ -133,8 +167,11 @@ export function NotebookEditor({
           <Link className="btn" to={`/practica/${record.id}`}>
             <Icon name="practice" size={14} /> Practicar
           </Link>
+          <button type="button" className="btn" aria-pressed={outline} onClick={() => setOutline(!outline)}>
+            <Icon name="index" size={14} /> <span className="btn-label">Índice</span>
+          </button>
           <button type="button" className="btn" aria-pressed={Boolean(tools)} onClick={() => setTools((current) => (current ? null : { key: doc.notebook.meta?.key, bpm: doc.notebook.meta?.bpm }))}>
-            <Icon name="circle" size={14} /> Armonía
+            <Icon name="circle" size={14} /> <span className="btn-label">Armonía</span>
           </button>
           <button type="button" className="btn" onClick={() => openExport(null)}>
             <Icon name="export" size={14} /> Exportar
@@ -172,17 +209,33 @@ export function NotebookEditor({
         </div>
       </header>
 
-      <div className={`nb-page${tools ? ' with-tools' : ''}`}>
+      <div className={`nb-page${tools ? ' with-tools' : ''}${outline ? ' with-outline' : ''}`}>
+        {outline && <NotebookOutline notebook={doc.notebook} onClose={() => setOutline(false)} />}
+        <div className="nb-main">
         <NotebookBlocks
           notebook={doc.notebook}
           change={doc.change}
           undo={doc.undo}
           documentId={record.id}
+          onRequestTransfer={(blockId, mode) => setTransfer({ blockId, mode })}
           onExportBlock={openExport}
           onActiveChange={setActiveBlock}
           onOpenTools={(context) => setTools({ key: doc.notebook.meta?.key, bpm: doc.notebook.meta?.bpm, ...context })}
         />
+        </div>
       </div>
+      {transfer && (
+        <DocumentPickerDialog
+          mode={transfer.mode}
+          label={(() => {
+            const block = doc.notebook.blocks.find((item) => item.id === transfer.blockId);
+            return (block && 'title' in block && block.title?.trim()) || (block ? block.kind : 'bloque');
+          })()}
+          currentId={record.id}
+          onClose={() => setTransfer(null)}
+          onPick={(id, title) => void performTransfer(id, title)}
+        />
+      )}
       {tools && (
         <Suspense fallback={null}>
           <HarmonyTools

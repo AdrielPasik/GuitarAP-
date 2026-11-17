@@ -1,8 +1,8 @@
-import type { ReactNode } from 'react';
+import type { DragEvent, ReactNode } from 'react';
 import type { NotebookBlock } from '@/core/model';
 import { Icon } from '@/components/ui/Icon';
 import { blockMeta, type NewBlockKind } from '@/features/notebook/block-meta';
-import { Menu } from '@/components/ui/Popover';
+import { Menu, type MenuItem } from '@/components/ui/Popover';
 import { CommentButton } from '@/features/notebook/comments';
 
 export function AddBlockMenu({
@@ -36,6 +36,7 @@ export function AddBlockMenu({
         { label: 'Tablatura', icon: 'tab', onSelect: () => onAdd('tablature') },
         { label: 'Mapa del mástil', icon: 'map', onSelect: () => onAdd('map') },
         { separator: true },
+        { label: 'Sección', icon: 'text', description: 'Agrupa los bloques que siguen (Verso 1, Estribillo, Solo…)', onSelect: () => onAdd('section') },
         { label: 'Título de sección', icon: 'text', onSelect: () => onAdd('heading') },
         { label: 'Nota de estudio', icon: 'text', onSelect: () => onAdd('note') },
       ]}
@@ -63,6 +64,9 @@ export function BlockFrame({
   onToggleCollapse,
   onExport,
   onAddAfter,
+  extraMenu,
+  drag,
+  badge,
   children,
 }: {
   block: NotebookBlock;
@@ -79,6 +83,19 @@ export function BlockFrame({
   onToggleCollapse: () => void;
   onExport?: () => void;
   onAddAfter: (kind: NewBlockKind) => void;
+  /** Extra actions (move to a section, move or copy to another song, link lyrics…) placed before Delete. */
+  extraMenu?: MenuItem[];
+  /** Drag and drop reordering. Never the only way: the menu and Alt+arrows do the same. */
+  drag?: {
+    onDragStart: (event: DragEvent) => void;
+    onDragEnd: () => void;
+    onDragOver: (event: DragEvent) => void;
+    onDrop: (event: DragEvent) => void;
+    edge: 'before' | 'after' | null;
+    dragging: boolean;
+  };
+  /** A small text next to the title (for example "con la letra «Verso 1»"). */
+  badge?: string;
   children: ReactNode;
 }) {
   const meta = blockMeta[block.kind] ?? { label: 'Bloque de otra versión', icon: 'text' as const };
@@ -87,11 +104,33 @@ export function BlockFrame({
   return (
     <section
       id={`block-${block.id}`}
-      className={`block kind-${block.kind}${active ? ' active' : ''}${collapsed ? ' collapsed' : ''}`}
+      className={`block kind-${block.kind}${active ? ' active' : ''}${collapsed ? ' collapsed' : ''}${drag?.dragging ? ' dragging' : ''}${drag?.edge ? ` drop-${drag.edge}` : ''}`}
       aria-label={`${meta.label} ${index + 1}${title ? `: ${title}` : ''}`}
+      onDragOver={drag?.onDragOver}
+      onDrop={drag?.onDrop}
     >
       {(!isText || !readOnly) && (
         <header className={`block-head${isText ? ' text' : ''}`}>
+          {!isText && !readOnly && drag && (
+            <button
+              type="button"
+              className="icon-btn grip nb-chrome"
+              draggable
+              aria-label={`Reordenar ${meta.label.toLowerCase()} ${index + 1}`}
+              aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
+              title="Arrastrar para reordenar (o Alt + flecha arriba o abajo)"
+              onDragStart={drag.onDragStart}
+              onDragEnd={drag.onDragEnd}
+              onKeyDown={(event) => {
+                if (event.altKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
+                  event.preventDefault();
+                  onMove(event.key === 'ArrowUp' ? -1 : 1);
+                }
+              }}
+            >
+              <Icon name="grip" size={14} />
+            </button>
+          )}
           {!isText && (
             <>
               <span className="block-kind" title={meta.label}>
@@ -105,6 +144,7 @@ export function BlockFrame({
                 value={title}
                 onChange={(event) => onTitle(event.target.value)}
               />
+              {badge && <span className="block-badge">{badge}</span>}
               {collapsed && <span className="block-summary">{summary}</span>}
             </>
           )}
@@ -133,6 +173,7 @@ export function BlockFrame({
                   { label: 'Bajar', icon: 'arrow-down', disabled: index === count - 1, onSelect: () => onMove(1) },
                   { label: 'Duplicar', icon: 'copy', onSelect: onDuplicate },
                   ...(onExport ? [{ label: 'Exportar este bloque…', icon: 'export' as const, onSelect: onExport }] : []),
+                  ...(extraMenu?.length ? [{ separator: true as const }, ...extraMenu] : []),
                   { separator: true as const },
                   { label: 'Eliminar bloque', icon: 'trash', danger: true, onSelect: onRemove },
                 ]}
@@ -192,5 +233,82 @@ export function TextBlock({
       value={block.text}
       onChange={(event) => onChange({ text: event.target.value })}
     />
+  );
+}
+
+/**
+ * A section is a named group of blocks. Its header is editorial (a large title, a hairline) rather than a card,
+ * and it carries the actions for the whole group: fold, move up or down, duplicate, delete.
+ */
+export function SectionHeader({
+  block,
+  index,
+  count,
+  sectionCount,
+  readOnly,
+  collapsed,
+  blocksInside,
+  onTitle,
+  onToggle,
+  onMoveSection,
+  onDuplicate,
+  onRemove,
+  onAddInside,
+}: {
+  block: Extract<NotebookBlock, { kind: 'section' }>;
+  index: number;
+  count: number;
+  sectionCount: number;
+  readOnly: boolean;
+  collapsed: boolean;
+  blocksInside: number;
+  onTitle: (title: string) => void;
+  onToggle: () => void;
+  onMoveSection: (offset: -1 | 1) => void;
+  onDuplicate: () => void;
+  onRemove: (withContent: boolean) => void;
+  onAddInside: (kind: NewBlockKind) => void;
+}) {
+  void count;
+  return (
+    <section id={`block-${block.id}`} className={`section-head${collapsed ? ' collapsed' : ''}`} aria-label={`Sección ${block.title || index + 1}`}>
+      <button type="button" className="icon-btn" aria-expanded={!collapsed} aria-label={`${collapsed ? 'Expandir' : 'Plegar'} la sección ${block.title || ''}`.trim()} onClick={onToggle}>
+        <Icon name={collapsed ? 'chevron-right' : 'chevron-down'} size={16} />
+      </button>
+      {readOnly ? (
+        <h2 className="section-title static">{block.title || 'Sección'}</h2>
+      ) : (
+        <input
+          className="section-title"
+          aria-label={`Nombre de la sección ${index + 1}`}
+          placeholder="Nombre de la sección: Verso 1, Estribillo, Solo…"
+          value={block.title}
+          onChange={(event) => onTitle(event.target.value)}
+        />
+      )}
+      {collapsed && <span className="block-summary">{blocksInside} {blocksInside === 1 ? 'bloque' : 'bloques'}</span>}
+      <span className="spacer" />
+      {!readOnly && (
+        <div className="block-tools nb-chrome">
+          <AddBlockMenu label={`Agregar bloque a la sección ${block.title || ''}`.trim()} triggerClassName="icon-btn" align="end" onAdd={onAddInside}>
+            <Icon name="plus" size={15} />
+          </AddBlockMenu>
+          <Menu
+            label={`Acciones de la sección ${block.title || index + 1}`}
+            align="end"
+            triggerClassName="icon-btn"
+            trigger={<Icon name="more" />}
+            items={[
+              { label: 'Subir la sección', icon: 'arrow-up', disabled: sectionCount < 2, onSelect: () => onMoveSection(-1) },
+              { label: 'Bajar la sección', icon: 'arrow-down', disabled: sectionCount < 2, onSelect: () => onMoveSection(1) },
+              { label: 'Duplicar la sección', icon: 'copy', onSelect: onDuplicate },
+              { separator: true },
+              { label: 'Eliminar solo el encabezado', description: 'Los bloques quedan donde están', icon: 'trash', onSelect: () => onRemove(false) },
+              { label: 'Eliminar la sección y su contenido', icon: 'trash', danger: true, onSelect: () => onRemove(true) },
+            ]}
+          />
+        </div>
+      )}
+    </section>
   );
 }

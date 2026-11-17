@@ -14,7 +14,7 @@ const song = (): NotebookContent => ({
   kind: 'notebook',
   version: 1,
   blocks: [
-    make('note', 'idea'),
+    make('text', 'idea'),
     section('s1', 'Verso 1'),
     make('lyrics', 'l1'),
     make('melody', 'm1'),
