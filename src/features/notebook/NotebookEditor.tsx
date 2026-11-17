@@ -15,6 +15,7 @@ import { cloneBlocks, extractBlocks, insertBlock, newBlock, removeBlock, setMeta
 import { appendBlocksToDocument, removeBlocksFromDocument } from '@/data/block-transfer';
 import { DocumentPickerDialog, type TransferMode } from '@/features/notebook/transfer-dialogs';
 import { NotebookOutline } from '@/features/notebook/NotebookOutline';
+import { blockMeta } from '@/features/notebook/block-meta';
 import { usePref } from '@/core/prefs';
 import { applyNotes, generatedScaleNotes } from '@/features/fretboard/operations';
 import { keyTitle, tonicPc, type KeyRef } from '@/core/theory/keys';
@@ -239,7 +240,7 @@ export function NotebookEditor({
           mode={transfer.mode}
           label={(() => {
             const block = doc.notebook.blocks.find((item) => item.id === transfer.blockId);
-            return (block && 'title' in block && block.title?.trim()) || (block ? block.kind : 'bloque');
+            return (block && 'title' in block && block.title?.trim()) || (block ? (blockMeta[block.kind]?.label ?? 'bloque') : 'bloque');
           })()}
           currentId={record.id}
           onClose={() => setTransfer(null)}

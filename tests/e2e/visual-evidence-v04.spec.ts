@@ -46,7 +46,7 @@ test.describe('evidence v0.4', () => {
     await addBlock(page, 'Melodía');
     await page.getByLabel('Escribir notas').fill('Do4 Mi4 Sol4 Fa4:2 Mi4 Re4 Do4:2');
     await page.getByLabel('Escribir notas').press('Enter');
-    await page.getByRole('button', { name: 'Agregar letra a esta melodía' }).click();
+    await page.getByRole('button', { name: 'Sílabas y frase de esta melodía' }).click();
     await page.getByLabel('Frase de letra de la melodía').fill('Hoy vuelvo a casa con el alma en paz');
     await page.getByLabel('Sílabas para repartir').fill('Hoy vuel-vo a ca-sa');
     await page.getByRole('button', { name: 'Repartir sobre las notas' }).click();

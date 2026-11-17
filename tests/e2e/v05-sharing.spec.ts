@@ -184,6 +184,9 @@ test('Escenario C y D — invitar a un editor: acepta, edita la letra; el coment
   // The owner promotes the commenter: the new role applies.
   await dialog.getByRole('button', { name: 'Actualizar' }).click();
   await dialog.getByLabel('Rol de Carla').selectOption('editor');
+  // selectOption sets the DOM value at once; the server has the new role only when the dialog finished saving.
+  await expect(ownerPage.locator('.toast', { hasText: 'Rol actualizado.' })).toBeVisible();
+  await expect(dialog.getByLabel('Rol de Carla')).toBeEnabled();
   await expect(dialog.getByLabel('Rol de Carla')).toHaveValue('editor');
   await carlaPage.reload();
   await expect(carlaPage.getByText('Editor', { exact: true })).toBeVisible();

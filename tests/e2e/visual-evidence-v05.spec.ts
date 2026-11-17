@@ -79,10 +79,10 @@ test.describe('evidence v0.5', () => {
     await page.keyboard.press('Escape');
     await settleSave(page);
     const songUrl = page.url();
-    await page.getByRole('button', { name: 'Índice' }).click();
+    await page.getByRole('button', { name: 'Índice', exact: true }).click();
     await page.mouse.move(2, 2);
     await shot(page, '03-cancion-con-secciones-e-indice', true);
-    await page.getByRole('button', { name: 'Índice' }).click();
+    await page.getByRole('button', { name: 'Índice', exact: true }).click();
 
     await page.evaluate(() => window.scrollTo(0, 0));
     await shot(page, '04-cancion-encabezado-bpm-tonalidad');

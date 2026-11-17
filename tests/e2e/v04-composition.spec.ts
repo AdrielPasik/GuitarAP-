@@ -113,7 +113,7 @@ test('Escenario F — melodía y letra: las sílabas siguen a su nota al editar,
   await createFromMenu(page, 'Canción con melodía', 'Melodía con letra');
   await page.getByLabel('Escribir notas').fill('Do4 Mi4 Sol4 Fa4');
   await page.getByLabel('Escribir notas').press('Enter');
-  await page.getByRole('button', { name: 'Agregar letra a esta melodía' }).click();
+  await page.getByRole('button', { name: 'Sílabas y frase de esta melodía' }).click();
   await page.getByLabel('Frase de letra de la melodía').fill('Hoy vuelvo a casa');
   await page.getByLabel('Sílabas para repartir').fill('Hoy vuel-vo a');
   await page.getByRole('button', { name: 'Repartir sobre las notas' }).click();

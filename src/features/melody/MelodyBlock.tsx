@@ -459,7 +459,7 @@ export function MelodyBlock({
       )}
       {!readOnly && (
         <button type="button" className="btn btn-link lyric-toggle nb-chrome" aria-expanded={showLyrics} onClick={() => setShowLyrics((value) => !value)}>
-          {showLyrics ? 'Ocultar letra' : 'Agregar letra a esta melodía'}
+          {showLyrics ? 'Ocultar sílabas y frase' : 'Sílabas y frase de esta melodía'}
         </button>
       )}
     </div>

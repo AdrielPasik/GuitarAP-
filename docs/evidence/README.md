@@ -74,3 +74,23 @@ La autenticación y la sincronización se responden localmente: no se usa ningun
 | 19 / 20 / 20b | Tema claro / oscuro / cuaderno en oscuro |
 | 21 / 22 / 23 | Escritorio / tablet (22, 22b) / móvil (23, 23b, 23c) |
 | 24 / 25 / 26 | Herramientas de armonía: círculo / modulación / acordes |
+
+## v0.5
+
+- `v0.4/` es el **antes**; `v0.5/` el **después**. Se regenera con
+  `CAPTURE_EVIDENCE=1 npx playwright test tests/e2e/visual-evidence-v05.spec.ts` (usa dos cuentas de prueba contra la
+  pasarela local de PostgreSQL; no toca ninguna biblioteca real).
+
+| # | Captura |
+|---|---|
+| 01 / 02 | Biblioteca / inicio de una composición (formulario mínimo: nombre, BPM, tonalidad, plantilla) |
+| 03 / 04 | Canción con secciones e índice / encabezado con BPM y tonalidad |
+| 05 / 06 | Letra + melodía / sonando con la nota resaltada y tempo de práctica |
+| 07 / 08 / 09 | Menú del bloque / Mover a… / Copiar a… |
+| 10 / 11 | Círculo de quintas abriendo en la tonalidad de la canción / Práctica |
+| 12 / 13 | Configuración: Colaboración / Preferencias musicales |
+| 14 / 15 | Compartir (privado) / enlace, invitación y colaboradores |
+| 16 / 17 / 17b | Invitado: contraseña / lectura / canción completa |
+| 18 / 19 / 20 / 21 | Invitación / proyecto colaborativo / actividad / compartidos conmigo |
+| 22 / 23 / 24 | Estado vacío / tema oscuro / configuración oscura |
+| 25–29 | Tablet y móvil (canción, invitado, biblioteca) |

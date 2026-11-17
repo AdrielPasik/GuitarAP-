@@ -187,14 +187,17 @@ export function SharedNotebookScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gateway, id, userId, persist]);
 
-  // Load: local copy first (works offline), then the server.
+  // Load: local copy first (works offline), then the server. It runs again when the session token arrives, because
+  // after a reload the token can come later than the local copy (a sync without a token does nothing).
   useEffect(() => {
     if (!userId) return;
     let live = true;
     void (async () => {
       const local = await db.shared.get(id);
       if (!live) return;
-      if (local && local.userId === userId) {
+      // Only seed from disk when nothing is in memory yet: a second run of this effect must not overwrite a copy that a
+      // sync has already refreshed (that is how a role change by the owner used to be lost after a reload).
+      if (local && local.userId === userId && copyRef.current?.id !== id) {
         copyRef.current = local;
         setCopy(local);
         history.reset(local.content);
@@ -206,7 +209,7 @@ export function SharedNotebookScreen() {
       live = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, userId, state === 'ready']);
+  }, [id, userId, state === 'ready', gateway?.accessToken]);
 
   // Keep following the other person while the tab is open.
   useEffect(() => {
