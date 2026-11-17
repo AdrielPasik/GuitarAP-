@@ -1,0 +1,930 @@
+/* GuitarAP v0.4 — the composition surfaces: player, melody, chords, lyrics, comments, song bar, harmony tools. */
+
+/* ---------- Player bar ---------- */
+.player-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 2px 0 8px;
+}
+.player-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.player-bar .play-btn {
+  width: 36px;
+  height: 36px;
+}
+.bpm-stepper.compact input {
+  width: 46px;
+}
+.tempo-source {
+  white-space: nowrap;
+}
+.field.compact span {
+  font-size: 0.82rem;
+}
+.field.compact select,
+.field.compact input {
+  height: 30px;
+}
+.tb-cell.playing .tb-fret,
+.tb-cell.playing::before {
+  background: color-mix(in srgb, var(--h-root) 22%, transparent);
+  box-shadow: 0 0 0 2px var(--h-root);
+  border-radius: 4px;
+}
+
+/* ---------- Entry + errors ---------- */
+.melody-entry {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.melody-entry form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.melody-text {
+  flex: 1 1 280px;
+  min-width: 0;
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  background: var(--raised);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 0.95rem;
+}
+.melody-text[aria-invalid='true'] {
+  border-color: var(--danger);
+}
+.melody-errors {
+  margin: 0;
+  padding: 8px 12px 8px 28px;
+  border-left: 3px solid var(--danger);
+  background: var(--danger-soft);
+  color: var(--ink);
+  border-radius: 0 6px 6px 0;
+  font-size: 0.9rem;
+}
+
+/* ---------- Melody strip ---------- */
+.melody-strip {
+  --beat: 54px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 6px;
+  min-height: 84px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  background-image: repeating-linear-gradient(to bottom, transparent 0 17px, color-mix(in srgb, var(--line) 70%, transparent) 17px 18px);
+}
+.melody-strip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.melody-empty {
+  margin: auto;
+  color: var(--ink-3);
+  text-align: center;
+  max-width: 44ch;
+}
+.mel-chip {
+  position: relative;
+  flex: 0 0 auto;
+  min-width: calc(var(--beat) * var(--beats, 1) * 0.72);
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 2px;
+  padding: 10px 8px 8px;
+  border: 1.5px solid var(--line-2);
+  border-radius: 8px;
+  background: var(--raised);
+  color: var(--ink);
+  cursor: pointer;
+  user-select: none;
+  transition: transform 0.12s, box-shadow 0.12s, border-color 0.12s;
+}
+.mel-chip:hover {
+  border-color: var(--ink-3);
+  transform: translateY(-1px);
+}
+.mel-chip.sel {
+  border-color: var(--h-root);
+  box-shadow: 0 0 0 2px var(--h-root);
+}
+.mel-chip.playing {
+  background: color-mix(in srgb, var(--h-root) 16%, var(--raised));
+  border-color: var(--h-root);
+  transform: translateY(-3px);
+  box-shadow: 0 6px 14px rgb(0 0 0 / 0.18), 0 0 0 2px var(--h-root);
+}
+.mel-chip.rest {
+  background: transparent;
+  border-style: dashed;
+  color: var(--ink-3);
+}
+.mel-name {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  line-height: 1;
+  display: inline-flex;
+  align-items: baseline;
+}
+.mel-name b {
+  font-weight: 650;
+}
+.mel-name sub {
+  font-size: 0.7rem;
+  color: var(--ink-3);
+  margin-left: 1px;
+  font-family: var(--font-mono);
+}
+.mel-name i {
+  font-size: 0.82rem;
+  font-style: italic;
+}
+.mel-len {
+  font-size: 0.7rem;
+  color: var(--ink-3);
+  min-height: 0.8rem;
+}
+.mel-lyric {
+  margin-top: 2px;
+  font-size: 0.82rem;
+  font-style: italic;
+  color: var(--ink-2);
+  border-top: 1px solid var(--line);
+  padding-top: 2px;
+  min-width: 100%;
+  text-align: center;
+}
+.mel-dot {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.melody-info {
+  margin: 8px 2px;
+}
+.melody-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  padding: 8px 10px;
+  margin: 6px 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--raised);
+}
+.tool-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.tool-group select {
+  height: 30px;
+  border: 1px solid var(--line-2);
+  border-radius: 6px;
+  background: var(--raised);
+  color: var(--ink);
+  padding: 0 6px;
+}
+.icon-btn.danger:hover {
+  color: var(--danger);
+}
+.melody-lyrics {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+.melody-lyrics textarea {
+  width: 100%;
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  padding: 8px 12px;
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  background: var(--raised);
+  color: var(--ink);
+}
+.melody-phrase {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 1.1rem;
+  margin: 8px 0;
+}
+.syllables {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.syllables input {
+  flex: 1 1 240px;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--line-2);
+  border-radius: 6px;
+  background: var(--raised);
+  color: var(--ink);
+}
+.lyric-toggle {
+  margin-top: 6px;
+}
+
+/* ---------- Piano picker ---------- */
+.piano-picker {
+  display: grid;
+  gap: 6px;
+  max-width: 560px;
+}
+.piano-octaves {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.piano-keys {
+  position: relative;
+  height: 96px;
+}
+.pkey {
+  position: absolute;
+  top: 0;
+  border: 1px solid var(--line-2);
+  cursor: pointer;
+  padding: 0;
+}
+.pkey.white {
+  height: 100%;
+  background: var(--raised);
+  color: var(--ink-3);
+  font-size: 0.68rem;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 4px;
+  border-radius: 0 0 5px 5px;
+}
+.pkey.black {
+  height: 60%;
+  background: var(--ink);
+  z-index: 2;
+  border-radius: 0 0 4px 4px;
+}
+.pkey.white:hover {
+  background: var(--sunken);
+}
+.pkey.black:hover {
+  background: var(--ink-2);
+}
+.pkey.on {
+  outline: 2px solid var(--h-root);
+  z-index: 3;
+}
+
+/* ---------- Chords ---------- */
+.chord-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  min-height: 70px;
+}
+.chord-chip {
+  flex: 0 0 auto;
+  min-width: calc(54px * var(--beats, 2) * 0.6);
+}
+.chord-btn {
+  width: 100%;
+  display: grid;
+  justify-items: center;
+  gap: 1px;
+  padding: 10px 14px 6px;
+  border: 1.5px solid var(--line-2);
+  border-radius: 8px;
+  background: var(--raised);
+  color: var(--ink);
+  cursor: pointer;
+  position: relative;
+}
+.chord-btn b {
+  font-family: var(--font-display);
+  font-size: 1.3rem;
+  font-weight: 650;
+}
+.chord-btn small {
+  font-size: 0.72rem;
+  color: var(--ink-3);
+  min-height: 0.9rem;
+}
+.chord-chip.sel .chord-btn {
+  border-color: var(--h-root);
+  box-shadow: 0 0 0 2px var(--h-root);
+}
+.chord-chip.playing .chord-btn {
+  background: color-mix(in srgb, var(--h-root) 16%, var(--raised));
+  border-color: var(--h-root);
+  transform: translateY(-3px);
+}
+.chord-chip.invalid .chord-btn {
+  border-color: var(--danger);
+}
+
+/* ---------- Lyrics ---------- */
+.lyrics-block {
+  display: grid;
+  gap: 8px;
+}
+.lyrics-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  align-items: center;
+}
+.lyrics-text {
+  width: 100%;
+  max-width: 68ch;
+  padding: 14px 18px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--raised);
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 1.18rem;
+  line-height: 1.7;
+  resize: vertical;
+}
+.lyrics-text:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.lyrics-read {
+  max-width: 68ch;
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  line-height: 1.55;
+}
+.lyric-section {
+  margin: 1.2em 0 0.25em;
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent-ink);
+}
+.lyric-section:first-child {
+  margin-top: 0;
+}
+.lyric-line {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  white-space: pre-wrap;
+}
+.lyric-line.with-chords {
+  margin-top: 0.4em;
+}
+.lyric-seg {
+  display: inline-flex;
+  flex-direction: column;
+}
+.lyric-chord {
+  font-family: var(--font-mono);
+  font-size: 0.8em;
+  font-weight: 600;
+  color: var(--h-root);
+  min-height: 1.2em;
+  padding-right: 0.5em;
+}
+.lyric-gap {
+  height: 0.7em;
+}
+.lyrics-empty {
+  font-family: var(--font-display);
+}
+.lyrics-preview {
+  max-width: 68ch;
+  padding: 6px 2px;
+}
+.lyrics-preview summary {
+  cursor: pointer;
+  color: var(--ink-2);
+  font-size: 0.9rem;
+}
+
+/* ---------- Comments ---------- */
+.icon-btn.has-comments,
+.btn.has-comments {
+  color: var(--accent-ink);
+}
+.comment-count {
+  margin-left: 3px;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+.comment-thread {
+  display: grid;
+  gap: 10px;
+  min-width: min(320px, 80vw);
+  max-width: 360px;
+}
+.comment-thread ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.comment p {
+  margin: 0 0 2px;
+  white-space: pre-wrap;
+}
+.comment-meta,
+.comment-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+}
+.comment-actions {
+  justify-content: flex-start;
+}
+.comment-thread textarea,
+.comment-new textarea {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid var(--line-2);
+  border-radius: 6px;
+  background: var(--raised);
+  color: var(--ink);
+  font: inherit;
+}
+.comment-new {
+  display: grid;
+  gap: 6px;
+}
+.btn-link.danger {
+  color: var(--danger);
+}
+
+/* ---------- Song bar ---------- */
+.song-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0 12px;
+}
+.song-bar.static {
+  margin: 0 0 8px;
+}
+.chip.set {
+  border-color: var(--h-root);
+}
+.bpm-chip input {
+  width: 44px;
+  border: none;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  text-align: center;
+}
+
+/* ---------- Harmony tools ---------- */
+.tools-panel {
+  position: fixed;
+  z-index: 40;
+  top: var(--topbar-h);
+  right: 0;
+  bottom: 0;
+  width: min(400px, 100vw);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  background: var(--surface);
+  border-left: 1px solid var(--line-2);
+  box-shadow: var(--shadow-pop);
+  overflow: hidden;
+}
+.tools-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.tools-head h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+.tools-note {
+  margin: 0;
+}
+.tools-body {
+  overflow-y: auto;
+  padding: 4px 2px 24px;
+  display: grid;
+  align-content: start;
+}
+.tool-section {
+  display: grid;
+  gap: 10px;
+}
+.tool-section h3,
+.tool-section h4 {
+  margin: 4px 0 0;
+}
+.tool-title {
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+}
+.tool-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.tool-line {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.degree {
+  min-width: 34px;
+  padding: 3px 7px;
+  text-align: center;
+  border: 1px solid var(--line-2);
+  border-radius: 6px;
+  font-weight: 600;
+  background: var(--raised);
+}
+.degree.r {
+  background: var(--h-root);
+  color: var(--h-ink);
+  border-color: var(--h-root);
+}
+.degree.t {
+  background: var(--h-third);
+  color: var(--h-ink);
+  border-color: var(--h-third);
+}
+.degree.f {
+  background: var(--h-fifth);
+  color: var(--h-ink);
+  border-color: var(--h-fifth);
+}
+.tool-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+.tool-table th,
+.tool-table td {
+  text-align: left;
+  padding: 5px 6px;
+  border-bottom: 1px solid var(--line);
+  font-weight: 500;
+}
+.tool-table thead th {
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-3);
+}
+.tool-table tr.on {
+  background: var(--accent-soft);
+}
+.tool-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.tool-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.tool-form {
+  display: grid;
+  grid-template-columns: 1fr 90px 1fr;
+  gap: 8px;
+}
+.pill {
+  padding: 2px 10px;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  background: var(--raised);
+  color: var(--ink);
+  font-weight: 600;
+  cursor: pointer;
+}
+.pill:disabled {
+  cursor: default;
+}
+.pill:hover:not(:disabled) {
+  border-color: var(--h-root);
+}
+.pill-row {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 4px 0;
+}
+.chord-tones {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.tone {
+  display: grid;
+  justify-items: center;
+  min-width: 62px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 2px solid var(--line-2);
+  background: var(--raised);
+}
+.tone b {
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+}
+.tone span {
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+}
+.tone small {
+  color: var(--ink-3);
+  font-size: 0.7rem;
+}
+.tone.role-root {
+  border-color: var(--h-root);
+}
+.tone.role-third {
+  border-color: var(--h-third);
+}
+.tone.role-fifth {
+  border-color: var(--h-fifth);
+}
+.tone.role-seventh {
+  border-color: var(--h-seventh);
+}
+.mod-pickers {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.mod-facts {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+}
+.mod-facts dt {
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-3);
+  margin-top: 8px;
+}
+.mod-facts dd {
+  margin: 0;
+}
+.paths {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+.paths li {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--raised);
+}
+.paths p {
+  margin: 2px 0 8px;
+}
+
+/* ---------- Circle of fifths ---------- */
+.cof {
+  width: 100%;
+  max-width: 340px;
+  margin: 0 auto;
+  display: block;
+}
+.cof-wedge {
+  cursor: pointer;
+  outline: none;
+}
+.cof-wedge path {
+  fill: var(--raised);
+  stroke: var(--line-2);
+  stroke-width: 1;
+  transition: fill 0.15s;
+}
+.cof-wedge:hover path {
+  fill: var(--sunken);
+}
+.cof-wedge:focus-visible path {
+  stroke: var(--accent);
+  stroke-width: 3;
+}
+.cof-wedge.near path {
+  fill: color-mix(in srgb, var(--h-fifth) 22%, var(--raised));
+}
+.cof-wedge.rel path {
+  fill: color-mix(in srgb, var(--h-third) 28%, var(--raised));
+}
+.cof-wedge.sel path {
+  fill: var(--h-root);
+  stroke: var(--h-root);
+}
+.cof-wedge.dest path {
+  fill: var(--h-seventh);
+  stroke: var(--h-seventh);
+}
+.cof-wedge.doc path {
+  stroke: var(--ink);
+  stroke-width: 3;
+  stroke-dasharray: 5 3;
+}
+.cof text {
+  fill: var(--ink);
+  pointer-events: none;
+  font-family: var(--font-display);
+}
+.cof-wedge.sel text,
+.cof-wedge.dest text {
+  fill: var(--h-ink);
+}
+.cof-major {
+  font-size: 17px;
+  font-weight: 650;
+}
+.cof-minor {
+  font-size: 13px;
+}
+.cof-alt {
+  font-size: 9px;
+  fill: var(--ink-3);
+}
+.cof-hub {
+  fill: var(--surface);
+  stroke: var(--line-2);
+}
+.cof-hub-title {
+  font-size: 24px;
+  font-weight: 650;
+}
+.cof-hub-sub {
+  font-size: 12px;
+  fill: var(--ink-3);
+  font-family: var(--font-ui);
+}
+.cof-arc {
+  stroke: var(--h-seventh);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-dasharray: 2 6;
+  pointer-events: none;
+}
+.cof-legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font-size: 0.8rem;
+  color: var(--ink-2);
+}
+.cof-legend .swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 5px;
+  border-radius: 3px;
+  vertical-align: -1px;
+  border: 1px solid var(--line-2);
+}
+.cof-legend .swatch.sel {
+  background: var(--h-root);
+}
+.cof-legend .swatch.rel {
+  background: color-mix(in srgb, var(--h-third) 40%, var(--raised));
+}
+.cof-legend .swatch.near {
+  background: color-mix(in srgb, var(--h-fifth) 35%, var(--raised));
+}
+.cof-legend .swatch.doc {
+  border: 2px dashed var(--ink);
+}
+
+/* the notebook leaves room for the explorer instead of hiding behind it */
+@media (min-width: 1100px) {
+  .nb-page.with-tools {
+    margin-right: 410px;
+  }
+}
+@media (max-width: 1099px) {
+  .tools-panel {
+    top: auto;
+    height: 74vh;
+    width: 100vw;
+    border-left: none;
+    border-top: 1px solid var(--line-2);
+    border-radius: 14px 14px 0 0;
+  }
+}
+
+/* ---------- Export extras ---------- */
+.ex-notes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 6px 0;
+}
+.ex-note-chip {
+  display: inline-grid;
+  justify-items: center;
+  min-width: 60px;
+  padding: 8px 10px;
+  border: 1.5px solid var(--line-2);
+  border-radius: 8px;
+  background: var(--raised);
+}
+.ex-note-chip b {
+  font-family: var(--font-display);
+  font-size: 1.3rem;
+}
+.ex-note-chip small,
+.ex-note-chip em {
+  font-size: 0.75rem;
+  color: var(--ink-3);
+}
+.ex-note-chip.rest {
+  border-style: dashed;
+}
+.ex-note-chip.chord {
+  padding: 8px 16px;
+}
+.ex-phrase {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 1.15rem;
+}
+.ex-comments {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  color: var(--ink-2);
+  font-size: 0.9rem;
+}
+.export-sheet .nb-chrome,
+.export-sheet .player-row {
+  display: none !important;
+}
+.sr-only-focusable {
+  position: absolute;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mel-chip,
+  .mel-chip:hover,
+  .mel-chip.playing,
+  .chord-chip.playing .chord-btn {
+    transition: none;
+    transform: none;
+  }
+}

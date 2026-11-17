@@ -1,21 +1,7 @@
-import { createContext, useContext, useState } from 'react';
-import type { NoteComment } from '@/core/model';
+import { useState } from 'react';
+import { useComments } from '@/features/notebook/comments-context';
 import { Icon } from '@/components/ui/Icon';
 import { Popover } from '@/components/ui/Popover';
-
-/**
- * Personal annotations. They live in the notebook (so they travel with backups, history and sync) and point at
- * blocks and musical events by id. Deleting offers Undo; a removed block takes its comments with it.
- */
-export type CommentsApi = {
-  all: NoteComment[];
-  add: (target: { blockId?: string; eventId?: string }, text: string) => void;
-  edit: (id: string, text: string) => void;
-  remove: (id: string) => void;
-  readOnly: boolean;
-};
-export const CommentsContext = createContext<CommentsApi>({ all: [], add: () => undefined, edit: () => undefined, remove: () => undefined, readOnly: true });
-export const useComments = () => useContext(CommentsContext);
 
 const dateLabel = (time: number) => new Date(time).toLocaleDateString('es-AR', { day: 'numeric', month: 'short' });
 

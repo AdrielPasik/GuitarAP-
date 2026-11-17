@@ -84,3 +84,38 @@ export async function mockServer(page: Page, options: { auth?: 'ok' | 'bad' | 'd
   );
 }
 
+
+/** Lets the browser tests read what the audio engine scheduled (the sound itself is not recorded). */
+export async function audioProbe(page: Page) {
+  await page.addInitScript(() => {
+    (window as unknown as { __GUITARAP_AUDIO_TEST__: boolean }).__GUITARAP_AUDIO_TEST__ = true;
+  });
+}
+export type AudioEntry = { type: string; midi?: number; when?: number; seconds?: number; instrument?: string; voices?: number };
+export const audioLog = (page: Page) =>
+  page.evaluate(() => ((window as unknown as { __guitarapAudioLog?: AudioEntry[] }).__guitarapAudioLog ?? []).map((entry) => ({ ...entry })));
+export const audioState = (page: Page) =>
+  page.evaluate(() => (window as unknown as { __guitarapAudio: { state: string; owner: string | null; voices: number; activeId: string | null } }).__guitarapAudio);
+
+/** Every stored document, read straight from IndexedDB (what is really saved, not what is on screen). */
+export function storedDocuments(page: Page) {
+  return page.evaluate(
+    () =>
+      new Promise<Array<{ id: string; title: string; type: string; content: any; deletedAt?: number }>>((resolve, reject) => {
+        const request = indexedDB.open('guitarap');
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => {
+          const all = request.result.transaction('documents').objectStore('documents').getAll();
+          all.onsuccess = () => resolve(all.result);
+        };
+      }),
+  );
+}
+
+/** Creates any material from the "Nuevo" menu by its visible name. */
+export async function createFromMenu(page: Page, entry: string, title: string) {
+  await page.getByRole('button', { name: 'Nuevo', exact: true }).click();
+  await page.getByRole('menuitem', { name: entry }).click();
+  await page.waitForURL(/\/material\//);
+  await page.getByLabel('Título del material').fill(title);
+}

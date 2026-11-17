@@ -167,7 +167,6 @@ const tonicPcOf = (open: string) => tonicPc(open.slice(0, -1));
 function ChordsTab({ chord, setChord, actions, style, listen }: { chord: string; setChord: (symbol: string) => void; actions: ToolsActions; style: 'latin' | 'english'; listen: ReturnType<typeof useListen> }) {
   const parsed = parseChord(chord);
   const [text, setText] = useState(chord);
-  useEffect(() => setText(chord), [chord]);
   const root = parsed?.root ?? 'C';
   const tones = parsed ? chordTones(parsed) : [];
   const { markers } = useMemo(() => neckMarkers(chord), [chord]);
@@ -319,7 +318,7 @@ export function HarmonyTools({ context, actions, onClose }: { context: ToolsCont
         {tab === 'circle' && (
           <CircleTab selected={selected} setSelected={setSelected} ctx={context} actions={actions} style={style} listen={listen} openChord={(symbol) => { setChord(symbol); setTab('chords'); }} />
         )}
-        {tab === 'chords' && <ChordsTab chord={chord} setChord={setChord} actions={actions} style={style} listen={listen} />}
+        {tab === 'chords' && <ChordsTab key={chord} chord={chord} setChord={setChord} actions={actions} style={style} listen={listen} />}
         {tab === 'modulation' && <ModulationTab from={selected} setFrom={setSelected} to={target} setTo={setTarget} actions={actions} style={style} listen={listen} />}
       </div>
     </aside>

@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { chordsToSequence } from '@/audio/plan';
+import { parseProgression } from '@/features/chords/progression';
 import { previewNote } from '@/audio/preview';
 import { useBlockPlayer } from '@/audio/useBlockPlayer';
 import type { ChordItem, ChordsContent } from '@/core/model';
@@ -8,39 +9,13 @@ import { diatonicChords, isDiatonic, keyLabel, romanOf, transposeKey } from '@/c
 import { Icon } from '@/components/ui/Icon';
 import { Menu, Popover } from '@/components/ui/Popover';
 import { Segmented } from '@/components/ui/Segmented';
-import { CommentButton, useComments } from '@/features/notebook/comments';
+import { CommentButton } from '@/features/notebook/comments';
+import { useComments } from '@/features/notebook/comments-context';
 import { useNotebookInfo } from '@/features/notebook/notebook-context';
 import { PlayerBar } from '@/features/notebook/PlayerBar';
 import { chordVoicing } from '@/audio/plan';
 
 type Change = (update: (content: ChordsContent) => ChordsContent) => void;
-
-/** "C - G - Am - F", "C G Am F" or "C | G | Am7 | F:4" (length in beats after a colon). */
-export function parseProgression(text: string, beats = 2) {
-  const tokens = text.replace(/[—–|,;]/g, ' ').replace(/(^|\s)-(?=\s|$)/g, ' ').split(/\s+/).filter(Boolean);
-  const items: ChordItem[] = [];
-  const errors: Array<{ token: string; reason: string }> = [];
-  for (const token of tokens) {
-    const [symbol, length] = token.split(':');
-    const chord = parseChord(symbol);
-    if (!chord) {
-      errors.push({
-        token,
-        reason: /\d$/.test(symbol) && /^[A-Ga-g]/.test(symbol) && /^[A-G][#b]?\d$/.test(symbol)
-          ? 'Eso es una nota con octava. Un acorde se escribe C, Am, G7, Cmaj7…'
-          : 'No es un acorde que reconozca. Probá con C, Am, G7, Dm7, Cmaj7 o F#m7b5.',
-      });
-      continue;
-    }
-    const value = length === undefined ? beats : Number(length);
-    if (!Number.isFinite(value) || value <= 0 || value > 16) {
-      errors.push({ token, reason: 'La duración debe ser un número de pulsos entre 0.25 y 16.' });
-      continue;
-    }
-    items.push({ id: crypto.randomUUID(), symbol: chordSymbol(chord), beats: value });
-  }
-  return { items, errors };
-}
 
 export function ChordsBlock({
   blockId,

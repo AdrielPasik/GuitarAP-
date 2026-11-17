@@ -19,7 +19,7 @@ import { TabBlock } from '@/features/tablature/TabBlock';
 import { MelodyBlock } from '@/features/melody/MelodyBlock';
 import { LyricsBlock } from '@/features/lyrics/LyricsBlock';
 import { ChordsBlock } from '@/features/chords/ChordsBlock';
-import { CommentsContext, type CommentsApi } from '@/features/notebook/comments';
+import { CommentsContext, type CommentsApi } from '@/features/notebook/comments-context';
 import { NotebookInfoContext } from '@/features/notebook/notebook-context';
 import { SongBar } from '@/features/notebook/SongBar';
 import { melodyToMidi, downloadMidi } from '@/audio/midi';

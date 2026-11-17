@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Icon } from '@/components/ui/Icon';
 import { Popover } from '@/components/ui/Popover';
 import { Segmented } from '@/components/ui/Segmented';
@@ -25,6 +26,12 @@ export function PlayerBar({
 }) {
   const { state } = player;
   const playing = state === 'playing';
+  // Typing a tempo is committed on Enter or when leaving the field, so "1" on the way to "120" is never applied.
+  const [draft, setDraft] = useState<string | null>(null);
+  const commit = () => {
+    if (draft !== null && draft.trim() && Number.isFinite(Number(draft))) onBpm?.(Math.max(30, Math.min(280, Math.round(Number(draft)))));
+    setDraft(null);
+  };
   return (
     <div className="player-bar" role="group" aria-label={`Reproducción de ${label}`}>
       <button
@@ -51,8 +58,13 @@ export function PlayerBar({
           min={30}
           max={280}
           readOnly={!onBpm}
-          value={player.bpm}
-          onChange={(event) => onBpm?.(Number(event.target.value))}
+          value={draft ?? player.bpm}
+          onChange={(event) => setDraft(event.target.value)}
+          onBlur={commit}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') event.currentTarget.blur();
+            if (event.key === 'Escape') setDraft(null);
+          }}
         />
         <span className="bpm-unit" aria-hidden="true">BPM</span>
         <button type="button" className="icon-btn" aria-label={`Subir BPM de ${label}`} disabled={!onBpm} onClick={() => onBpm?.(player.bpm + 2)}>

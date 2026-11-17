@@ -1,4 +1,5 @@
 import type { MelodyContent, MelodyEvent } from '@/core/model';
+import { parseChord } from '@/core/theory/chords';
 import { formatNote, parseNote } from '@/core/theory/pitch';
 
 /** Pure edits of a melody. Every function returns a new value; none touches sound or presentation. */
@@ -55,7 +56,7 @@ export function parseMelodyText(text: string, defaultBeats = 1): ParseResult {
     }
     const note = parseNote(name);
     if (!note) {
-      errors.push({ token, reason: /^[A-Ga-g][#b♯♭]?(maj|m|dim|aug|sus|\d?$)/.test(name) && !/\d/.test(name) ? 'Parece un acorde: las notas llevan octava (por ejemplo C4).' : 'No es una nota válida. Probá con Do4, Re♯3, C4 o Bb3.' });
+      errors.push({ token, reason: parseChord(name) ? 'Parece un acorde: las notas llevan octava (por ejemplo C4). Los acordes van en un bloque de Acordes.' : 'No es una nota válida. Probá con Do4, Re♯3, C4 o Bb3.' });
       continue;
     }
     if (note.midi < MIN_MIDI || note.midi > MAX_MIDI) {

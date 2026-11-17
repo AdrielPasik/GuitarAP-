@@ -7,7 +7,9 @@ import { formatNote, octaveOf, parseNote, pitchClassName } from '@/core/theory/p
 import { Icon } from '@/components/ui/Icon';
 import { Menu, Popover } from '@/components/ui/Popover';
 import { Segmented } from '@/components/ui/Segmented';
-import { CommentButton, useComments } from '@/features/notebook/comments';
+import { CommentButton } from '@/features/notebook/comments';
+import { useComments } from '@/features/notebook/comments-context';
+import { copyEvents, pastedEvents } from '@/features/melody/clipboard';
 import { PlayerBar } from '@/features/notebook/PlayerBar';
 import { useNoteStyle } from '@/features/melody/note-style';
 import { PianoPicker } from '@/features/melody/PianoPicker';
@@ -18,8 +20,6 @@ import {
 } from '@/features/melody/operations';
 
 type Change = (update: (content: MelodyContent) => MelodyContent) => void;
-/** Copy/paste inside the app: notes without ids (a pasted note is a new note). */
-let clipboard: Array<Omit<MelodyEvent, 'id' | 'lyric'>> = [];
 
 const split = (text: string) => {
   const match = /^(.*?)(-?\d+)$/.exec(text);
@@ -128,14 +128,12 @@ export function MelodyBlock({
     select(result.ids);
   }
   function copy() {
-    clipboard = selectedEvents.map(({ id: _id, lyric: _lyric, ...rest }) => {
-      void _id; void _lyric;
-      return rest;
-    });
+    copyEvents(selectedEvents);
   }
   function paste() {
-    if (readOnly || !clipboard.length) return;
-    add(clipboard.map((event) => ({ ...event, id: newId() })));
+    const held = pastedEvents();
+    if (readOnly || !held.length) return;
+    add(held.map((event) => ({ ...event, id: newId() })));
   }
 
   function onKeyDown(event: React.KeyboardEvent) {
@@ -228,7 +226,7 @@ export function MelodyBlock({
               submitText();
             }}
           >
-            <label className="visually-hidden" htmlFor={`mel-text-${blockId}`}>Escribir notas</label>
+            <label className="sr-only" htmlFor={`mel-text-${blockId}`}>Escribir notas</label>
             <input
               id={`mel-text-${blockId}`}
               aria-label="Escribir notas"
