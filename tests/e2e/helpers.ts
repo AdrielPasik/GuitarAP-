@@ -101,7 +101,7 @@ export const audioState = (page: Page) =>
 export function storedDocuments(page: Page) {
   return page.evaluate(
     () =>
-      new Promise<Array<{ id: string; title: string; type: string; content: any; deletedAt?: number }>>((resolve, reject) => {
+      new Promise<Array<{ id: string; title: string; type: string; content: Record<string, never> & { kind?: string; blocks: Array<{ kind: string; content: unknown }> }; deletedAt?: number }>>((resolve, reject) => {
         const request = indexedDB.open('guitarap');
         request.onerror = () => reject(request.error);
         request.onsuccess = () => {

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Direccion B: escritura musical">
+  <g stroke="#1f1c17" stroke-width="1.6" stroke-linecap="round"><path d="M6 20h52M6 27h52M6 34h52M6 41h52M6 48h52"/></g>
+  <ellipse cx="24" cy="41" rx="8" ry="6" transform="rotate(-20 24 41)" fill="#d4551f"/>
+  <path d="M31 38V10c0 0 14 2 14 14" fill="none" stroke="#d4551f" stroke-width="3" stroke-linecap="round"/>
+</svg>

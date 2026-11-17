@@ -1,4 +1,5 @@
 import { Link, NavLink, Outlet } from 'react-router-dom';
+import { LogoMark } from '@/components/brand/Logo';
 import { Icon } from '@/components/ui/Icon';
 import { AccountMenu } from '@/features/account/AccountMenu';
 import { AuthDialog } from '@/features/account/AuthDialog';
@@ -21,9 +22,9 @@ export function AppShell() {
       <header className="topbar" role="banner">
         <Link className="brand" to="/biblioteca" aria-label="GuitarAP, ir a la biblioteca">
           <span className="brand-mark">
-            <Icon name="pick" size={18} />
+            <LogoMark size={30} />
           </span>
-          <span className="brand-name">GuitarAP</span>
+          <span className="brand-name">Guitar<span className="ap">AP</span></span>
         </Link>
         <nav className="topbar-nav" aria-label="Secciones principales">
           {navigation.map((item) => (

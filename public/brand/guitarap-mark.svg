@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="t">
+  <title id="t">GuitarAP</title>
+  <style>
+    :root { --ink: #1f1c17; --ember: #d4551f; }
+    @media (prefers-color-scheme: dark) { :root { --ink: #f4efe6; --ember: #f08a50; } }
+  </style>
+  <g stroke="var(--ink)" stroke-width="1.3" stroke-linecap="round" opacity=".42">
+    <path d="M3 14h58M3 21.2h58M3 28.4h58M3 35.6h58M3 42.8h58M3 50h58"/>
+  </g>
+  <path d="M45.4 18.6A19 19 0 1 0 51 32H34" fill="none" stroke="var(--ink)" stroke-width="6.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <g transform="rotate(-22 47 17)"><ellipse cx="47" cy="17" rx="6" ry="4.4" fill="var(--ember)"/></g>
+  <path d="M52.6 15.6V4.5" stroke="var(--ember)" stroke-width="2.4" stroke-linecap="round"/>
+</svg>

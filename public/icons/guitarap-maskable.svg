@@ -1,5 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
   <title id="title">GuitarAP</title>
-  <rect width="512" height="512" fill="#0f766e"/>
-  <path fill="#f4fbf9" d="M337 70c-16 0-30 13-30 30v109l-88 31a69 69 0 1 0 20 48v-91l68-24v69a69 69 0 1 0 20 48V100c0-17-13-30-30-30h40Zm-151 251a27 27 0 1 1 0-54 27 27 0 0 1 0 54Zm88-48a27 27 0 1 1 0 54 27 27 0 0 1 0-54Z"/>
+  <rect width="512" height="512" fill="#1d1a16"/>
+  <g transform="translate(112 118) scale(4.7)">
+    <path d="M45.4 18.6A19 19 0 1 0 51 32H34" fill="none" stroke="#f4efe6" stroke-width="6.8" stroke-linecap="round" stroke-linejoin="round"/>
+    <g transform="rotate(-22 47 17)"><ellipse cx="47" cy="17" rx="6.4" ry="4.8" fill="#f08a50"/></g>
+    <path d="M52.8 15.4V3.5" stroke="#f08a50" stroke-width="2.8" stroke-linecap="round"/>
+  </g>
 </svg>

@@ -51,9 +51,9 @@
   --g4: #247571;
   --g5: #7a3646;
   --shadow-pop: 0 8px 28px rgb(40 30 15 / 0.18), 0 1px 3px rgb(40 30 15 / 0.12);
-  --font-ui: 'Segoe UI Variable Text', 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
-  --font-display: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
-  --font-mono: 'Cascadia Mono', 'SF Mono', ui-monospace, Consolas, 'Liberation Mono', monospace;
+  --font-ui: 'Figtree Variable', 'Segoe UI Variable Text', 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
+  --font-display: 'Fraunces Variable', 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
+  --font-mono: 'JetBrains Mono Variable', 'Cascadia Mono', 'SF Mono', ui-monospace, Consolas, 'Liberation Mono', monospace;
   --topbar-h: 52px;
 }
 

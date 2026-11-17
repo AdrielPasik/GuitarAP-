@@ -5,6 +5,7 @@ import { ToastProvider } from '@/components/ui/Toast';
 import { AccountProvider } from '@/features/account/AccountProvider';
 import { MetronomeProvider } from '@/features/metronome/Metronome';
 import { PwaRegistration } from '@/features/pwa/PwaRegistration';
+import { FxEffects } from '@/features/theme/fx';
 import { ThemeProvider } from '@/features/theme/ThemeProvider';
 
 const LibraryScreen = lazy(() =>
@@ -60,6 +61,7 @@ export function App() {
           </BrowserRouter>
         </MetronomeProvider>
       </ToastProvider>
+      <FxEffects />
       <PwaRegistration />
     </ThemeProvider>
   );

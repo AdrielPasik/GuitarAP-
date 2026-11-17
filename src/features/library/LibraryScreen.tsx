@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import type { LibraryNode, MusicalDocument } from '@/core/model';
-import { documentKind, type DocumentKind } from '@/core/notebook';
+import { documentKind, toNotebook, type DocumentKind } from '@/core/notebook';
 import { usePref } from '@/core/prefs';
 import { Dialog } from '@/components/ui/Dialog';
+import { StudioScene } from '@/components/art/Art';
 import { Icon, type IconName } from '@/components/ui/Icon';
 import { Menu } from '@/components/ui/Popover';
 import { useToast } from '@/components/ui/toast-context';
@@ -57,6 +58,13 @@ export function LibraryScreen() {
   const [bannerHidden, setBannerHidden] = usePref('local-banner-hidden', false);
   const current = nodes.find((node) => node.id === folderId) ?? null;
   const trail = useMemo(() => ancestry(nodes, folderId), [nodes, folderId]);
+  const recent = useMemo(() => [...documents].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 4), [documents]);
+  const ideas = useMemo(
+    () => documents.filter((item) => (toNotebook(item).meta?.status ?? '') === 'idea').sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 3),
+    [documents],
+  );
+  const hour = new Date().getHours();
+  const greeting = hour < 6 ? 'Buenas noches' : hour < 13 ? 'Buenos días' : hour < 20 ? 'Buenas tardes' : 'Buenas noches';
   const open_ = useMemo(() => new Set([...expanded, ...trail.map((node) => node.id)]), [expanded, trail]);
 
   useEffect(() => {
@@ -205,6 +213,50 @@ export function LibraryScreen() {
           {createMenu}
         </div>
 
+        {folderId === null && !text && (
+          <section className="lib-hero" aria-label="Tu estudio">
+            <StudioScene />
+            <p className="hero-kicker">{greeting}</p>
+            <h2 className="hero-title">
+              ¿Qué vas a <em>componer</em> hoy?
+            </h2>
+            <p className="hero-sub">Escribí una melodía, guardá una letra o estudiá una escala. Todo lo que hagas queda en tu biblioteca.</p>
+            <div className="hero-actions">
+              <button type="button" className="btn btn-primary" onClick={() => void createFrom('composition')}>
+                <Icon name="song" size={14} /> Nueva canción
+              </button>
+              <button type="button" className="btn" onClick={() => void createFrom('melody')}>
+                <Icon name="melody" size={14} /> Nueva melodía
+              </button>
+              <button type="button" className="btn" onClick={() => void createFrom('scale')}>
+                <Icon name="map" size={14} /> Nueva escala
+              </button>
+            </div>
+            {recent.length > 0 && (
+              <div className="hero-recent">
+                <h3>Seguir con</h3>
+                {recent.map((item, index) => (
+                  <Link key={item.id} className={`recent-chip${index === 0 ? ' continue' : ''}`} to={`/material/${item.id}`} title={item.title || 'Sin título'}>
+                    <Icon name={kindInfo[documentKind(item)].icon} size={13} />
+                    {index === 0 ? `Continuar: ${item.title || 'Sin título'}` : item.title || 'Sin título'}
+                  </Link>
+                ))}
+              </div>
+            )}
+            {ideas.length > 0 && (
+              <div className="hero-recent">
+                <h3>Ideas pendientes</h3>
+                {ideas.map((item) => (
+                  <Link key={item.id} className="recent-chip" to={`/material/${item.id}`}>
+                    <Icon name={kindInfo[documentKind(item)].icon} size={13} />
+                    {item.title || 'Sin título'}
+                  </Link>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
+
         {account.status.kind === 'local' && !bannerHidden && (
           <p className="local-note" role="note">
             <Icon name="cloud-off" size={15} />
@@ -235,11 +287,18 @@ export function LibraryScreen() {
         )}
 
         {everything === 0 && !text ? (
-          <div className="lib-empty">
-            <h2>Tu cuaderno está vacío</h2>
-            <p>Empezá por lo que quieras tocar hoy.</p>
+          <div className="lib-empty scenic">
+            <StudioScene variant="compact" />
+            <h2>Tu estudio está vacío</h2>
+            <p>Empezá por lo que tengas en la cabeza hoy: una melodía, una letra, un riff o una escala.</p>
             <div className="empty-actions">
-              <button type="button" className="btn btn-primary" onClick={() => void createFrom('riff')}>
+              <button type="button" className="btn btn-primary" onClick={() => void createFrom('composition')}>
+                <Icon name="song" size={14} /> Empezar una canción
+              </button>
+              <button type="button" className="btn" onClick={() => void createFrom('melody')}>
+                <Icon name="melody" size={14} /> Escribir una melodía
+              </button>
+              <button type="button" className="btn" onClick={() => void createFrom('riff')}>
                 <Icon name="tab" size={14} /> Escribir una tablatura
               </button>
               <button type="button" className="btn" onClick={() => void createFrom('scale')}>
