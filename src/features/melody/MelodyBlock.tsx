@@ -12,6 +12,7 @@ import { CommentButton } from '@/features/notebook/comments';
 import { useComments } from '@/features/notebook/comments-context';
 import { copyEvents, pastedEvents } from '@/features/melody/clipboard';
 import { PlayerBar } from '@/features/notebook/PlayerBar';
+import { withBlockBpm } from '@/audio/tempo';
 import { useNoteStyle } from '@/features/melody/note-style';
 import { PianoPicker } from '@/features/melody/PianoPicker';
 import {
@@ -186,7 +187,7 @@ export function MelodyBlock({
           label="melodía"
           disabled={noteCount(content) === 0}
           emptyHint="Escribí alguna nota para poder escucharla"
-          onBpm={readOnly ? undefined : (bpm) => onChange((current) => ({ ...current, bpm: Math.max(30, Math.min(280, Math.round(bpm))) }))}
+          onBlockBpm={readOnly ? undefined : (bpm) => onChange((current) => withBlockBpm(current, bpm))}
           onInstrument={readOnly ? undefined : (instrument) => onChange((current) => ({ ...current, instrument }))}
         />
         {!readOnly && (

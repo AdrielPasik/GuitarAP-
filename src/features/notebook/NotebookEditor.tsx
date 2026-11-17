@@ -177,6 +177,7 @@ export function NotebookEditor({
           notebook={doc.notebook}
           change={doc.change}
           undo={doc.undo}
+          documentId={record.id}
           onExportBlock={openExport}
           onActiveChange={setActiveBlock}
           onOpenTools={(context) => setTools({ key: doc.notebook.meta?.key, bpm: doc.notebook.meta?.bpm, ...context })}

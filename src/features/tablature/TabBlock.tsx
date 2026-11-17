@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { tablatureToSequence } from '@/audio/plan';
 import { useBlockPlayer } from '@/audio/useBlockPlayer';
 import { PlayerBar } from '@/features/notebook/PlayerBar';
+import { withBlockBpm } from '@/audio/tempo';
 import type { TablatureContent, Technique } from '@/core/model';
 import { stringName } from '@/core/music';
 import { usePref } from '@/core/prefs';
@@ -345,7 +346,7 @@ export function TabBlock({
           label="tablatura"
           disabled={!hasSound}
           emptyHint="Escribí alguna nota para poder escucharla"
-          onBpm={readOnly ? undefined : (bpm) => onChange((current) => ({ ...current, bpm: Math.max(30, Math.min(280, Math.round(bpm))) }))}
+          onBlockBpm={readOnly ? undefined : (bpm) => onChange((current) => withBlockBpm(current, bpm))}
           onInstrument={readOnly ? undefined : (instrument) => onChange((current) => ({ ...current, instrument }))}
         />
         {!readOnly && (

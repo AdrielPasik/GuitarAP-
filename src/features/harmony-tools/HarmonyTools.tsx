@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { transport, useTransport } from '@/audio/engine';
-import { progressionToSequence, resolveBpm } from '@/audio/plan';
+import { progressionToSequence } from '@/audio/plan';
 import type { KeySignature } from '@/core/model';
 import { chordPitchClasses, chordSymbol, chordTones, parseChord, QUALITIES } from '@/core/theory/chords';
 import {
@@ -298,7 +298,7 @@ export function HarmonyTools({ context, actions, onClose }: { context: ToolsCont
   const [selected, setSelected] = useState<KeyRef>(startKey);
   const [target, setTarget] = useState<KeyRef>(neighbors(startKey)[0].key);
   const [chord, setChord] = useState(context.chord ?? 'C');
-  const bpm = resolveBpm(undefined, context.bpm, metro.bpm).bpm;
+  const bpm = metro.practiceBpm ?? context.bpm ?? metro.baseBpm;
   const listen = useListen(bpm);
 
   return (

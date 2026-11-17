@@ -82,6 +82,7 @@ export function newBlock(kind: NotebookBlock['kind'], style: TextBlockStyle = 'n
   if (kind === 'melody') return { id, kind, content: { version: 1, events: [] } };
   if (kind === 'lyrics') return { id, kind, content: { text: '' } };
   if (kind === 'chords') return { id, kind, content: { version: 1, items: [] } };
+  if (kind === 'section') return { id, kind, title: '' };
   return { id, kind: 'text', style, text: '' };
 }
 
@@ -188,13 +189,196 @@ export function moveBlock(notebook: NotebookContent, id: string, offset: -1 | 1)
 
 export type OutlineItem = { id: string; label: string; kind: NotebookBlock['kind'] };
 
+/* ---------------- sections, moving and copying ---------------- */
+
+/** Index range [start, end) of a section: its header plus the blocks that follow, up to the next section. */
+export function sectionRange(notebook: NotebookContent, sectionId: string): [number, number] | null {
+  const start = notebook.blocks.findIndex((block) => block.id === sectionId && block.kind === 'section');
+  if (start < 0) return null;
+  let end = start + 1;
+  while (end < notebook.blocks.length && notebook.blocks[end].kind !== 'section') end += 1;
+  return [start, end];
+}
+
+export const sectionsOf = (notebook: NotebookContent) =>
+  notebook.blocks.flatMap((block, index) => (block.kind === 'section' ? [{ id: block.id, title: block.title, index }] : []));
+
+/** The section a block belongs to (the closest section header above it), if any. */
+export function sectionOfBlock(notebook: NotebookContent, blockId: string) {
+  const index = notebook.blocks.findIndex((block) => block.id === blockId);
+  for (let at = index; at >= 0; at -= 1) if (notebook.blocks[at].kind === 'section') return notebook.blocks[at].id;
+  return null;
+}
+
+/** Moves a block to an exact position (used by drag and drop). `index` is where it ends up in the new list. */
+export function moveBlockTo(notebook: NotebookContent, id: string, index: number): NotebookContent {
+  const from = notebook.blocks.findIndex((block) => block.id === id);
+  if (from < 0) return notebook;
+  const blocks = [...notebook.blocks];
+  const [block] = blocks.splice(from, 1);
+  blocks.splice(Math.max(0, Math.min(index, blocks.length)), 0, block);
+  return { ...notebook, blocks };
+}
+
+/** Moves a block to the end of a section (or, with null, to the very end). */
+export function moveBlockToSection(notebook: NotebookContent, blockId: string, sectionId: string | null): NotebookContent {
+  const block = notebook.blocks.find((item) => item.id === blockId);
+  if (!block || block.kind === 'section') return notebook;
+  const without = { ...notebook, blocks: notebook.blocks.filter((item) => item.id !== blockId) };
+  if (sectionId === null) return { ...without, blocks: [...without.blocks, block] };
+  const range = sectionRange(without, sectionId);
+  if (!range) return notebook;
+  const blocks = [...without.blocks];
+  blocks.splice(range[1], 0, block);
+  return { ...without, blocks };
+}
+
+/** Moves a whole section (header and content) above or below its neighbouring section. */
+export function moveSection(notebook: NotebookContent, sectionId: string, offset: -1 | 1): NotebookContent {
+  const sections = sectionsOf(notebook);
+  const at = sections.findIndex((item) => item.id === sectionId);
+  const other = sections[at + offset];
+  if (at < 0 || !other) return notebook;
+  const mine = sectionRange(notebook, sectionId)!;
+  const theirs = sectionRange(notebook, other.id)!;
+  const [first, second] = mine[0] < theirs[0] ? [mine, theirs] : [theirs, mine];
+  const before = notebook.blocks.slice(0, first[0]);
+  const a = notebook.blocks.slice(first[0], first[1]);
+  const between = notebook.blocks.slice(first[1], second[0]);
+  const b = notebook.blocks.slice(second[0], second[1]);
+  const after = notebook.blocks.slice(second[1]);
+  return { ...notebook, blocks: [...before, ...b, ...between, ...a, ...after] };
+}
+
+/** A copy of a section right after it. Ids are new; links between copied blocks follow the copies. */
+export function duplicateSection(notebook: NotebookContent, sectionId: string): NotebookContent {
+  const range = sectionRange(notebook, sectionId);
+  if (!range) return notebook;
+  const originals = notebook.blocks.slice(range[0], range[1]);
+  const { blocks: copies, comments } = cloneBlocks(notebook, originals.map((block) => block.id));
+  const header = copies[0];
+  if (header.kind === 'section') header.title = header.title ? `${header.title} (copia)` : 'Sección (copia)';
+  return {
+    ...notebook,
+    blocks: [...notebook.blocks.slice(0, range[1]), ...copies, ...notebook.blocks.slice(range[1])],
+    ...(notebook.comments?.length || comments.length ? { comments: [...(notebook.comments ?? []), ...comments] } : {}),
+  };
+}
+
+/** Removes a section header; its blocks stay (they simply join the previous section) unless `withContent`. */
+export function removeSection(notebook: NotebookContent, sectionId: string, withContent: boolean): NotebookContent {
+  const range = sectionRange(notebook, sectionId);
+  if (!range) return notebook;
+  const blocks = withContent ? [...notebook.blocks.slice(0, range[0]), ...notebook.blocks.slice(range[1])] : notebook.blocks.filter((block) => block.id !== sectionId);
+  return pruneComments({ ...notebook, blocks });
+}
+
+/**
+ * Copies blocks with fresh ids, carrying their comments (re-pointed at the new ids) and keeping links between
+ * blocks that are copied together (a melody still points at its lyrics copy). A link to a block that is not in
+ * the copied set is dropped: a copy never points into another place by accident.
+ */
+export function cloneBlocks(notebook: NotebookContent, ids: string[]): { blocks: NotebookBlock[]; comments: NoteComment[] } {
+  const originals = ids.map((id) => notebook.blocks.find((block) => block.id === id)).filter((block): block is NotebookBlock => Boolean(block));
+  const idMap = new Map<string, string>();
+  const blocks = originals.map((original) => {
+    const copy = cloneBlock(original);
+    idMap.set(original.id, copy.id);
+    // cloneBlock gave every inner event a new id; remember the mapping so comments can follow.
+    if (original.kind === 'melody' && copy.kind === 'melody') original.content.events.forEach((event, index) => idMap.set(event.id, copy.content.events[index].id));
+    if (original.kind === 'chords' && copy.kind === 'chords') original.content.items.forEach((item, index) => idMap.set(item.id, copy.content.items[index].id));
+    if (original.kind === 'tablature' && copy.kind === 'tablature') original.content.columns.forEach((column, index) => idMap.set(column.id, copy.content.columns[index].id));
+    return copy;
+  });
+  for (const copy of blocks) {
+    if (copy.kind === 'melody' && copy.content.lyricsBlockId) {
+      const target = idMap.get(copy.content.lyricsBlockId);
+      if (target) copy.content.lyricsBlockId = target;
+      else delete copy.content.lyricsBlockId;
+    }
+  }
+  const comments = (notebook.comments ?? [])
+    .filter((comment) => comment.blockId && idMap.has(comment.blockId) && (!comment.eventId || idMap.has(comment.eventId)))
+    .map((comment) => ({ ...comment, id: crypto.randomUUID(), blockId: idMap.get(comment.blockId!), eventId: comment.eventId ? idMap.get(comment.eventId) : undefined }));
+  return { blocks, comments: comments.map((comment) => (comment.eventId === undefined ? (({ eventId: _e, ...rest }) => (void _e, rest))(comment) : comment)) as NoteComment[] };
+}
+
+/** Takes blocks out of a notebook together with their comments (what a move carries to the destination). */
+export function extractBlocks(notebook: NotebookContent, ids: string[]): { blocks: NotebookBlock[]; comments: NoteComment[] } {
+  const set = new Set(ids);
+  return {
+    blocks: notebook.blocks.filter((block) => set.has(block.id)).map((block) => structuredClone(block)),
+    comments: (notebook.comments ?? []).filter((comment) => comment.blockId && set.has(comment.blockId)).map((comment) => structuredClone(comment)),
+  };
+}
+
+/** Appends blocks (and their comments) to a notebook, as they are. Links to blocks that did not come along are dropped. */
+export function appendBlocks(notebook: NotebookContent, blocks: NotebookBlock[], comments: NoteComment[] = []): NotebookContent {
+  const present = new Set([...notebook.blocks.map((block) => block.id), ...blocks.map((block) => block.id)]);
+  const adjusted = blocks.map((block) => {
+    if (block.kind !== 'melody' || !block.content.lyricsBlockId || present.has(block.content.lyricsBlockId)) return block;
+    const content = { ...block.content };
+    delete content.lyricsBlockId;
+    return { ...block, content };
+  });
+  const merged = { ...notebook, blocks: [...notebook.blocks, ...adjusted] };
+  return comments.length ? { ...merged, comments: [...(merged.comments ?? []), ...comments] } : merged;
+}
+
+
 /** Headings and titled blocks, used for section navigation in practice mode. */
 export function notebookOutline(notebook: NotebookContent): OutlineItem[] {
   return notebook.blocks.flatMap((block): OutlineItem[] => {
+    if (block.kind === 'section') return [{ id: block.id, label: block.title.trim() || 'Sección', kind: block.kind }];
     if (block.kind === 'text') {
       const first = block.text.trim().split('\n')[0];
       return block.style === 'heading' && first ? [{ id: block.id, label: first, kind: block.kind }] : [];
     }
     return block.title?.trim() ? [{ id: block.id, label: block.title.trim(), kind: block.kind }] : [];
   });
+}
+
+/* ---------------- text that lives in blocks ---------------- */
+
+/** Blocks that hold writing: free notes and lyrics. These are the ones text can be moved between. */
+export const isTextual = (block: NotebookBlock) => block.kind === 'text' || block.kind === 'lyrics';
+export const textOf = (block: NotebookBlock) => (block.kind === 'text' ? block.text : block.kind === 'lyrics' ? block.content.text : '');
+function withText(block: NotebookBlock, text: string): NotebookBlock {
+  if (block.kind === 'text') return { ...block, text };
+  if (block.kind === 'lyrics') return { ...block, content: { ...block.content, text } };
+  return block;
+}
+
+/**
+ * Moves (or copies) a selected piece of text from one writing block to another. The selection is cut from the
+ * source (taking its line break with it when it was whole lines) and appended to the destination on its own
+ * line. Ranges that do not fit the text are refused instead of guessed.
+ */
+export function transferText(
+  notebook: NotebookContent,
+  from: { blockId: string; start: number; end: number },
+  toBlockId: string,
+  mode: 'move' | 'copy',
+): NotebookContent {
+  const source = notebook.blocks.find((block) => block.id === from.blockId);
+  const target = notebook.blocks.find((block) => block.id === toBlockId);
+  if (!source || !target || !isTextual(source) || !isTextual(target) || source.id === target.id) return notebook;
+  const text = textOf(source);
+  const start = Math.max(0, Math.min(from.start, from.end));
+  const end = Math.min(text.length, Math.max(from.start, from.end));
+  const picked = text.slice(start, end);
+  if (!picked.trim()) return notebook;
+  const destination = textOf(target);
+  const joined = destination.trim() ? `${destination}${destination.endsWith('\n') ? '' : '\n'}${picked.replace(/^\n+|\n+$/g, '')}` : picked.replace(/^\n+|\n+$/g, '');
+  const wholeLines = (start === 0 || text[start - 1] === '\n') && (end === text.length || text[end] === '\n');
+  const cutEnd = wholeLines && text[end] === '\n' ? end + 1 : end;
+  const remaining = wholeLines && cutEnd === end && start > 0 ? text.slice(0, start - 1) + text.slice(end) : text.slice(0, start) + text.slice(cutEnd);
+  return {
+    ...notebook,
+    blocks: notebook.blocks.map((block) => {
+      if (block.id === target.id) return withText(block, joined);
+      if (block.id === source.id && mode === 'move') return withText(block, remaining);
+      return block;
+    }),
+  };
 }

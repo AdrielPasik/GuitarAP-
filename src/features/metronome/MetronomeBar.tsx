@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Icon } from '@/components/ui/Icon';
 import { Popover } from '@/components/ui/Popover';
 import { useMetronome } from '@/features/metronome/metronome-context';
@@ -19,6 +20,7 @@ function Beats({ className = '' }: { className?: string }) {
 
 function Stepper({ large = false }: { large?: boolean }) {
   const metro = useMetronome();
+  const [draft, setDraft] = useState<string | null>(null);
   return (
     <span className={`bpm-stepper${large ? ' large' : ''}`}>
       <button type="button" className="icon-btn" aria-label="Bajar BPM" onClick={() => metro.setBpm(metro.bpm - 1)}>
@@ -30,8 +32,16 @@ function Stepper({ large = false }: { large?: boolean }) {
         inputMode="numeric"
         min={30}
         max={280}
-        value={metro.bpm}
-        onChange={(event) => metro.setBpm(Number(event.target.value))}
+        value={draft ?? metro.bpm}
+        onChange={(event) => setDraft(event.target.value)}
+        onBlur={() => {
+          if (draft !== null && draft.trim() && Number.isFinite(Number(draft))) metro.setBpm(Number(draft));
+          setDraft(null);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') event.currentTarget.blur();
+          if (event.key === 'Escape') setDraft(null);
+        }}
       />
       <span className="bpm-unit" aria-hidden="true">
         BPM
@@ -58,6 +68,14 @@ export function MetronomeBar() {
         <Icon name={metro.running ? 'stop' : 'play'} size={14} />
       </button>
       <Stepper />
+      <span className={`tempo-source ${metro.source} hide-narrow`} role="status">
+        {metro.source === 'práctica' ? 'práctica' : metro.source === 'canción' ? 'canción' : ''}
+      </span>
+      {metro.practiceBpm !== undefined && (
+        <button type="button" className="btn btn-link hide-narrow" onClick={metro.resetPractice} title="El tempo de práctica es temporal: la canción conserva el suyo">
+          ↺ {metro.baseBpm}
+        </button>
+      )}
       <Beats className="hide-narrow" />
       <Popover
         label="Ajustes del metrónomo"

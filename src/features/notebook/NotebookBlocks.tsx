@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useMetronome } from '@/features/metronome/metronome-context';
 import type { NotebookContent } from '@/core/model';
 import {
   addComment,
@@ -51,6 +52,7 @@ export function NotebookBlocks({
   onExportBlock,
   onActiveChange,
   onOpenTools,
+  documentId,
   readOnly = false,
 }: {
   notebook: NotebookContent;
@@ -59,6 +61,8 @@ export function NotebookBlocks({
   onExportBlock?: (blockId: string) => void;
   onActiveChange?: (blockId: string) => void;
   onOpenTools?: (context?: { chord?: string }) => void;
+  /** Lets the metronome follow this song's BPM while it is open. */
+  documentId?: string;
   readOnly?: boolean;
 }) {
   const toast = useToast();
@@ -66,6 +70,13 @@ export function NotebookBlocks({
   // Folding is a view state: it is never saved and never changes the document.
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const edit: Change = change ?? (() => undefined);
+  const metro = useMetronome();
+  const setSongContext = metro.setSongContext;
+  const songBpm = notebook.meta?.bpm;
+  useEffect(() => {
+    if (documentId) setSongContext(documentId, songBpm);
+  }, [documentId, songBpm, setSongContext]);
+  useEffect(() => () => setSongContext(null), [setSongContext]);
   const activate = (id: string) => {
     setActiveId(id);
     onActiveChange?.(id);

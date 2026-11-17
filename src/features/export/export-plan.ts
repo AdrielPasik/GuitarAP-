@@ -68,6 +68,8 @@ export function planExport(notebook: NotebookContent, selection: ExportSelection
       items.push({ key: block.id, blockId: block.id, kind: 'lyrics', caption: block.title?.trim() ?? '', lyrics: block.content, comments });
     } else if (block.kind === 'chords') {
       items.push({ key: block.id, blockId: block.id, kind: 'chords', caption: block.title?.trim() ?? '', chords: block.content, comments });
+    } else if (block.kind === 'section') {
+      if (block.title.trim()) items.push({ key: block.id, blockId: block.id, kind: 'text', caption: '', text: { style: 'heading', value: block.title } });
     } else if (block.kind === 'text') {
       if (block.text.trim()) items.push({ key: block.id, blockId: block.id, kind: 'text', caption: '', text: { style: block.style, value: block.text } });
     } else if (block.kind === 'map') {
@@ -119,6 +121,7 @@ export function exportFileName(title: string, notebook: NotebookContent, selecti
     else if (block.kind === 'lyrics') what = 'letra';
     else if (block.kind === 'chords') what = 'acordes';
     else if (block.kind === 'text') what = 'nota';
+    else if (block.kind === 'section') what = 'seccion';
     else {
       const scope = selection.scopes[block.id] ?? 'each';
       if (scope === 'complete') what = 'escala-completa';

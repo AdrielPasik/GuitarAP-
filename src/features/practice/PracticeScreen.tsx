@@ -179,7 +179,7 @@ export function PracticeScreen() {
         {current && notebook ? (
           <>
             <h2 className="practice-title">{current.title || 'Sin título'}</h2>
-            <NotebookBlocks notebook={notebook} readOnly />
+            <NotebookBlocks notebook={notebook} documentId={current.id} readOnly />
           </>
         ) : (
           <p className="practice-empty">

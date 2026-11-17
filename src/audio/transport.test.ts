@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { chordsToSequence, melodyToSequence, resolveBpm, tablatureToSequence } from '@/audio/plan';
+import { chordsToSequence, melodyToSequence, tablatureToSequence } from '@/audio/plan';
+import { baseTempo, effectiveTempo } from '@/audio/tempo';
 import { Transport } from '@/audio/transport';
 import type { AudioBackend, InstrumentId } from '@/audio/types';
 import { createTablatureContent } from '@/core/model';
@@ -77,9 +78,14 @@ describe('planner', () => {
     expect(sequence.events[1].midis).toEqual([]);
   });
   it('one visible tempo rule', () => {
-    expect(resolveBpm(80, 100, 96)).toEqual({ bpm: 80, source: 'bloque' });
-    expect(resolveBpm(undefined, 100, 96)).toEqual({ bpm: 100, source: 'cuaderno' });
-    expect(resolveBpm(undefined, undefined, 96)).toEqual({ bpm: 96, source: 'metrónomo' });
+    expect(effectiveTempo({ practice: 80, block: 70, song: 92, preference: 100 })).toEqual({ bpm: 80, source: 'práctica' });
+    expect(effectiveTempo({ block: 70, song: 92, preference: 100 })).toEqual({ bpm: 70, source: 'bloque' });
+    expect(effectiveTempo({ song: 92, preference: 100 })).toEqual({ bpm: 92, source: 'canción' });
+    expect(effectiveTempo({ preference: 100 })).toEqual({ bpm: 100, source: 'preferencia' });
+    expect(effectiveTempo({})).toEqual({ bpm: 96, source: 'sistema' });
+    // "Volver a…" returns to what the tempo would be without the temporary one.
+    expect(baseTempo({ practice: 80, block: 70, song: 92 })).toEqual({ bpm: 70, source: 'bloque' });
+    expect(baseTempo({ practice: 80, song: 92 })).toEqual({ bpm: 92, source: 'canción' });
   });
 });
 

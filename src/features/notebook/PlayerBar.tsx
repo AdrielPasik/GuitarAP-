@@ -3,35 +3,51 @@ import { Icon } from '@/components/ui/Icon';
 import { Popover } from '@/components/ui/Popover';
 import { Segmented } from '@/components/ui/Segmented';
 import type { BlockPlayer } from '@/audio/useBlockPlayer';
+import { clampBpm, type TempoSource } from '@/audio/tempo';
+import { useNotebookInfo } from '@/features/notebook/notebook-context';
+
+const SOURCE_LABEL: Record<TempoSource, string> = {
+  práctica: 'tempo de práctica',
+  bloque: 'tempo propio',
+  canción: 'tempo de la canción',
+  preferencia: 'tempo predeterminado',
+  sistema: 'tempo predeterminado',
+};
 
 /**
- * Compact player shared by every playable block: one Play/Pause, Stop, tempo with its source, and a popover
- * for the rest (sound, loop, click). The sound is a synthesis made in the browser, and it says so.
+ * Compact player shared by every playable block: Play/Pause, Stop, tempo, and a popover for the rest.
+ * The number is the tempo the block will play at and says where it comes from. Editing it sets a *practice*
+ * tempo (temporary, never saved); the block's own tempo is an explicit exception chosen in the popover.
  */
 export function PlayerBar({
   player,
   label,
-  onBpm,
+  onBlockBpm,
   onInstrument,
   disabled,
   emptyHint,
 }: {
   player: BlockPlayer;
   label: string;
-  /** Called with a new tempo: the block stores it (its own BPM). Absent = the tempo is read-only here. */
-  onBpm?: (bpm: number) => void;
+  /** Sets (number) or clears (undefined) the block's own tempo. Absent = the block cannot be edited (reading). */
+  onBlockBpm?: (bpm: number | undefined) => void;
   onInstrument?: (instrument: 'piano' | 'guitar') => void;
   disabled?: boolean;
   emptyHint?: string;
 }) {
   const { state } = player;
+  const info = useNotebookInfo();
   const playing = state === 'playing';
   // Typing a tempo is committed on Enter or when leaving the field, so "1" on the way to "120" is never applied.
   const [draft, setDraft] = useState<string | null>(null);
+  const [ownDraft, setOwnDraft] = useState<string | null>(null);
   const commit = () => {
-    if (draft !== null && draft.trim() && Number.isFinite(Number(draft))) onBpm?.(Math.max(30, Math.min(280, Math.round(Number(draft)))));
+    if (draft !== null && draft.trim() && Number.isFinite(Number(draft))) player.setPractice(clampBpm(Number(draft)));
     setDraft(null);
   };
+  const practice = player.source === 'práctica';
+  const hasOwn = player.blockBpm !== undefined;
+  const songBpm = info.docBpm;
   return (
     <div className="player-bar" role="group" aria-label={`Reproducción de ${label}`}>
       <button
@@ -47,8 +63,8 @@ export function PlayerBar({
       <button type="button" className="icon-btn" aria-label={`Detener ${label}`} disabled={state === 'idle'} onClick={player.stop}>
         <Icon name="stop" size={14} />
       </button>
-      <span className="bpm-stepper compact">
-        <button type="button" className="icon-btn" aria-label={`Bajar BPM de ${label}`} disabled={!onBpm} onClick={() => onBpm?.(player.bpm - 2)}>
+      <span className={`bpm-stepper compact${practice ? ' practice' : hasOwn ? ' own' : ''}`}>
+        <button type="button" className="icon-btn" aria-label={`Bajar BPM de ${label}`} onClick={() => player.setPractice(player.bpm - 2)}>
           <Icon name="minus" size={12} />
         </button>
         <input
@@ -57,7 +73,6 @@ export function PlayerBar({
           inputMode="numeric"
           min={30}
           max={280}
-          readOnly={!onBpm}
           value={draft ?? player.bpm}
           onChange={(event) => setDraft(event.target.value)}
           onBlur={commit}
@@ -67,16 +82,70 @@ export function PlayerBar({
           }}
         />
         <span className="bpm-unit" aria-hidden="true">BPM</span>
-        <button type="button" className="icon-btn" aria-label={`Subir BPM de ${label}`} disabled={!onBpm} onClick={() => onBpm?.(player.bpm + 2)}>
+        <button type="button" className="icon-btn" aria-label={`Subir BPM de ${label}`} onClick={() => player.setPractice(player.bpm + 2)}>
           <Icon name="plus" size={12} />
         </button>
       </span>
-      <span className="muted small tempo-source" title="De dónde sale el tempo: el del bloque, el del cuaderno o el del metrónomo">
-        tempo del {player.source}
+      <span className={`tempo-source ${player.source}`} title="De dónde sale el tempo: práctica (temporal), propio del bloque, de la canción o predeterminado">
+        {SOURCE_LABEL[player.source]}
       </span>
-      <Popover label={`Sonido de ${label}`} align="end" triggerClassName="icon-btn" trigger={<Icon name="settings" size={14} />}>
-        {() => (
+      {practice && (
+        <button
+          type="button"
+          className="btn btn-link"
+          onClick={player.resetPractice}
+          title="El tempo de práctica es temporal: la canción conserva el suyo"
+        >
+          Volver a {player.base.bpm} BPM
+        </button>
+      )}
+      <Popover label={`Sonido y tempo de ${label}`} align="end" triggerClassName="icon-btn" trigger={<Icon name="settings" size={14} />}>
+        {(close) => (
           <div className="pop-stack">
+            {onBlockBpm && (
+              <fieldset className="tempo-choice">
+                <legend>Tempo de este bloque</legend>
+                <label className="check">
+                  <input
+                    type="radio"
+                    name={`tempo-${label}`}
+                    checked={!hasOwn}
+                    onChange={() => {
+                      onBlockBpm(undefined);
+                      setOwnDraft(null);
+                    }}
+                  />
+                  <span>Usar BPM de la canción{songBpm ? ` (${songBpm})` : ''}</span>
+                </label>
+                <label className="check">
+                  <input
+                    type="radio"
+                    name={`tempo-${label}`}
+                    checked={hasOwn}
+                    onChange={() => onBlockBpm(clampBpm(songBpm ?? player.base.bpm))}
+                  />
+                  <span>BPM propio</span>
+                </label>
+                {hasOwn && (
+                  <input
+                    type="number"
+                    aria-label={`BPM propio de ${label}`}
+                    min={30}
+                    max={280}
+                    value={ownDraft ?? player.blockBpm}
+                    onChange={(event) => setOwnDraft(event.target.value)}
+                    onBlur={() => {
+                      if (ownDraft !== null && ownDraft.trim() && Number.isFinite(Number(ownDraft))) onBlockBpm(clampBpm(Number(ownDraft)));
+                      setOwnDraft(null);
+                    }}
+                    onKeyDown={(event) => event.key === 'Enter' && event.currentTarget.blur()}
+                  />
+                )}
+                <p className="muted small">
+                  {hasOwn ? 'Este bloque ignora los cambios de BPM de la canción hasta que vuelvas a «Usar BPM de la canción».' : 'Si cambiás el BPM de la canción, este bloque lo sigue.'}
+                </p>
+              </fieldset>
+            )}
             <Segmented<'piano' | 'guitar'>
               label="Instrumento"
               value={player.instrument}
@@ -93,6 +162,7 @@ export function PlayerBar({
             <label className="check">
               <input type="checkbox" checked={player.prefs.click} onChange={(event) => player.prefs.setClick(event.target.checked)} /> Clic de metrónomo al reproducir
             </label>
+            <button type="button" className="btn" onClick={close}>Listo</button>
           </div>
         )}
       </Popover>

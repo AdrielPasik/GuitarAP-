@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo } from 'react';
 import { transport, useTransport } from '@/audio/engine';
-import { resolveBpm } from '@/audio/plan';
+import { baseTempo, effectiveTempo } from '@/audio/tempo';
 import type { InstrumentId, Sequence } from '@/audio/types';
 import { useMetronome } from '@/features/metronome/metronome-context';
 import { useNotebookInfo } from '@/features/notebook/notebook-context';
@@ -34,7 +34,10 @@ export function useBlockPlayer({ owner, sequence, blockBpm, instrument }: Player
   const metro = useMetronome();
   const { docBpm } = useNotebookInfo();
   const prefs = useSoundPrefs();
-  const tempo = resolveBpm(blockBpm, docBpm, metro.bpm);
+  const [preference] = usePref<number>('default-bpm', 96);
+  const inputs = { practice: metro.practiceBpm, block: blockBpm, song: docBpm, preference };
+  const tempo = effectiveTempo(inputs);
+  const base = baseTempo(inputs);
   const chosen = instrument ?? prefs.instrument;
   const mine = snapshot.owner === owner;
   const state = mine ? snapshot.state : 'idle';
@@ -56,6 +59,11 @@ export function useBlockPlayer({ owner, sequence, blockBpm, instrument }: Player
     [owner, sequence, tempo.bpm, chosen, prefs.loop, prefs.click, prefs.volume, metro.beatsPerMeasure],
   );
 
+  // A tempo change (song BPM, practice tempo, block exception) is heard immediately without losing the place.
+  useEffect(() => {
+    if (transport.snapshot().owner === owner && transport.snapshot().state !== 'idle' && transport.snapshot().bpm !== tempo.bpm) transport.setBpm(tempo.bpm);
+  }, [tempo.bpm, owner]);
+
   // Editing the sequence while it sounds would desynchronise it: stop instead of playing stale notes.
   const signature = useMemo(() => JSON.stringify(sequence.events.map((event) => [event.id, event.midis, event.beats])), [sequence]);
   useEffect(() => {
@@ -75,6 +83,11 @@ export function useBlockPlayer({ owner, sequence, blockBpm, instrument }: Player
     activeId: mine ? snapshot.activeId : null,
     bpm: tempo.bpm,
     source: tempo.source,
+    /** What the tempo returns to when the practice tempo is cleared. */
+    base,
+    blockBpm,
+    setPractice: metro.setBpm,
+    resetPractice: metro.resetPractice,
     instrument: chosen,
     play,
     pause: () => transport.pause(),

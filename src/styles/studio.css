@@ -953,3 +953,53 @@
   border: 1px dashed var(--line-2);
   border-radius: 8px;
 }
+
+/* ---- tempo: where the number comes from ---- */
+.tempo-source {
+  font-size: 0.78rem;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+.tempo-source.práctica {
+  color: var(--accent-ink);
+  font-weight: 700;
+}
+.tempo-source.bloque {
+  color: var(--h-third);
+  font-weight: 700;
+}
+.bpm-stepper.practice input {
+  color: var(--accent-ink);
+}
+.bpm-stepper.own input {
+  color: var(--h-third);
+}
+.practice-chip {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  gap: 8px;
+}
+.tempo-choice {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+.tempo-choice legend {
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 0 4px;
+  color: var(--ink-2);
+}
+.tempo-choice input[type='number'] {
+  width: 90px;
+  height: 30px;
+  border: 1px solid var(--line-2);
+  border-radius: 6px;
+  padding: 0 8px;
+  background: var(--raised);
+  color: var(--ink);
+}

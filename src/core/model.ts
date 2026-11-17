@@ -109,6 +109,8 @@ export type MelodyEvent = {
 /** A sequence of notes, independent of any instrument. Its look (names, colours) is a preference, not data. */
 export type MelodyContent = {
   version: 1;
+  /** Stable reference to the lyrics block this melody is sung with. Removing the link keeps both blocks. */
+  lyricsBlockId?: string;
   events: MelodyEvent[];
   /** Own tempo. Absent = the notebook's, then the metronome's. */
   bpm?: number;
@@ -148,6 +150,8 @@ export type NotebookBlock =
   | { id: string; kind: 'melody'; title?: string; content: MelodyContent }
   | { id: string; kind: 'lyrics'; title?: string; content: LyricsContent }
   | { id: string; kind: 'chords'; title?: string; content: ChordsContent }
+  /** A named group: the blocks that follow it, up to the next section. Optional; never imposed. */
+  | { id: string; kind: 'section'; title: string }
   | { id: string; kind: 'text'; style: TextBlockStyle; text: string };
 export type NotebookContent = {
   kind: 'notebook';

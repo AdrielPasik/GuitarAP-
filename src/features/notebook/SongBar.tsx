@@ -1,4 +1,7 @@
+import { useState } from 'react';
 import type { NotebookContent, SongMeta } from '@/core/model';
+import { clampBpm } from '@/audio/tempo';
+import { useMetronome } from '@/features/metronome/metronome-context';
 import { setMeta } from '@/core/notebook';
 import { allKeys, keyTitle, type KeyRef } from '@/core/theory/keys';
 import { Icon } from '@/components/ui/Icon';
@@ -23,6 +26,8 @@ export function SongBar({
   change: (update: (notebook: NotebookContent) => NotebookContent) => void;
 }) {
   const [style] = useNoteStyle();
+  const metro = useMetronome();
+  const [bpmDraft, setBpmDraft] = useState<string | null>(null);
   const meta: SongMeta = notebook.meta ?? {};
   const patch = (next: Partial<SongMeta>) => change((current) => setMeta(current, next));
   const keyValue = meta.key ? `${meta.key.tonic}:${meta.key.mode}` : '';
@@ -63,8 +68,8 @@ export function SongBar({
           </div>
         )}
       </Popover>
-      <label className="chip bpm-chip" title="Tempo del cuaderno. Cada bloque puede tener el suyo.">
-        <span>Tempo</span>
+      <label className="chip bpm-chip" title="BPM de la canción: todos los bloques sin tempo propio lo siguen.">
+        <span>BPM</span>
         <input
           aria-label="Tempo del cuaderno"
           type="number"
@@ -72,11 +77,26 @@ export function SongBar({
           min={30}
           max={280}
           placeholder="—"
-          value={meta.bpm ?? ''}
-          onChange={(event) => patch({ bpm: event.target.value ? Math.max(30, Math.min(280, Math.round(Number(event.target.value)))) : undefined })}
+          value={bpmDraft ?? meta.bpm ?? ''}
+          onChange={(event) => setBpmDraft(event.target.value)}
+          onBlur={() => {
+            if (bpmDraft !== null) patch({ bpm: bpmDraft.trim() && Number.isFinite(Number(bpmDraft)) ? clampBpm(Number(bpmDraft)) : undefined });
+            setBpmDraft(null);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') event.currentTarget.blur();
+            if (event.key === 'Escape') setBpmDraft(null);
+          }}
         />
-        <span>BPM</span>
       </label>
+      {metro.practiceBpm !== undefined && (
+        <span className="chip practice-chip" role="status">
+          Práctica a {metro.practiceBpm} BPM
+          <button type="button" className="btn btn-link" onClick={metro.resetPractice}>
+            Volver a {metro.baseBpm}
+          </button>
+        </span>
+      )}
       <Popover
         label="Estado de la canción"
         triggerClassName="chip"

@@ -13,6 +13,7 @@ import { CommentButton } from '@/features/notebook/comments';
 import { useComments } from '@/features/notebook/comments-context';
 import { useNotebookInfo } from '@/features/notebook/notebook-context';
 import { PlayerBar } from '@/features/notebook/PlayerBar';
+import { withBlockBpm } from '@/audio/tempo';
 import { chordVoicing } from '@/audio/plan';
 
 type Change = (update: (content: ChordsContent) => ChordsContent) => void;
@@ -83,7 +84,7 @@ export function ChordsBlock({
           label="progresión"
           disabled={items.length === 0}
           emptyHint="Agregá algún acorde para poder escucharlo"
-          onBpm={readOnly ? undefined : (bpm) => onChange((state) => ({ ...state, bpm: Math.max(30, Math.min(280, Math.round(bpm))) }))}
+          onBlockBpm={readOnly ? undefined : (bpm) => onChange((state) => withBlockBpm(state, bpm))}
           onInstrument={readOnly ? undefined : (instrument) => onChange((state) => ({ ...state, instrument }))}
         />
         {!readOnly && (

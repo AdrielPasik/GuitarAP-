@@ -1,16 +1,109 @@
-import { useEffect, useRef, useState } from 'react';
-import { transport } from '@/audio/engine';
-import { usePref } from '@/core/prefs';
-import { getAudioContext } from '@/audio/webaudio-backend';
-import { MetronomeContext as Context } from '@/features/metronome/metronome-context';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
+import { transport } from '@/audio/engine';
+import { baseTempo, clampBpm, effectiveTempo } from '@/audio/tempo';
+import { getAudioContext } from '@/audio/webaudio-backend';
+import { usePref } from '@/core/prefs';
+import { MetronomeContext as Context, type Metro } from '@/features/metronome/metronome-context';
 
-
+/**
+ * The global metronome. It shares the app's single AudioContext, schedules ahead on the audio clock, and steps
+ * aside when music starts (one clock at a time). Its tempo follows the open song; changing it by hand sets a
+ * temporary practice tempo that is never written to a document.
+ */
 export function MetronomeProvider({ children }: { children: ReactNode }) {
-  const [running, setRunning] = useState(false); const [defaultBpm] = usePref<number>('default-bpm', 96); const [bpm, setBpm] = useState(defaultBpm); const [beat, setBeat] = useState(0); const [volume, setVolume] = useState(.45); const [beatsPerMeasure, setBeatsPerMeasure] = useState(4); const audio = useRef<AudioContext | null>(null); const timer = useRef<number | undefined>(undefined); const next = useRef(0); const count = useRef(0); const taps = useRef<number[]>([]);
-  useEffect(() => { if (!running) return; if (!audio.current) audio.current = getAudioContext(); void audio.current.resume(); next.current = audio.current.currentTime + .05; const schedule = () => { const ctx = audio.current!; while (next.current < ctx.currentTime + .12) { const oscillator = ctx.createOscillator(); const gain = ctx.createGain(); const accented = count.current % beatsPerMeasure === 0; oscillator.frequency.value = accented ? 1050 : 720; gain.gain.setValueAtTime(.0001, next.current); gain.gain.exponentialRampToValueAtTime(volume * (accented ? .22 : .13), next.current + .004); gain.gain.exponentialRampToValueAtTime(.0001, next.current + .04); oscillator.connect(gain).connect(ctx.destination); oscillator.start(next.current); oscillator.stop(next.current + .05); const current = count.current++; window.setTimeout(() => setBeat(current % beatsPerMeasure), Math.max(0, (next.current - ctx.currentTime) * 1000)); next.current += 60 / bpm; } }; timer.current = window.setInterval(schedule, 25); schedule(); return () => window.clearInterval(timer.current); }, [beatsPerMeasure, bpm, running, volume]);
+  const [preference] = usePref<number>('default-bpm', 96);
+  const [running, setRunning] = useState(false);
+  const [beat, setBeat] = useState(0);
+  const [volume, setVolumeState] = useState(0.45);
+  const [beatsPerMeasure, setBeatsPerMeasureState] = useState(4);
+  const [practiceBpm, setPracticeBpm] = useState<number | undefined>(undefined);
+  const [song, setSong] = useState<{ id: string | null; bpm?: number }>({ id: null });
+  const timer = useRef<number | undefined>(undefined);
+  const next = useRef(0);
+  const count = useRef(0);
+  const taps = useRef<number[]>([]);
+
+  const inputs = { practice: practiceBpm, song: song.bpm, preference };
+  const { bpm, source } = effectiveTempo(inputs);
+  const baseBpm = baseTempo(inputs).bpm;
+
+  useEffect(() => {
+    if (!running) return;
+    const ctx = getAudioContext();
+    void ctx.resume();
+    next.current = ctx.currentTime + 0.05;
+    const schedule = () => {
+      while (next.current < ctx.currentTime + 0.12) {
+        const accented = count.current % beatsPerMeasure === 0;
+        const oscillator = ctx.createOscillator();
+        const gain = ctx.createGain();
+        oscillator.frequency.value = accented ? 1050 : 720;
+        gain.gain.setValueAtTime(0.0001, next.current);
+        gain.gain.exponentialRampToValueAtTime(volume * (accented ? 0.22 : 0.13), next.current + 0.004);
+        gain.gain.exponentialRampToValueAtTime(0.0001, next.current + 0.04);
+        oscillator.connect(gain).connect(ctx.destination);
+        oscillator.start(next.current);
+        oscillator.stop(next.current + 0.05);
+        const current = count.current;
+        count.current += 1;
+        window.setTimeout(() => setBeat(current % beatsPerMeasure), Math.max(0, (next.current - ctx.currentTime) * 1000));
+        next.current += 60 / bpm;
+      }
+    };
+    timer.current = window.setInterval(schedule, 25);
+    schedule();
+    return () => window.clearInterval(timer.current);
+  }, [beatsPerMeasure, bpm, running, volume]);
+
   // Music and the metronome never run on two clocks: when something plays, the metronome steps aside.
-  useEffect(() => { const off = transport.onStart(() => setRunning(false)); return () => { off(); }; }, []);
-  function tap() { const time = performance.now(); taps.current = [...taps.current.filter((item) => time - item < 2200), time]; if (taps.current.length > 1) { const pairs = taps.current.slice(1).map((item, index) => item - taps.current[index]); setBpm(Math.round(60000 / (pairs.reduce((sum, item) => sum + item, 0) / pairs.length))); } }
-  return <Context value={{ running, bpm, beat, volume, beatsPerMeasure, setBpm: (value) => setBpm(Math.max(30, Math.min(280, value))), setVolume: (value) => setVolume(Math.max(0, Math.min(1, value))), setBeatsPerMeasure: (value) => setBeatsPerMeasure(Math.max(2, Math.min(12, value))), toggle: () => setRunning((value) => !value), tap }}>{children}</Context>;
+  useEffect(() => {
+    const off = transport.onStart(() => setRunning(false));
+    return () => {
+      off();
+    };
+  }, []);
+
+  const setBpm = useCallback((value: number) => setPracticeBpm(clampBpm(value)), []);
+  const resetPractice = useCallback(() => setPracticeBpm(undefined), []);
+  const lastSong = useRef<string | null>(null);
+  const setSongContext = useCallback((id: string | null, songBpm?: number) => {
+    setSong((current) => (current.id === id && current.bpm === songBpm ? current : { id, bpm: songBpm }));
+    // Going from one song to a different one drops the practice tempo; leaving to the library and coming back
+    // to the same song (or editor <-> practice of one song) keeps it.
+    if (id !== null) {
+      if (lastSong.current !== null && lastSong.current !== id) setPracticeBpm(undefined);
+      lastSong.current = id;
+    }
+  }, []);
+
+  const value = useMemo<Metro>(
+    () => ({
+      running,
+      bpm,
+      source,
+      practiceBpm,
+      songBpm: song.bpm,
+      baseBpm,
+      beat,
+      volume,
+      beatsPerMeasure,
+      setBpm,
+      resetPractice,
+      setSongContext,
+      setVolume: (next_: number) => setVolumeState(Math.max(0, Math.min(1, next_))),
+      setBeatsPerMeasure: (next_: number) => setBeatsPerMeasureState(Math.max(2, Math.min(12, next_))),
+      toggle: () => setRunning((current) => !current),
+      tap: () => {
+        const time = performance.now();
+        taps.current = [...taps.current.filter((item) => time - item < 2200), time];
+        if (taps.current.length > 1) {
+          const gaps = taps.current.slice(1).map((item, index) => item - taps.current[index]);
+          setBpm(60000 / (gaps.reduce((sum, item) => sum + item, 0) / gaps.length));
+        }
+      },
+    }),
+    [running, bpm, source, practiceBpm, song.bpm, baseBpm, beat, volume, beatsPerMeasure, setBpm, resetPractice, setSongContext],
+  );
+  return <Context value={value}>{children}</Context>;
 }

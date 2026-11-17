@@ -7,14 +7,6 @@ import { tuningToMidi } from '@/core/theory/pitch';
  * Planner: musical data in, neutral timed events out. No sound and no browser API here.
  * Rule for time: a step of a tablature lasts one beat unless the block says otherwise.
  */
-export type BpmSource = 'bloque' | 'cuaderno' | 'metrónomo';
-
-/** One explicit tempo rule, shown in the UI: the block's own BPM, else the notebook's, else the metronome's. */
-export function resolveBpm(block: number | undefined, notebook: number | undefined, metronome: number): { bpm: number; source: BpmSource } {
-  if (block) return { bpm: block, source: 'bloque' };
-  if (notebook) return { bpm: notebook, source: 'cuaderno' };
-  return { bpm: metronome, source: 'metrónomo' };
-}
 
 export function melodyToSequence(content: MelodyContent): Sequence {
   let cursor = 0;
