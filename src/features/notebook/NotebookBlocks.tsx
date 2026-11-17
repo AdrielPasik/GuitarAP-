@@ -40,7 +40,8 @@ function summaryOf(block: NotebookContent['blocks'][number]) {
   if (block.kind === 'melody') return `${noteCount(block.content)} notas · ${melodyBeats(block.content)} pulsos`;
   if (block.kind === 'chords') return block.content.items.map((item) => item.symbol).join(' ').slice(0, 48) || 'Sin acordes';
   if (block.kind === 'lyrics') return block.content.text.trim().split('\n').find((line) => line.trim() && !line.startsWith('#'))?.slice(0, 48) ?? 'Sin letra';
-  return block.text.slice(0, 40);
+  if (block.kind === 'text') return block.text.slice(0, 40);
+  return '';
 }
 
 export function NotebookBlocks({
@@ -176,6 +177,11 @@ export function NotebookBlocks({
                 edit((current) => updateBlock(current, block.id, (item) => (item.kind === 'chords' ? { ...item, content: update(item.content) } : item)))
               }
             />
+          )}
+          {!['tablature', 'map', 'melody', 'lyrics', 'chords', 'text'].includes(block.kind) && (
+            <p className="muted unknown-block">
+              Este bloque viene de una versión más nueva de GuitarAP y no se puede mostrar acá. Sigue guardado tal como estaba y no se modifica.
+            </p>
           )}
           {block.kind === 'text' && (
             <TextBlock

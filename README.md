@@ -1,10 +1,14 @@
 # GuitarAP
 
-Cuaderno musical para guitarristas, como aplicación web progresiva local-first. En un mismo material podés combinar
-**tablaturas** (secuencias), **mapas del mástil** (escalas con varias posiciones y notas libres) y **notas de
-estudio**. Conserva los datos en IndexedDB, sincroniza opcionalmente con tu cuenta, y ofrece backups JSON,
-historial de versiones, Práctica con metrónomo y exportación PNG/PDF.
+Tu estudio personal para **componer, estudiar y escuchar** ideas musicales, como aplicación web progresiva local-first.
+En un mismo cuaderno conviven **letra**, **melodía** (notas con octava y duración sencilla), **progresiones de
+acordes**, **tablaturas**, **mapas del mástil** (escalas con varias posiciones), **comentarios** y notas de estudio.
+Se puede **escuchar** lo que escribís (síntesis local de piano y guitarra, sin descargas, offline), explorar armonía
+(círculo de quintas, acordes, modulación) sin tocar tu composición, practicar y exportar (PNG, PDF, MIDI). Conserva
+los datos en IndexedDB, sincroniza opcionalmente con tu cuenta y ofrece backups JSON e historial de versiones.
+No hay pentagramas: es una decisión de producto.
 
+- [Auditoría v0.4](docs/audit-v0.4.md) · [Audio (ADR 0007)](docs/adr/0007-audio-architecture.md) · [Modelo de composición (ADR 0008)](docs/adr/0008-composition-model.md) · [Identidad](docs/design/identity-v0.4.md)
 - [Auditoría v0.3](docs/audit-v0.3.md) · [Sistema armónico](docs/design/harmony.md) · [Auditoría v0.2](docs/audit-v0.2.md) · [Dirección de diseño](docs/design/direction.md) ·
   [Arquitectura de experiencia](docs/ux-architecture.md) · [Evidencia visual](docs/evidence/README.md)
 

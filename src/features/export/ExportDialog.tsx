@@ -13,7 +13,7 @@ const TALL_PNG = 3000; // CSS px: beyond this a single image becomes unwieldy
 
 function blockLabel(block: NotebookContent['blocks'][number], index: number) {
   if (block.kind === 'text') return block.text.trim().split('\n')[0].slice(0, 36) || `Texto ${index + 1}`;
-  return block.title?.trim() || `${blockMeta[block.kind].label} ${index + 1}`;
+  return block.title?.trim() || `${(blockMeta[block.kind]?.label ?? "Bloque")} ${index + 1}`;
 }
 
 /**
@@ -118,7 +118,7 @@ export function ExportDialog({
                     <label className="check">
                       <input type="checkbox" checked={selection.included.includes(block.id)} onChange={() => toggleBlock(block.id)} />
                       <span className="ex-block-name">
-                        <Icon name={blockMeta[block.kind].icon} size={14} /> {blockLabel(block, index)}
+                        <Icon name={blockMeta[block.kind]?.icon ?? "text"} size={14} /> {blockLabel(block, index)}
                       </span>
                     </label>
                     {block.kind === 'map' && selection.included.includes(block.id) && (

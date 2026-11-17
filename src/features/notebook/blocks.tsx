@@ -81,7 +81,7 @@ export function BlockFrame({
   onAddAfter: (kind: NewBlockKind) => void;
   children: ReactNode;
 }) {
-  const meta = blockMeta[block.kind];
+  const meta = blockMeta[block.kind] ?? { label: 'Bloque de otra versión', icon: 'text' as const };
   const title = block.kind === 'text' ? '' : (block.title ?? '');
   const isText = block.kind === 'text';
   return (

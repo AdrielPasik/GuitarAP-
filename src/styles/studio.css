@@ -236,7 +236,7 @@
   gap: 8px;
   flex-wrap: wrap;
 }
-.syllables input {
+.syllables input:not([type='checkbox']) {
   flex: 1 1 240px;
   height: 34px;
   padding: 0 10px;
@@ -927,4 +927,29 @@
     transition: none;
     transform: none;
   }
+}
+
+/* ---- fixes found while reviewing the evidence ---- */
+.syllables input:not([type='checkbox']) {
+  flex: 1 1 240px;
+}
+.syllables input[type='checkbox'] {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+.syllables .check {
+  align-items: center;
+  white-space: nowrap;
+}
+.tools-panel .segmented {
+  flex-shrink: 0;
+}
+.cof-arc {
+  stroke-opacity: 0.75;
+}
+.unknown-block {
+  padding: 12px 14px;
+  border: 1px dashed var(--line-2);
+  border-radius: 8px;
 }

@@ -70,7 +70,7 @@ export function planExport(notebook: NotebookContent, selection: ExportSelection
       items.push({ key: block.id, blockId: block.id, kind: 'chords', caption: block.title?.trim() ?? '', chords: block.content, comments });
     } else if (block.kind === 'text') {
       if (block.text.trim()) items.push({ key: block.id, blockId: block.id, kind: 'text', caption: '', text: { style: block.style, value: block.text } });
-    } else {
+    } else if (block.kind === 'map') {
       const scope = selection.scopes[block.id] ?? 'each';
       const prefix = block.title?.trim() ? `${block.title.trim()} · ` : '';
       const positions = block.content.positions;

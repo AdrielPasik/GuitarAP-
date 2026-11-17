@@ -49,3 +49,28 @@ La autenticación y la sincronización se responden localmente: no se usa ningun
 | 16 / 17 | Práctica con intervalos / modo foco |
 | 18 / 19 / 20 / 21 | Configuración / tema claro / tema oscuro / exportación en tema oscuro |
 
+
+## v0.4
+
+- `v0.3/` es el **antes** (la biblioteca, el cuaderno y la identidad de v0.3). `v0.4/` es el **después**. Se
+  regenera con `CAPTURE_EVIDENCE=1 npx playwright test tests/e2e/visual-evidence-v04.spec.ts`: contenido real
+  escrito a través de la interfaz (una canción «Hoy vuelvo a casa» con letra, melodía con sílabas, acordes,
+  tablatura, mapa y un comentario).
+
+| # | Captura |
+|---|---|
+| 01 | Nueva biblioteca musical (encabezado, «Seguir con», «Ideas pendientes») |
+| 02 / 03 | Tres direcciones de identidad / logo claro y oscuro, íconos |
+| 04 | Estado vacío con guitarras |
+| 05a / 05b | Movimiento: dos cuadros de la escena, 3,5 s de diferencia |
+| 06 | Pantalla de creación (menú «Nuevo») |
+| 07 / 08 | Canción con letra / con melodía |
+| 09 / 10 / 11 | Editor simple de melodías con teclado / melodía sonando (nota resaltada) / melodía con letra |
+| 12 | Tablatura sonando (columna resaltada) |
+| 13 / 14 | Mapa de escala / cuaderno mixto completo |
+| 15 | Comentarios |
+| 16 / 17 | Práctica / modo foco |
+| 18 / 18b | Configuración: sonido / apariencia |
+| 19 / 20 / 20b | Tema claro / oscuro / cuaderno en oscuro |
+| 21 / 22 / 23 | Escritorio / tablet (22, 22b) / móvil (23, 23b, 23c) |
+| 24 / 25 / 26 | Herramientas de armonía: círculo / modulación / acordes |
