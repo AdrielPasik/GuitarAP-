@@ -76,6 +76,7 @@ export function NotebookBlocks({
   onOpenTools,
   onRequestTransfer,
   documentId,
+  onAddComment,
   readOnly = false,
 }: {
   notebook: NotebookContent;
@@ -88,6 +89,8 @@ export function NotebookBlocks({
   onRequestTransfer?: (blockId: string, mode: TransferMode) => void;
   /** Lets the metronome follow this song's BPM while it is open. */
   documentId?: string;
+  /** A commenter reads the song but may leave comments: the blocks stay read-only. */
+  onAddComment?: (target: { blockId?: string; eventId?: string }, text: string) => void;
   readOnly?: boolean;
 }) {
   const toast = useToast();
@@ -159,8 +162,9 @@ export function NotebookBlocks({
 
   const comments: CommentsApi = {
     all: notebook.comments ?? [],
-    readOnly,
-    add: (target, text) => edit((current) => addComment(current, target, text).notebook),
+    readOnly: readOnly && !onAddComment,
+    addOnly: Boolean(onAddComment),
+    add: onAddComment ?? ((target, text) => edit((current) => addComment(current, target, text).notebook)),
     edit: (id, text) => edit((current) => editComment(current, id, text)),
     remove: (id) => {
       edit((current) => deleteComment(current, id));

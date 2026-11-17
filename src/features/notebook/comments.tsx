@@ -45,7 +45,7 @@ function Thread({ target, label, onDone }: { target: { blockId?: string; eventId
                     {dateLabel(comment.createdAt)}
                     {comment.updatedAt !== comment.createdAt ? ` · editado ${dateLabel(comment.updatedAt)}` : ''}
                   </span>
-                  {!api.readOnly && (
+                  {!api.readOnly && !api.addOnly && (
                     <span className="comment-actions">
                       <button type="button" className="btn btn-link" onClick={() => { setEditing(comment.id); setText(comment.text); }}>Editar</button>
                       <button type="button" className="btn btn-link danger" onClick={() => api.remove(comment.id)}>Eliminar</button>

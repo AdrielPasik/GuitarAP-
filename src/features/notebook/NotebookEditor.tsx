@@ -23,6 +23,7 @@ import type { ToolsContext } from '@/features/harmony-tools/HarmonyTools';
 import { everything, onlyBlock, type ExportSelection } from '@/features/export/export-plan';
 
 const HarmonyTools = lazy(() => import('@/features/harmony-tools/HarmonyTools').then((module) => ({ default: module.HarmonyTools })));
+const ShareDialog = lazy(() => import('@/features/share/ShareDialog').then((module) => ({ default: module.ShareDialog })));
 const ExportDialog = lazy(() => import('@/features/export/ExportDialog').then((module) => ({ default: module.ExportDialog })));
 
 const kindLabel = { tablature: 'Tablatura', map: 'Mapa', mixed: 'Material de estudio', melody: 'Melodía', lyrics: 'Letra', chords: 'Acordes', composition: 'Composición' } as const;
@@ -67,6 +68,7 @@ export function NotebookEditor({
   const [tools, setTools] = useState<ToolsContext | null>(null);
   const [transfer, setTransfer] = useState<{ blockId: string; mode: TransferMode } | null>(null);
   const [outline, setOutline] = usePref<boolean>('outline-open', false);
+  const [sharing, setSharing] = useState(false);
   const [style] = useNoteStyle();
   const chordsBlock = [...doc.notebook.blocks].reverse().find((block) => block.kind === 'chords' && block.id === activeBlock) ?? [...doc.notebook.blocks].reverse().find((block) => block.kind === 'chords');
   const addChords = (symbols: string[]) => {
@@ -173,6 +175,9 @@ export function NotebookEditor({
           <button type="button" className="btn" aria-pressed={Boolean(tools)} onClick={() => setTools((current) => (current ? null : { key: doc.notebook.meta?.key, bpm: doc.notebook.meta?.bpm }))}>
             <Icon name="circle" size={14} /> <span className="btn-label">Armonía</span>
           </button>
+          <button type="button" className="btn" onClick={() => setSharing(true)}>
+            <Icon name="share" size={14} /> <span className="btn-label">Compartir</span>
+          </button>
           <button type="button" className="btn" onClick={() => openExport(null)}>
             <Icon name="export" size={14} /> Exportar
           </button>
@@ -224,6 +229,11 @@ export function NotebookEditor({
         />
         </div>
       </div>
+      {sharing && (
+        <Suspense fallback={null}>
+          <ShareDialog kind="document" id={record.id} title={doc.title} onClose={() => setSharing(false)} />
+        </Suspense>
+      )}
       {transfer && (
         <DocumentPickerDialog
           mode={transfer.mode}

@@ -275,6 +275,21 @@ describe('E — revocation', () => {
   });
 });
 
+describe('markers — which projects are shared', () => {
+  it('counts active links, members and pending invitations for the owner only', async () => {
+    const doc = await h.newDocument(owner, 'Marcada', content('m'));
+    expect((await as(owner).rpc<Array<{ id: string }>>('shared_by_me')).map((item) => item.id)).not.toContain(doc);
+    const link = await shareLink(doc);
+    await invite(doc, 'viewer');
+    const mine = await as(owner).rpc<Array<{ id: string; links: number; members: number; invites: number }>>('shared_by_me');
+    expect(mine.find((item) => item.id === doc)).toMatchObject({ links: 1, members: 0, invites: 1 });
+    await as(owner).rpc('share_revoke_link', { p_link_id: link.id });
+    expect(((await as(owner).rpc<Array<{ id: string; links: number }>>('shared_by_me')).find((item) => item.id === doc))?.links).toBe(0);
+    expect(await as(eve).rpc('shared_by_me')).toEqual([]); // nobody sees another person's sharing
+    await expect(as(null).rpc('shared_by_me')).rejects.toThrow(/permission denied|not authenticated/);
+  });
+});
+
 describe('G — sharing a folder', () => {
   it('shows the exact scope first, reaches everything inside (including subfolders), and nothing else', async () => {
     const scope = await as(owner).rpc<{ documents: Array<{ title: string }> }>('share_preview_scope', { p_kind: 'node', p_id: temaFolder });

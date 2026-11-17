@@ -8,6 +8,8 @@ export type CommentsApi = {
   edit: (id: string, text: string) => void;
   remove: (id: string) => void;
   readOnly: boolean;
+  /** A commenter may add comments but not edit or delete any. */
+  addOnly?: boolean;
 };
 export const CommentsContext = createContext<CommentsApi>({ all: [], add: () => undefined, edit: () => undefined, remove: () => undefined, readOnly: true });
 export const useComments = () => useContext(CommentsContext);

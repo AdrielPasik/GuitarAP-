@@ -6,6 +6,11 @@ import { usePref } from '@/core/prefs';
 import { Dialog } from '@/components/ui/Dialog';
 import { StudioScene } from '@/components/art/Art';
 import { NewSongDialog } from '@/features/library/NewSongDialog';
+import { collabApi } from '@/features/share/collab-api';
+import { useCollabState, useGateway } from '@/features/share/use-collab';
+import { lazy, Suspense } from 'react';
+
+const ShareDialog = lazy(() => import('@/features/share/ShareDialog').then((module) => ({ default: module.ShareDialog })));
 import { Icon, type IconName } from '@/components/ui/Icon';
 import { Menu } from '@/components/ui/Popover';
 import { useToast } from '@/components/ui/toast-context';
@@ -55,6 +60,19 @@ export function LibraryScreen() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [naming, setNaming] = useState<Naming>(null);
   const [newSong, setNewSong] = useState(false);
+  const [sharing, setSharing] = useState<{ kind: 'document' | 'node'; id: string; title: string } | null>(null);
+  const gateway = useGateway();
+  const collab = useCollabState();
+  const [shared, setShared] = useState<Map<string, { links: number; members: number; invites: number }>>(new Map());
+  const signedIn = Boolean(gateway?.accessToken);
+  useEffect(() => {
+    if (collab !== 'ready' || !signedIn || !gateway) return;
+    let live = true;
+    collabApi.sharedByMe(gateway).then((list) => live && setShared(new Map(list.map((item) => [item.id, item])))).catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [collab, signedIn, gateway, sharing]);
   const [moving, setMoving] = useState<{ kind: 'doc' | 'node'; id: string; title: string; from: string | null } | null>(null);
   const [sort, setSort] = usePref<'recent' | 'name'>('library-sort', 'recent');
   const [bannerHidden, setBannerHidden] = usePref('local-banner-hidden', false);
@@ -167,6 +185,11 @@ export function LibraryScreen() {
           onSelect={goTo}
           onMenu={(node) => setNaming({ mode: 'rename-node', id: node.id, initial: node.name })}
         />
+        {collab === 'ready' && signedIn && (
+          <Link className="tree-row" to="/compartidos">
+            <Icon name="users" size={15} /> Compartidos conmigo
+          </Link>
+        )}
         <Link className="tree-row trash-link" to="/configuracion/recuperacion">
           <Icon name="trash" size={15} /> Papelera
         </Link>
@@ -320,6 +343,7 @@ export function LibraryScreen() {
                 <button type="button" className="lib-open" onClick={() => goTo(node.id)}>
                   <Glyph kind={node.kind} />
                   <span className="lib-title">{node.name}</span>
+                  {shared.has(node.id) && <span className="lib-shared" role="img" aria-label="Compartida" title="Compartida"><Icon name="users" size={13} /></span>}
                   <span className="lib-meta">
                     {kindInfo[node.kind].label} · {countIn(node)} {countIn(node) === 1 ? 'elemento' : 'elementos'}
                   </span>
@@ -335,6 +359,7 @@ export function LibraryScreen() {
                     { label: 'Renombrar', icon: 'pencil', onSelect: () => setNaming({ mode: 'rename-node', id: node.id, initial: node.name }) },
                     { label: 'Duplicar', icon: 'copy', onSelect: () => void libraryRepository.duplicateNode(node.id) },
                     { label: 'Mover a…', onSelect: () => setMoving({ kind: 'node', id: node.id, title: node.name, from: node.parentId }) },
+                    { label: 'Compartir…', icon: 'share', onSelect: () => setSharing({ kind: 'node', id: node.id, title: node.name }) },
                     {
                       label: 'Enviar a la papelera',
                       icon: 'trash',
@@ -352,6 +377,7 @@ export function LibraryScreen() {
                   <button type="button" className="lib-open" onClick={() => open(item)}>
                     <Glyph kind={kind} />
                     <span className="lib-title">{item.title || 'Sin título'}</span>
+                    {shared.has(item.id) && <span className="lib-shared" role="img" aria-label="Compartido" title="Compartido"><Icon name="users" size={13} /></span>}
                     <span className="lib-meta">
                       {kindInfo[kind].label}
                       {text || current === null ? (pathOf(nodes, item.songId ?? item.nodeId) ? ` · ${pathOf(nodes, item.songId ?? item.nodeId)}` : '') : ''}
@@ -367,6 +393,7 @@ export function LibraryScreen() {
                       { label: 'Abrir', icon: 'pencil', onSelect: () => open(item) },
                       { label: 'Practicar', icon: 'practice', onSelect: () => navigate(`/practica/${item.id}`) },
                       { label: 'Renombrar', onSelect: () => setNaming({ mode: 'rename-doc', id: item.id, initial: item.title }) },
+                      { label: 'Compartir…', icon: 'share', onSelect: () => setSharing({ kind: 'document', id: item.id, title: item.title }) },
                       { label: 'Duplicar', icon: 'copy', onSelect: () => void libraryRepository.duplicateDocument(item.id) },
                       { label: 'Mover a…', onSelect: () => setMoving({ kind: 'doc', id: item.id, title: item.title, from: item.nodeId }) },
                       {
@@ -399,6 +426,11 @@ export function LibraryScreen() {
         )}
       </section>
 
+      {sharing && (
+        <Suspense fallback={null}>
+          <ShareDialog kind={sharing.kind} id={sharing.id} title={sharing.title} onClose={() => setSharing(null)} />
+        </Suspense>
+      )}
       {newSong && (
         <NewSongDialog
           onClose={() => setNewSong(false)}

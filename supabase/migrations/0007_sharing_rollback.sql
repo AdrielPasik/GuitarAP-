@@ -12,6 +12,7 @@ drop function if exists public.share_link_info(text);
 drop function if exists public.collab_add_comment(uuid, jsonb);
 drop function if exists public.collab_save_document(uuid, bigint, text, jsonb, uuid);
 drop function if exists public.collab_pull_document(uuid);
+drop function if exists public.shared_by_me();
 drop function if exists public.shared_with_me();
 drop function if exists public.share_accept_invite(text, text);
 drop function if exists public.collab_activity(text, uuid, int);

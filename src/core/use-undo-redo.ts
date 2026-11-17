@@ -42,5 +42,12 @@ export function useUndoRedo<T>(initialValue: T, limit = 100) {
     });
   }, [limit]);
 
-  return { value: present, set, undo, redo, canUndo: past.length > 0, canRedo: future.length > 0 };
+  /** Replaces the state and forgets the history: for content that arrives from outside (not an edit of mine). */
+  const reset = useCallback((next: T) => {
+    setPresent(next);
+    setPast([]);
+    setFuture([]);
+  }, []);
+
+  return { value: present, set, reset, undo, redo, canUndo: past.length > 0, canRedo: future.length > 0 };
 }

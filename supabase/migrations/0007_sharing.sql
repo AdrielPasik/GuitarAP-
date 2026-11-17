@@ -397,6 +397,29 @@ begin
   );
 end $$;
 
+
+-- Which of MY projects are shared right now (counts only): drives the "shared" markers in the library.
+create or replace function public.shared_by_me() returns jsonb
+language plpgsql stable security definer set search_path = pg_catalog, public
+as $$
+declare me uuid := private.require_user();
+begin
+  return coalesce((
+    select jsonb_agg(jsonb_build_object('kind', s.resource_kind, 'id', s.resource_id, 'links', s.links, 'members', s.members, 'invites', s.invites))
+    from (
+      select r.resource_kind, r.resource_id,
+        (select count(*) from public.share_links l where l.owner_id = me and l.resource_kind = r.resource_kind and l.resource_id = r.resource_id
+           and l.revoked_at is null and (l.expires_at is null or l.expires_at > now())) as links,
+        (select count(*) from public.share_members m where m.owner_id = me and m.resource_kind = r.resource_kind and m.resource_id = r.resource_id and m.revoked_at is null) as members,
+        (select count(*) from public.share_invites i where i.owner_id = me and i.resource_kind = r.resource_kind and i.resource_id = r.resource_id
+           and i.accepted_at is null and i.revoked_at is null and i.expires_at > now()) as invites
+      from (select resource_kind, resource_id from public.share_links where owner_id = me
+            union select resource_kind, resource_id from public.share_members where owner_id = me
+            union select resource_kind, resource_id from public.share_invites where owner_id = me) r
+    ) s where s.links + s.members + s.invites > 0
+  ), '[]'::jsonb);
+end $$;
+
 -- ---------------------------------------------------------------- collaboration on a document
 
 create or replace function public.collab_pull_document(p_doc uuid) returns jsonb
@@ -572,7 +595,7 @@ do $$
 declare f record;
 begin
   for f in select p.oid::regprocedure as sig from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-           where n.nspname = 'public' and (p.proname like 'share\_%' escape '\' or p.proname like 'collab\_%' escape '\' or p.proname = 'shared_with_me') loop
+           where n.nspname = 'public' and (p.proname like 'share\_%' escape '\' or p.proname like 'collab\_%' escape '\' or p.proname in ('shared_with_me', 'shared_by_me')) loop
     execute format('revoke execute on function %s from public, anon, authenticated', f.sig);
   end loop;
 end $$;
@@ -589,6 +612,7 @@ grant execute on function public.share_preview_scope(text, uuid) to authenticate
 grant execute on function public.collab_activity(text, uuid, int) to authenticated;
 grant execute on function public.share_accept_invite(text, text) to authenticated;
 grant execute on function public.shared_with_me() to authenticated;
+grant execute on function public.shared_by_me() to authenticated;
 grant execute on function public.collab_pull_document(uuid) to authenticated;
 grant execute on function public.collab_save_document(uuid, bigint, text, jsonb, uuid) to authenticated;
 grant execute on function public.collab_add_comment(uuid, jsonb) to authenticated;
