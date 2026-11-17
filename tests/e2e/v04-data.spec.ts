@@ -191,7 +191,8 @@ test('Escenario K — tema oscuro, movimiento reducido y efectos apagados: las i
   // The writing surface stays calm: no scene behind a melody.
   await page.getByRole('button', { name: 'Nueva melodía' }).click();
   await expect(page.getByLabel('Escribir notas')).toBeVisible();
-  await expect(page.locator('.studio-scene:visible')).toHaveCount(0);
+  // The song header may carry the scene (it sits behind the title, never behind the music): the writing area stays calm.
+  await expect(page.locator('.studio-scene:visible:not(.doc-head .studio-scene)')).toHaveCount(0);
 
   // Dark theme keeps the music readable.
   await page.getByRole('button', { name: 'Activar modo oscuro' }).click();

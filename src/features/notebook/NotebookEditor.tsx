@@ -14,6 +14,7 @@ import { useNotebookDocument, type SaveState } from '@/features/notebook/useNote
 import { cloneBlocks, extractBlocks, insertBlock, newBlock, removeBlock, setMeta, updateBlock } from '@/core/notebook';
 import { appendBlocksToDocument, removeBlocksFromDocument } from '@/data/block-transfer';
 import { DocumentPickerDialog, type TransferMode } from '@/features/notebook/transfer-dialogs';
+import { StudioScene } from '@/components/art/Art';
 import { NotebookOutline } from '@/features/notebook/NotebookOutline';
 import { blockMeta } from '@/features/notebook/block-meta';
 import { usePref } from '@/core/prefs';
@@ -143,6 +144,7 @@ export function NotebookEditor({
   return (
     <section className="notebook" aria-label={`Material: ${doc.title}`}>
       <header className="doc-head">
+        <StudioScene variant="compact" />
         <Link className="back-link" to={record.songId ?? record.nodeId ? `/biblioteca?c=${record.songId ?? record.nodeId}` : '/biblioteca'} aria-label={`Volver a la biblioteca${location ? `, ${location}` : ''}`}>
           <Icon name="chevron-left" size={16} />
           <span>{location || 'Biblioteca'}</span>

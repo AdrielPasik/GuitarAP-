@@ -94,3 +94,18 @@ La autenticación y la sincronización se responden localmente: no se usa ningun
 | 18 / 19 / 20 / 21 | Invitación / proyecto colaborativo / actividad / compartidos conmigo |
 | 22 / 23 / 24 | Estado vacío / tema oscuro / configuración oscura |
 | 25–29 | Tablet y móvil (canción, invitado, biblioteca) |
+
+## v0.5 → v0.5.1 (mismas pantallas, mismo contenido, mismo viewport)
+
+`docs/evidence/v0.5/` es la versión publicada anterior; `docs/evidence/v0.5.1/` es la nueva. Se regenera con:
+
+```bash
+npm run build -- --mode e2e
+CAPTURE_EVIDENCE=1 EVIDENCE_DIR=docs/evidence/v0.5.1 npx playwright test tests/e2e/visual-evidence-v05.spec.ts
+```
+
+Comparar por número: `03` canción, `05` letra + melodía, `11` práctica, `13` configuración, `15` compartir, `17` invitado,
+`23` oscuro, `28` móvil. Qué cambió de verdad: barra superior de nogal y latón, portada de canción, encabezados
+editoriales, cuaderno de letra rayado con margen y chips de estructura, consola oscura de melodía con teclado de marfil y
+ébano, mesa de composición para Letra + melodía, configuración y pantalla del invitado con portada.
+Qué **no** cambió: la biblioteca (se conservó a propósito), las tablaturas y el mapa del mástil (solo marco).

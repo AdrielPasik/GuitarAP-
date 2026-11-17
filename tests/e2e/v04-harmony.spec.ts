@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { audioLog, audioProbe, cell, createFromMenu, createMaterial, neck, openLibrary, settleSave, storedDocuments } from './helpers';
+import { audioLog, audioProbe, cell, createFromMenu, createMaterial, neck, openLibrary, settleSave, storedDocuments, silentWriting } from './helpers';
 
 const panel = (page: Page) => page.getByRole('complementary', { name: 'Herramientas musicales' });
 const openTools = async (page: Page) => {
@@ -49,6 +49,7 @@ test('Test A — el círculo de quintas: Do mayor, Sol mayor y La menor, con esc
 
 test('Test B — modulación de Do mayor a Sol mayor: notas y acordes comunes, caminos posibles y audio, sin modificar la canción', async ({ page }) => {
   await audioProbe(page);
+  await silentWriting(page);
   await openLibrary(page);
   await createFromMenu(page, 'Cuaderno de composición', 'Modulando');
   await page.getByRole('button', { name: 'Agregar melodía' }).click();

@@ -1,0 +1,53 @@
+# An isolated, throw-away Supabase-shaped stack for validating the migrations against the REAL components:
+# Supabase's own Postgres image (roles, auth schema, extensions), GoTrue (Auth, JWT issuing) and PostgREST (HTTP API,
+# role switching from the JWT). Nothing here talks to your Supabase project. Ports are bound to 127.0.0.1 only.
+name: guitarap-real-stack
+services:
+  db:
+    image: supabase/postgres:15.1.1.78
+    environment:
+      POSTGRES_PASSWORD: test-only-password
+    ports:
+      - "127.0.0.1:4320:5432"
+    volumes:
+      - ./roles.sql:/docker-entrypoint-initdb.d/init-scripts/99-roles.sql:ro
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres", "-h", "localhost"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+  auth:
+    image: supabase/gotrue:v2.158.1
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:4321:9999"
+    environment:
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: "9999"
+      API_EXTERNAL_URL: http://127.0.0.1:4321
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:test-only-password@db:5432/postgres
+      GOTRUE_SITE_URL: http://127.0.0.1:4199
+      GOTRUE_JWT_SECRET: test-only-jwt-secret-with-at-least-32-characters
+      GOTRUE_JWT_EXP: "3600"
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+      GOTRUE_JWT_ADMIN_ROLES: service_role
+      GOTRUE_JWT_AUD: authenticated
+      GOTRUE_DISABLE_SIGNUP: "false"
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
+      GOTRUE_MAILER_AUTOCONFIRM: "true"
+  rest:
+    image: postgrest/postgrest:v12.2.3
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:4322:3000"
+    environment:
+      PGRST_DB_URI: postgres://authenticator:test-only-password@db:5432/postgres
+      PGRST_DB_SCHEMAS: public
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_JWT_SECRET: test-only-jwt-secret-with-at-least-32-characters
+      PGRST_DB_USE_LEGACY_GUCS: "false"

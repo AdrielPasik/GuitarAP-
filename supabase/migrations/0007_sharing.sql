@@ -72,6 +72,7 @@ create table if not exists public.share_links (
   created_at timestamptz not null default now(),
   failed_attempts int not null default 0,
   locked_until timestamptz,
+  lockouts int not null default 0,
   open_count bigint not null default 0,
   last_opened_at timestamptz
 );
@@ -94,6 +95,14 @@ create table if not exists public.share_activity (
 );
 create index if not exists share_activity_resource on public.share_activity (resource_kind, resource_id, id desc);
 
+-- Failed unlock attempts per network address (hashed). The database is the only place a limit can live: the browser
+-- talks to Supabase directly, so neither Cloudflare Pages nor the app's own host sees those requests.
+create table if not exists public.share_unlock_ip (
+  ip_hash bytea primary key,
+  window_start timestamptz not null,
+  failures int not null default 0
+);
+
 create table if not exists public.collab_ops (
   op_id uuid primary key,
   document_id uuid not null,
@@ -108,7 +117,8 @@ alter table public.share_links enable row level security;
 alter table public.share_sessions enable row level security;
 alter table public.share_activity enable row level security;
 alter table public.collab_ops enable row level security;
-revoke all on public.share_members, public.share_invites, public.share_links, public.share_sessions, public.share_activity, public.collab_ops from public, anon, authenticated;
+alter table public.share_unlock_ip enable row level security;
+revoke all on public.share_members, public.share_invites, public.share_links, public.share_sessions, public.share_activity, public.collab_ops, public.share_unlock_ip from public, anon, authenticated;
 revoke all on sequence public.share_activity_id_seq from public, anon, authenticated;
 
 -- ---------------------------------------------------------------- internal helpers (not exposed)
@@ -199,6 +209,41 @@ as $$
     and (d.node_id in (select id from down) or d.song_id in (select id from down))
 $$;
 
+-- The caller's network address, hashed (never stored in clear). PostgREST exposes the request headers; Supabase sits
+-- behind Cloudflare, which sets cf-connecting-ip itself, so the value cannot be chosen by the client. If the header is
+-- absent the last x-forwarded-for hop is used (the one added by the closest proxy). No address -> no per-address limit.
+create or replace function private.client_ip_hash() returns bytea
+language plpgsql stable set search_path = pg_catalog, extensions
+as $$
+declare headers jsonb; ip text; hops text[];
+begin
+  begin
+    headers := nullif(current_setting('request.headers', true), '')::jsonb;
+  exception when others then
+    return null;
+  end;
+  if headers is null then return null; end if;
+  ip := nullif(trim(headers->>'cf-connecting-ip'), '');
+  if ip is null then
+    hops := string_to_array(coalesce(headers->>'x-forwarded-for', ''), ',');
+    if array_length(hops, 1) is not null then ip := nullif(trim(hops[array_length(hops, 1)]), ''); end if;
+  end if;
+  if ip is null then return null; end if;
+  return extensions.digest(convert_to(ip, 'UTF8'), 'sha256');
+end $$;
+
+create or replace function private.note_unlock_failure(p_ip bytea) returns void
+language plpgsql volatile security definer set search_path = pg_catalog, public
+as $$
+begin
+  if p_ip is null then return; end if;
+  insert into public.share_unlock_ip(ip_hash, window_start, failures) values (p_ip, now(), 1)
+  on conflict (ip_hash) do update set
+    failures = case when public.share_unlock_ip.window_start <= now() - interval '1 hour' then 1 else public.share_unlock_ip.failures + 1 end,
+    window_start = case when public.share_unlock_ip.window_start <= now() - interval '1 hour' then now() else public.share_unlock_ip.window_start end;
+  delete from public.share_unlock_ip where window_start < now() - interval '1 day';
+end $$;
+
 -- Reader-facing copy of a notebook: personal comments are not part of a read-only link.
 create or replace function private.public_content(p_content jsonb) returns jsonb
 language sql immutable set search_path = pg_catalog
@@ -271,6 +316,9 @@ declare me uuid := private.require_user(); token text := private.new_token(); in
 begin
   if p_role not in ('editor', 'commenter', 'viewer') then raise exception 'invalid role' using errcode = '22023'; end if;
   if not private.owns_resource(p_kind, p_id, me) then raise exception 'forbidden' using errcode = '42501'; end if;
+  if p_expires is not null and (p_expires <= now() or p_expires > now() + interval '90 days') then
+    raise exception 'expiry must be within the next 90 days' using errcode = '22023';
+  end if;
   insert into public.share_invites(owner_id, resource_kind, resource_id, role, token_hash, expires_at)
   values (me, p_kind, p_id, p_role, private.token_hash(token), coalesce(p_expires, now() + interval '7 days'))
   returning id into invite_id;
@@ -429,7 +477,9 @@ declare me uuid := private.require_user(); role text := private.doc_role(p_doc, 
 begin
   if role is null then raise exception 'forbidden' using errcode = '42501'; end if;
   select * into d from public.documents where id = p_doc;
-  return jsonb_build_object('id', d.id, 'title', d.title, 'type', d.type, 'content', d.payload, 'rev', d.rev,
+  -- Comments are annotations: a viewer (like a link reader) receives the music without them.
+  return jsonb_build_object('id', d.id, 'title', d.title, 'type', d.type,
+    'content', case when role = 'viewer' then private.public_content(d.payload) else d.payload end, 'rev', d.rev,
     'updatedAt', extract(epoch from d.updated_at) * 1000, 'role', role);
 end $$;
 
@@ -527,18 +577,32 @@ begin
   scope_ok := private.owns_resource(l.resource_kind, l.resource_id, l.owner_id);
   if not scope_ok then return jsonb_build_object('valid', false, 'reason', 'gone'); end if;
   return jsonb_build_object('valid', true, 'requiresPassword', l.password_hash is not null, 'kind', l.resource_kind,
-    'title', private.resource_title(l.resource_kind, l.resource_id), 'locked', coalesce(l.locked_until > now(), false));
+    'title', case when l.password_hash is null then private.resource_title(l.resource_kind, l.resource_id) else null end,
+    'locked', coalesce(l.locked_until > now(), false));
 end $$;
 
--- Verifies the password on the server. Failures are counted per link; five in a row lock it for 15 minutes. Results
--- are returned (not raised) so the counter is committed. The session token is random, shown once, stored hashed.
+-- Verifies the password on the server. Three layers, all enforced here because the browser talks to Supabase directly:
+--   1. per link: five wrong passwords lock the link; every further lock-out doubles the wait (15 min, 30 min, 1 h ...
+--      up to 24 h), so a weak password cannot be ground down over days;
+--   2. per network address: 20 failed unlocks (wrong password or unknown link) in one hour block that address for the
+--      rest of the hour, whichever link it tries;
+--   3. each failure costs a quarter of a second while the link row is locked, so attempts on one link are serial.
+-- Results are returned (not raised) so the counters are committed. The session token is random, shown once, stored hashed.
 create or replace function public.share_unlock(p_token text, p_password text) returns jsonb
 language plpgsql security definer set search_path = pg_catalog, public, extensions
 as $$
-declare l public.share_links; session_token text := private.new_token();
+declare l public.share_links; session_token text := private.new_token(); ip bytea := private.client_ip_hash(); t public.share_unlock_ip;
 begin
+  if ip is not null then
+    select * into t from public.share_unlock_ip where ip_hash = ip;
+    if t.ip_hash is not null and t.window_start > now() - interval '1 hour' and t.failures >= 20 then
+      return jsonb_build_object('ok', false, 'reason', 'locked', 'scope', 'network',
+        'retryAfterSeconds', ceil(extract(epoch from (t.window_start + interval '1 hour' - now()))));
+    end if;
+  end if;
   select * into l from public.share_links where token_hash = private.token_hash(p_token) for update;
   if l.id is null or l.revoked_at is not null or (l.expires_at is not null and l.expires_at <= now()) then
+    perform private.note_unlock_failure(ip);
     return jsonb_build_object('ok', false, 'reason', 'invalid');
   end if;
   if l.password_hash is null then return jsonb_build_object('ok', true, 'session', null); end if;
@@ -546,14 +610,16 @@ begin
     return jsonb_build_object('ok', false, 'reason', 'locked', 'retryAfterSeconds', ceil(extract(epoch from (l.locked_until - now()))));
   end if;
   if p_password is not null and extensions.crypt(p_password, l.password_hash) = l.password_hash then
-    update public.share_links set failed_attempts = 0, locked_until = null where id = l.id;
+    update public.share_links set failed_attempts = 0, locked_until = null, lockouts = 0 where id = l.id;
     insert into public.share_sessions(token_hash, link_id, expires_at) values (private.token_hash(session_token), l.id, now() + interval '2 hours');
     delete from public.share_sessions where expires_at < now();
     return jsonb_build_object('ok', true, 'session', session_token);
   end if;
   perform pg_sleep(0.25);
+  perform private.note_unlock_failure(ip);
   update public.share_links set
-    locked_until = case when failed_attempts + 1 >= 5 then now() + interval '15 minutes' else locked_until end,
+    locked_until = case when failed_attempts + 1 >= 5 then now() + least(interval '24 hours', interval '15 minutes' * (2 ^ least(lockouts, 7))) else locked_until end,
+    lockouts = case when failed_attempts + 1 >= 5 then lockouts + 1 else lockouts end,
     failed_attempts = case when failed_attempts + 1 >= 5 then 0 else failed_attempts + 1 end
   where id = l.id;
   return jsonb_build_object('ok', false, 'reason', 'wrong_password');
@@ -626,3 +692,6 @@ language sql stable security definer set search_path = pg_catalog
 as $$ select jsonb_build_object('sharing', 1) $$;
 revoke execute on function public.collab_capabilities() from public;
 grant execute on function public.collab_capabilities() to anon, authenticated;
+
+-- Make PostgREST pick the new functions up immediately (Supabase also reloads on DDL).
+notify pgrst, 'reload schema';

@@ -40,11 +40,13 @@ export async function createHarness(upTo = '0007') {
     await db.exec(readFileSync(path.join(migrationsDir, file), 'utf8'));
   }
 
-  async function run(role: Role, uid: string | null, sql: string, params: unknown[] = []) {
+  async function run(role: Role, uid: string | null, sql: string, params: unknown[] = [], headers?: Record<string, string>) {
     await db.exec('begin');
     try {
       if (role !== 'postgres') await db.exec(`set local role ${role}`);
       await db.query(`select set_config('request.jwt.claim.sub', $1, true)`, [uid ?? '']);
+      // PostgREST publishes the request headers to the function like this.
+      await db.query(`select set_config('request.headers', $1, true)`, [headers ? JSON.stringify(headers) : '']);
       const result = await db.query(sql, params);
       await db.exec('commit');
       return result.rows as Array<Record<string, unknown>>;
@@ -54,14 +56,14 @@ export async function createHarness(upTo = '0007') {
     }
   }
 
-  const as = (role: Role, uid: string | null) => ({
-    sql: (sql: string, params: unknown[] = []) => run(role, uid, sql, params),
+  const as = (role: Role, uid: string | null, headers?: Record<string, string>) => ({
+    sql: (sql: string, params: unknown[] = []) => run(role, uid, sql, params, headers),
     /** Calls public.<name>(named args) the way PostgREST does, as the given role. */
     async rpc<T = unknown>(name: string, args: Record<string, unknown> = {}): Promise<T> {
       const keys = Object.keys(args);
       const call = keys.map((key, index) => `${key} => $${index + 1}`).join(', ');
       const values = keys.map((key) => (args[key] !== null && typeof args[key] === 'object' ? JSON.stringify(args[key]) : args[key]));
-      const rows = await run(role, uid, `select public.${name}(${call}) as result`, values);
+      const rows = await run(role, uid, `select public.${name}(${call}) as result`, values, headers);
       return rows[0].result as T;
     },
   });

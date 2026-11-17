@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { usePref } from '@/core/prefs';
 import { melodyToSequence } from '@/audio/plan';
 import { previewNote } from '@/audio/preview';
@@ -14,7 +14,7 @@ import { copyEvents, pastedEvents } from '@/features/melody/clipboard';
 import { PlayerBar } from '@/features/notebook/PlayerBar';
 import { withBlockBpm } from '@/audio/tempo';
 import { useNoteStyle } from '@/features/melody/note-style';
-import { PianoPicker } from '@/features/melody/PianoPicker';
+import { PianoKeyboard } from '@/features/melody/PianoKeyboard';
 import {
   assignSyllables, clampBeats, DURATIONS, duplicateEvents, insertEvents, intervalLabel, moveEvent, newId, noteCount, noteEvent,
   parseMelodyText, range, removeEvents, restEvent, reverseOrder, setBeats, setLyric, setPitch, shiftOctave, splitSyllables,
@@ -53,11 +53,19 @@ export function MelodyBlock({
   const [anchor, setAnchor] = useState<string | null>(null);
   const [text, setText] = useState('');
   const [errors, setErrors] = useState<Array<{ token: string; reason: string }>>([]);
-  const [keyboard, setKeyboard] = useState(false);
+  const [keyboard, setKeyboard] = usePref<boolean>('melody.keyboard', true);
+  const [mode, setMode] = useState<'add' | 'replace'>('add');
+  const [nextBeats, setNextBeats] = useState(1);
+  const [fresh, setFresh] = useState<string | null>(null);
   const [showLyrics, setShowLyrics] = useState(Boolean(content.phrase) || content.events.some((event) => event.lyric));
   const [syllables, setSyllables] = useState('');
   const [fromSelected, setFromSelected] = useState(false);
   const strip = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!fresh) return undefined;
+    const timer = window.setTimeout(() => setFresh(null), 700);
+    return () => window.clearTimeout(timer);
+  }, [fresh]);
 
   const events = content.events;
   const selectedEvents = events.filter((event) => selection.includes(event.id));
@@ -75,14 +83,36 @@ export function MelodyBlock({
     if (id) document.getElementById(`mel-${id}`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }
   /** Adds notes after the selection. The last added note becomes the selection (a pasted group stays selected). */
-  function add(newEvents: MelodyEvent[], keepGroup = false) {
+  function add(newEvents: MelodyEvent[], keepGroup = false, silent = false) {
     if (!newEvents.length) return;
     const at = insertIndex;
     onChange((current) => insertEvents(current, newEvents, at));
     select(keepGroup ? newEvents.map((event) => event.id) : [newEvents[newEvents.length - 1].id]);
+    setFresh(newEvents[newEvents.length - 1].id);
+    if (silent) return;
     const firstNote = newEvents.find((event) => event.midi !== undefined);
     if (firstNote?.midi !== undefined) hear(firstNote.midi);
   }
+  /** One key of the keyboard: it sounds first (so it feels instant), then it writes or replaces. */
+  function pressKey(midi: number) {
+    if (readOnly) return;
+    hear(midi);
+    if (replacing && onlyOneSelected) {
+      onChange((current) => setPitch(current, onlyOneSelected.id, midi));
+      setFresh(onlyOneSelected.id);
+      return;
+    }
+    add([noteEvent(midi, nextBeats)], false, true);
+  }
+  const onlyOneSelected = selection.length === 1 ? last : null;
+  const replacing = mode === 'replace' && Boolean(onlyOneSelected && onlyOneSelected.type !== 'rest');
+  const lastName = last && last.midi !== undefined ? formatNote(last.midi, style, last.accidental ?? 'sharp') : null;
+  const target = replacing && lastName
+    ? { text: `Cada tecla reemplaza «${lastName}»`, tone: 'replace' }
+    : last
+      ? { text: `Cada tecla agrega una nota después de «${lastName ?? 'silencio'}»`, tone: 'add' }
+      : { text: 'Cada tecla agrega una nota al final', tone: 'add' };
+  const playingEvent = events.find((event) => event.id === player.activeId);
   const referenceMidi = () => last?.midi ?? [...events].reverse().find((event) => event.midi !== undefined)?.midi ?? (defaultOctave + 1) * 12;
 
 
@@ -223,6 +253,103 @@ export function MelodyBlock({
         )}
       </div>
 
+      <div
+        ref={strip}
+        className="melody-strip"
+        role="listbox"
+        aria-multiselectable="true"
+        aria-label="Notas de la melodía"
+        aria-activedescendant={last ? `mel-${last.id}` : undefined}
+        tabIndex={0}
+        onKeyDown={onKeyDown}
+      >
+        {events.length === 0 && (
+          <p className="melody-empty">{readOnly ? 'Esta melodía no tiene notas.' : 'Todavía no hay notas. Tocá una tecla del teclado de abajo y se escucha y se agrega.'}</p>
+        )}
+        {events.map((event) => {
+          const label = name(event);
+          const parts = label ? split(label) : null;
+          const selected = selection.includes(event.id);
+          const playing = player.activeId === event.id;
+          const commented = comments.all.some((comment) => comment.blockId === blockId && comment.eventId === event.id);
+          return (
+            <div
+              key={event.id}
+              id={`mel-${event.id}`}
+              role="option"
+              aria-selected={selected}
+              aria-label={`${label ?? 'Silencio'}, ${beatsLabel(event.beats)}${event.lyric ? `, sílaba ${event.lyric}` : ''}${commented ? ', con comentario' : ''}`}
+              className={`mel-chip${event.type === 'rest' ? ' rest' : ''}${selected ? ' sel' : ''}${playing ? ' playing' : ''}${fresh === event.id ? ' fresh' : ''}`}
+              style={{ ['--beats' as string]: event.beats }}
+              onClick={(click) => {
+                strip.current?.focus();
+                if (click.shiftKey) extend(event.id);
+                else if (click.ctrlKey || click.metaKey) setSelection((current) => (current.includes(event.id) ? current.filter((id) => id !== event.id) : [...current, event.id]));
+                else {
+                  select([event.id]);
+                  if (event.midi !== undefined) hear(event.midi);
+                }
+              }}
+            >
+              <span className="mel-name">
+                {parts ? (<><b>{parts.name}</b><sub>{parts.octave}</sub></>) : <i>silencio</i>}
+              </span>
+              <span className="mel-len" aria-hidden="true">{event.beats === 1 ? '' : beatsLabel(event.beats)}</span>
+              {event.lyric && <span className="mel-lyric">{event.lyric}</span>}
+              {commented && <span className="mel-dot" aria-hidden="true" />}
+            </div>
+          );
+        })}
+      </div>
+
+      {!readOnly && (
+        <section className="kb-panel nb-chrome" aria-label="Escribir con el teclado">
+          <div className="kb-bar">
+            <span className={`kb-target ${target.tone}`} role="status">{target.text}</span>
+            {onlyOneSelected && onlyOneSelected.type !== 'rest' && (
+              <Segmented<'add' | 'replace'>
+                label="Qué hace cada tecla"
+                value={mode}
+                onChange={setMode}
+                options={[
+                  { value: 'add', label: 'Agregar', title: 'Cada tecla agrega una nota nueva después de la seleccionada' },
+                  { value: 'replace', label: 'Reemplazar', title: 'Cada tecla cambia la altura de la nota seleccionada' },
+                ]}
+              />
+            )}
+            <Segmented<string>
+              label="Duración de las notas nuevas"
+              value={String(nextBeats)}
+              onChange={(value) => setNextBeats(Number(value))}
+              options={DURATIONS.map((item) => ({ value: String(item.beats), label: item.label, title: item.hint }))}
+            />
+            <button type="button" className="btn btn-ghost" title="Agregar un silencio" onClick={() => add([restEvent(nextBeats)], false, true)}>Silencio</button>
+            <label className="check small" title="Escuchar cada nota al tocarla o escribirla">
+              <input type="checkbox" checked={player.prefs.preview} onChange={(event) => player.prefs.setPreview(event.target.checked)} />
+              <span>Escuchar al escribir</span>
+            </label>
+            <button type="button" className="btn btn-link" aria-expanded={keyboard} onClick={() => setKeyboard(!keyboard)}>
+              {keyboard ? 'Ocultar teclado' : 'Mostrar teclado'}
+            </button>
+          </div>
+          {keyboard && (
+            <PianoKeyboard style={style} selected={last?.midi} playing={playingEvent?.midi} focusMidi={last?.midi ?? referenceMidi()} onPress={pressKey} />
+          )}
+        </section>
+      )}
+
+      <div className="melody-info muted small" aria-live="polite">
+        {events.length > 0 && (
+          <span>
+            {noteCount(content)} {noteCount(content) === 1 ? 'nota' : 'notas'} · {totalBeats(content)} pulsos
+            {spans && ` · rango ${lowName}–${highName}${spans.span ? ` (${spans.span} semitonos)` : ''}`}
+          </span>
+        )}
+        {onlyOne?.midi !== undefined && previousNote?.midi !== undefined && (
+          <span> · desde la nota anterior: {intervalLabel(previousNote.midi, onlyOne.midi)}</span>
+        )}
+      </div>
+
       {!readOnly && (
         <div className="melody-entry nb-chrome">
           <form
@@ -248,9 +375,6 @@ export function MelodyBlock({
             <button type="submit" className="btn" disabled={!text.trim()}>
               <Icon name="plus" size={14} /> Agregar
             </button>
-            <button type="button" className="btn btn-ghost" aria-pressed={keyboard} onClick={() => setKeyboard((value) => !value)}>
-              <Icon name="keyboard" size={14} /> Teclado
-            </button>
           </form>
           {errors.length > 0 && (
             <ul id={`mel-err-${blockId}`} className="melody-errors" role="alert">
@@ -260,76 +384,8 @@ export function MelodyBlock({
               <li className="muted">No se agregó nada: tu melodía sigue igual.</li>
             </ul>
           )}
-          {keyboard && (
-            <PianoPicker
-              style={style}
-              selected={last?.midi}
-              onPick={(midi) => add([noteEvent(midi, last?.beats ?? 1)])}
-            />
-          )}
         </div>
       )}
-
-      <div
-        ref={strip}
-        className="melody-strip"
-        role="listbox"
-        aria-multiselectable="true"
-        aria-label="Notas de la melodía"
-        aria-activedescendant={last ? `mel-${last.id}` : undefined}
-        tabIndex={0}
-        onKeyDown={onKeyDown}
-      >
-        {events.length === 0 && (
-          <p className="melody-empty">{readOnly ? 'Esta melodía no tiene notas.' : 'Todavía no hay notas. Escribí arriba, usá el teclado o apretá una letra (C, D, E…) acá.'}</p>
-        )}
-        {events.map((event) => {
-          const label = name(event);
-          const parts = label ? split(label) : null;
-          const selected = selection.includes(event.id);
-          const playing = player.activeId === event.id;
-          const commented = comments.all.some((comment) => comment.blockId === blockId && comment.eventId === event.id);
-          return (
-            <div
-              key={event.id}
-              id={`mel-${event.id}`}
-              role="option"
-              aria-selected={selected}
-              aria-label={`${label ?? 'Silencio'}, ${beatsLabel(event.beats)}${event.lyric ? `, sílaba ${event.lyric}` : ''}${commented ? ', con comentario' : ''}`}
-              className={`mel-chip${event.type === 'rest' ? ' rest' : ''}${selected ? ' sel' : ''}${playing ? ' playing' : ''}`}
-              style={{ ['--beats' as string]: event.beats }}
-              onClick={(click) => {
-                strip.current?.focus();
-                if (click.shiftKey) extend(event.id);
-                else if (click.ctrlKey || click.metaKey) setSelection((current) => (current.includes(event.id) ? current.filter((id) => id !== event.id) : [...current, event.id]));
-                else {
-                  select([event.id]);
-                  if (event.midi !== undefined) hear(event.midi);
-                }
-              }}
-            >
-              <span className="mel-name">
-                {parts ? (<><b>{parts.name}</b><sub>{parts.octave}</sub></>) : <i>silencio</i>}
-              </span>
-              <span className="mel-len" aria-hidden="true">{event.beats === 1 ? '' : beatsLabel(event.beats)}</span>
-              {event.lyric && <span className="mel-lyric">{event.lyric}</span>}
-              {commented && <span className="mel-dot" aria-hidden="true" />}
-            </div>
-          );
-        })}
-      </div>
-
-      <div className="melody-info muted small" aria-live="polite">
-        {events.length > 0 && (
-          <span>
-            {noteCount(content)} {noteCount(content) === 1 ? 'nota' : 'notas'} · {totalBeats(content)} pulsos
-            {spans && ` · rango ${lowName}–${highName}${spans.span ? ` (${spans.span} semitonos)` : ''}`}
-          </span>
-        )}
-        {onlyOne?.midi !== undefined && previousNote?.midi !== undefined && (
-          <span> · desde la nota anterior: {intervalLabel(previousNote.midi, onlyOne.midi)}</span>
-        )}
-      </div>
 
       {!readOnly && selection.length > 0 && (
         <div className="melody-tools nb-chrome" role="toolbar" aria-label="Edición de la nota seleccionada">

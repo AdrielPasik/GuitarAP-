@@ -249,44 +249,100 @@
   margin-top: 6px;
 }
 
-/* ---------- Piano picker ---------- */
-.piano-picker {
+/* ---------- Note keyboard (the main way to write a melody) ---------- */
+.kb-panel {
+  margin: 10px 0 6px;
+  padding: 12px 14px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--surface) 92%, var(--accent, #b4532a)) 0%, var(--surface) 70%);
+  box-shadow: 0 1px 0 var(--line) inset, 0 8px 22px -16px rgb(0 0 0 / 0.45);
   display: grid;
-  gap: 6px;
-  max-width: 560px;
+  gap: 10px;
+}
+.kb-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+.kb-target {
+  flex: 1 1 220px;
+  font-family: var(--font-display, inherit);
+  font-style: italic;
+  font-size: 1.02rem;
+  color: var(--ink);
+}
+.kb-target.replace {
+  color: var(--accent, #b4532a);
+}
+.piano-keyboard {
+  display: grid;
+  gap: 8px;
+  outline: none;
+  border-radius: 10px;
+}
+.piano-keyboard:focus-visible {
+  box-shadow: 0 0 0 2px var(--focus, var(--h-root));
 }
 .piano-octaves {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
+}
+.piano-range {
+  font-size: 0.82rem;
+  color: var(--ink-2);
+}
+.piano-hint {
+  margin-left: auto;
+}
+.piano-scroll {
+  overflow-x: auto;
+  padding-bottom: 2px;
 }
 .piano-keys {
   position: relative;
-  height: 96px;
+  height: clamp(132px, 22vh, 190px);
+  min-width: 520px;
+  padding-top: 6px;
+  border-radius: 8px 8px 10px 10px;
+  background: linear-gradient(180deg, var(--ink) 0 6px, transparent 6px);
 }
 .pkey {
   position: absolute;
-  top: 0;
+  top: 6px;
   border: 1px solid var(--line-2);
   cursor: pointer;
   padding: 0;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: transform 70ms ease-out, background-color 90ms ease-out, box-shadow 90ms ease-out;
 }
 .pkey.white {
-  height: 100%;
-  background: var(--raised);
+  height: calc(100% - 6px);
+  background: linear-gradient(180deg, var(--raised) 0%, var(--raised) 78%, color-mix(in srgb, var(--raised) 86%, var(--ink)) 100%);
   color: var(--ink-3);
-  font-size: 0.68rem;
+  font-size: 0.74rem;
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  padding-bottom: 4px;
-  border-radius: 0 0 5px 5px;
+  padding-bottom: 8px;
+  border-radius: 0 0 8px 8px;
+}
+.pkey.white.c {
+  color: var(--ink);
+  font-weight: 650;
 }
 .pkey.black {
-  height: 60%;
-  background: var(--ink);
+  height: 58%;
+  background: linear-gradient(180deg, #2a2420 0%, var(--ink) 100%);
   z-index: 2;
-  border-radius: 0 0 4px 4px;
+  border-radius: 0 0 6px 6px;
+  box-shadow: 0 3px 5px -2px rgb(0 0 0 / 0.5);
 }
 .pkey.white:hover {
   background: var(--sunken);
@@ -294,9 +350,41 @@
 .pkey.black:hover {
   background: var(--ink-2);
 }
+.pkey.down,
+.pkey.white.down {
+  transform: translateY(2px);
+  background: color-mix(in srgb, var(--h-root) 34%, var(--raised));
+  box-shadow: inset 0 -3px 0 var(--h-root);
+}
+.pkey.black.down {
+  background: color-mix(in srgb, var(--h-root) 70%, var(--ink));
+  box-shadow: none;
+}
+.pkey.lit {
+  background: color-mix(in srgb, var(--accent, #b4532a) 40%, var(--raised));
+  box-shadow: inset 0 -4px 0 var(--accent, #b4532a);
+}
+.pkey.black.lit {
+  background: var(--accent, #b4532a);
+}
 .pkey.on {
   outline: 2px solid var(--h-root);
+  outline-offset: -3px;
   z-index: 3;
+}
+.mel-chip.fresh {
+  animation: mel-fresh 650ms ease-out;
+}
+@keyframes mel-fresh {
+  0% { transform: translateY(-6px) scale(1.06); box-shadow: 0 0 0 3px color-mix(in srgb, var(--h-root) 55%, transparent); }
+  100% { transform: none; box-shadow: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mel-chip.fresh { animation: none; }
+  .pkey { transition: none; }
+}
+@media (max-width: 640px) {
+  .piano-hint { display: none; }
 }
 
 /* ---------- Chords ---------- */

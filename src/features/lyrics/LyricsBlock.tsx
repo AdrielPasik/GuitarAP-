@@ -1,8 +1,7 @@
 import { useRef } from 'react';
 import type { LyricsContent } from '@/core/model';
 import { Icon } from '@/components/ui/Icon';
-import { Menu } from '@/components/ui/Popover';
-import { parseLyrics, SECTIONS } from '@/features/lyrics/parse';
+import { parseLyrics } from '@/features/lyrics/parse';
 
 /** Reading view: section titles, and chords sitting above the word they belong to. */
 export function LyricsReading({ content }: { content: LyricsContent }) {
@@ -27,6 +26,14 @@ export function LyricsReading({ content }: { content: LyricsContent }) {
       })}
     </div>
   );
+}
+
+const STRUCTURE = ['Verso', 'Preestribillo', 'Estribillo', 'Puente', 'Outro'] as const;
+/** «Verso» becomes «Verso 2» when the song already has a «Verso 1»: the structure numbers itself. */
+function nextTitle(text: string, title: string) {
+  if (title !== 'Verso') return title;
+  const count = text.split('\n').filter((line) => /^#\s*Verso\b/i.test(line.trim())).length;
+  return `Verso ${count + 1}`;
 }
 
 /**
@@ -65,12 +72,19 @@ export function LyricsBlock({
   return (
     <div className="lyrics-block">
       <div className="lyrics-tools nb-chrome">
-        <Menu
-          label="Agregar sección"
-          triggerClassName="btn btn-ghost"
-          trigger={<><Icon name="plus" size={14} /> Sección</>}
-          items={SECTIONS.map((title) => ({ label: title, onSelect: () => insert(`# ${title}\n`) }))}
-        />
+        <div className="structure-chips" role="group" aria-label="Estructura de la letra">
+          {STRUCTURE.map((title) => (
+            <button
+              key={title}
+              type="button"
+              className="chip-btn"
+              title={`Agregar «${title}» en el cursor`}
+              onClick={() => insert(`# ${nextTitle(content.text, title)}\n`)}
+            >
+              <Icon name="plus" size={12} /> {title}
+            </button>
+          ))}
+        </div>
         <button type="button" className="btn btn-ghost" onClick={() => insert('[]')} title="Escribí el acorde entre corchetes antes de la palabra: [Am]">
           Acorde […]
         </button>

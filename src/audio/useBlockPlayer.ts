@@ -20,7 +20,7 @@ export function useSoundPrefs() {
   const [instrument, setInstrument] = usePref<InstrumentId>('sound.instrument', 'piano');
   const [click, setClick] = usePref<boolean>('sound.click', false);
   const [loop, setLoop] = usePref<boolean>('sound.loop', false);
-  const [preview, setPreview] = usePref<boolean>('sound.preview', false);
+  const [preview, setPreview] = usePref<boolean>('sound.preview', true);
   const [volume, setVolume] = usePref<number>('sound.volume', 0.7);
   return { instrument, setInstrument, click, setClick, loop, setLoop, preview, setPreview, volume, setVolume };
 }

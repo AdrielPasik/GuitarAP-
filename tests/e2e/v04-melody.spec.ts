@@ -76,10 +76,9 @@ test('la entrada de notas valida sin destruir, y se edita con teclado: octava, d
   expect(stored.events[1].midi).toBe(60);
 });
 
-test('el teclado visual solo elige la altura', async ({ page }) => {
+test('el teclado visual está a la vista y solo elige la altura', async ({ page }) => {
   await openLibrary(page);
   await songWithMelody(page);
-  await page.getByRole('button', { name: 'Teclado' }).click();
   await page.getByRole('button', { name: 'Do4', exact: true }).click();
   await page.getByRole('button', { name: 'Mi4', exact: true }).click();
   await expect(notes(page)).toHaveCount(2);
@@ -90,6 +89,7 @@ test('Escenario B — Play programa las notas en orden y a tiempo; pausa, reanud
   await audioProbe(page);
   await openLibrary(page);
   await songWithMelody(page);
+  await page.getByLabel('Escuchar al escribir').uncheck(); // writing sounds by default since v0.5.1; this test is about Play
   await writeNotes(page, 'Do4 Re4 Mi4 Sol4');
   await bpmField(page).fill('120');
   await bpmField(page).press('Enter');

@@ -26,6 +26,8 @@ drop function if exists public.share_revoke_link(uuid);
 drop function if exists public.share_update_link(uuid, text, boolean, timestamptz, boolean, boolean);
 drop function if exists public.share_create_link(text, uuid, text, timestamptz, boolean);
 
+drop function if exists private.note_unlock_failure(bytea);
+drop function if exists private.client_ip_hash();
 drop function if exists private.public_content(jsonb);
 drop function if exists private.documents_under(uuid);
 drop function if exists private.resource_title(text, uuid);
@@ -37,9 +39,12 @@ drop function if exists private.require_user();
 drop function if exists private.token_hash(text);
 drop function if exists private.new_token();
 
+drop table if exists public.share_unlock_ip;
 drop table if exists public.collab_ops;
 drop table if exists public.share_activity;
 drop table if exists public.share_sessions;
 drop table if exists public.share_links;
 drop table if exists public.share_invites;
 drop table if exists public.share_members;
+
+notify pgrst, 'reload schema';

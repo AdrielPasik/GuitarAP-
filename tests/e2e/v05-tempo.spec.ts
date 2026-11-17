@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { audioLog, audioProbe, audioState, cell, createFromMenu, openLibrary, settleSave, storedDocuments } from './helpers';
+import { audioLog, audioProbe, audioState, cell, createFromMenu, openLibrary, settleSave, storedDocuments, silentWriting } from './helpers';
 
 const songBpm = (page: Page) => page.getByRole('spinbutton', { name: 'Tempo del cuaderno' });
 const setSongBpm = async (page: Page, value: string) => {
@@ -51,6 +51,7 @@ test('Escenario A — la canción define 92 BPM y todos sus bloques lo heredan, 
 
 test('Escenario B — cambiar el BPM de la canción cambia la reproducción de todos los bloques, y la música no cambia', async ({ page }) => {
   await audioProbe(page);
+  await silentWriting(page);
   await openLibrary(page);
   await threeBlockSong(page, 'Tema B');
   await settleSave(page);
@@ -103,6 +104,7 @@ test('Escenario C — un bloque con tempo propio ignora a la canción hasta que 
 
 test('Escenario D — bajar el tempo para practicar no cambia la canción, y se puede volver al original', async ({ page }) => {
   await audioProbe(page);
+  await silentWriting(page);
   await openLibrary(page);
   await createFromMenu(page, 'Cuaderno de composición', 'Tema D');
   await setSongBpm(page, '120');

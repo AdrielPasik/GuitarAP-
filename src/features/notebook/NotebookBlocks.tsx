@@ -395,6 +395,7 @@ export function NotebookBlocks({
                   collapsed={collapsed.has(block.id)}
                   summary={summaryOf(block)}
                   badge={linkedLyrics ? 'con su letra' : hasMelody ? 'con su melodía' : undefined}
+                  onBadge={linkedLyrics || hasMelody ? () => setVocalOpen(linkedLyrics ? block.id : (notebook.blocks.find((item) => item.kind === 'melody' && (item.content as { lyricsBlockId?: string }).lyricsBlockId === block.id)?.id ?? block.id)) : undefined}
                   onToggleCollapse={() => toggleCollapsed(block.id)}
                   onExport={onExportBlock && block.kind !== 'text' ? () => onExportBlock(block.id) : undefined}
                   onTitle={(title) => edit((current) => updateBlock(current, block.id, (item) => (item.kind === 'text' || item.kind === 'section' ? item : { ...item, title })))}

@@ -67,6 +67,7 @@ export function BlockFrame({
   extraMenu,
   drag,
   badge,
+  onBadge,
   children,
 }: {
   block: NotebookBlock;
@@ -96,6 +97,8 @@ export function BlockFrame({
   };
   /** A small text next to the title (for example "con la letra «Verso 1»"). */
   badge?: string;
+  /** Makes the badge a button (e.g. «con su letra» opens the joint view). */
+  onBadge?: () => void;
   children: ReactNode;
 }) {
   const meta = blockMeta[block.kind] ?? { label: 'Bloque de otra versión', icon: 'text' as const };
@@ -144,7 +147,11 @@ export function BlockFrame({
                 value={title}
                 onChange={(event) => onTitle(event.target.value)}
               />
-              {badge && <span className="block-badge">{badge}</span>}
+              {badge && (onBadge ? (
+                <button type="button" className="block-badge link" title="Abrir la vista Letra + melodía" onClick={onBadge}>{badge} →</button>
+              ) : (
+                <span className="block-badge">{badge}</span>
+              ))}
               {collapsed && <span className="block-summary">{summary}</span>}
             </>
           )}

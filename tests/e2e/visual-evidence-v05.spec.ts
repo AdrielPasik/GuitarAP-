@@ -11,7 +11,7 @@ import { mirror, newAccount, newPerson, admin } from './sharing-helpers';
  * the real interface. No real library or account is involved.
  */
 const enabled = Boolean(process.env.CAPTURE_EVIDENCE);
-const out = path.resolve('docs/evidence/v0.5');
+const out = path.resolve(process.env.EVIDENCE_DIR ?? 'docs/evidence/v0.5');
 const shot = async (page: Page, name: string, fullPage = false) => {
   await page.waitForTimeout(500);
   await page.screenshot({ path: path.join(out, `${name}.png`), fullPage });

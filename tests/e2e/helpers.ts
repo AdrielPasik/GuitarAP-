@@ -91,6 +91,10 @@ export async function audioProbe(page: Page) {
     (window as unknown as { __GUITARAP_AUDIO_TEST__: boolean }).__GUITARAP_AUDIO_TEST__ = true;
   });
 }
+/** Writing a note sounds by default since v0.5.1. Tests that measure what Play schedules turn that off at load. */
+export async function silentWriting(page: Page) {
+  await page.addInitScript(() => window.localStorage.setItem('guitarap.pref.sound.preview', 'false'));
+}
 export type AudioEntry = { type: string; midi?: number; when?: number; seconds?: number; instrument?: string; voices?: number };
 export const audioLog = (page: Page) =>
   page.evaluate(() => ((window as unknown as { __guitarapAudioLog?: AudioEntry[] }).__guitarapAudioLog ?? []).map((entry) => ({ ...entry })));

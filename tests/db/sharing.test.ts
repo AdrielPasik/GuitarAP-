@@ -406,3 +406,73 @@ describe('H — adversarial checks', () => {
     await expect(as(bob).rpc('sync_library', { p_owner_id: owner, p_op_id: fresh(), p_snapshot: { documents: [], nodes: [], versions: [] } })).rejects.toThrow(/owner mismatch/);
   });
 });
+
+describe('Q — hardening found in the final audit (rate limiting, titles, comments, expiry)', () => {
+  type Unlock = { ok: boolean; reason?: string; scope?: string; retryAfterSeconds?: number; session?: string };
+  const unlockFrom = (ip: string | null, token: string, password: string) =>
+    h.as('anon', null, ip ? { 'cf-connecting-ip': ip } : undefined).rpc<Unlock>('share_unlock', { p_token: token, p_password: password });
+
+  it('every lock-out on a link lasts twice as long as the previous one, and a correct password resets it', async () => {
+    const link = await shareLink(letra, { p_password: 'cancion-escalada' });
+    const fail = async () => { for (let i = 0; i < 5; i += 1) await unlockFrom(null, link.token, 'mal-mal-mal'); };
+    await fail();
+    const first = await unlockFrom(null, link.token, 'cancion-escalada');
+    expect(first.reason).toBe('locked');
+    expect(first.retryAfterSeconds).toBeGreaterThan(800);
+    expect(first.retryAfterSeconds).toBeLessThanOrEqual(900);
+    await h.admin.sql(`update public.share_links set locked_until = now() - interval '1 second' where id = $1`, [link.id]);
+    await fail();
+    const second = await unlockFrom(null, link.token, 'cancion-escalada');
+    expect(second.retryAfterSeconds).toBeGreaterThan(1700);
+    expect(second.retryAfterSeconds).toBeLessThanOrEqual(1800);
+    await h.admin.sql(`update public.share_links set locked_until = now() - interval '1 second' where id = $1`, [link.id]);
+    expect((await unlockFrom(null, link.token, 'cancion-escalada')).ok).toBe(true);
+    expect((await h.admin.sql('select lockouts from public.share_links where id = $1', [link.id]))[0].lockouts).toBe(0);
+  });
+
+  it('one network address is stopped after 20 failures, on any link; others and the right password elsewhere are unaffected', async () => {
+    const a = await shareLink(letra, { p_password: 'password-link-a' });
+    const b = await shareLink(solo, { p_password: 'password-link-b' });
+    // 20 failures spread over unknown tokens (token guessing counts too) and a known link.
+    for (let i = 0; i < 15; i += 1) await unlockFrom('203.0.113.9', `token-inventado-${i}`, 'x');
+    for (let i = 0; i < 4; i += 1) await unlockFrom('203.0.113.9', a.token, 'mal-mal-mal');
+    expect((await unlockFrom('203.0.113.9', b.token, 'mal-mal-mal')).reason).toBe('wrong_password'); // the 20th
+    const blocked = await unlockFrom('203.0.113.9', b.token, 'password-link-b'); // even the right password
+    expect(blocked).toMatchObject({ ok: false, reason: 'locked', scope: 'network' });
+    expect(blocked.retryAfterSeconds).toBeGreaterThan(3000);
+    // Another address is not affected, and neither is a request that carries no address.
+    expect((await unlockFrom('203.0.113.10', b.token, 'password-link-b')).ok).toBe(true);
+    expect((await unlockFrom(null, b.token, 'password-link-b')).ok).toBe(true);
+    // The address is stored only as a hash.
+    const rows = await h.admin.sql(`select encode(ip_hash, 'hex') as ip from public.share_unlock_ip`);
+    expect(JSON.stringify(rows)).not.toContain('203.0.113');
+    // The window ends: the address can try again.
+    await h.admin.sql(`update public.share_unlock_ip set window_start = now() - interval '61 minutes'`);
+    expect((await unlockFrom('203.0.113.9', b.token, 'password-link-b')).ok).toBe(true);
+  });
+
+  it('a password-protected link does not even reveal the project title before the password', async () => {
+    const link = await shareLink(letra, { p_password: 'password-titulo' });
+    const info = await as(null).rpc<Record<string, unknown>>('share_link_info', { p_token: link.token });
+    expect(info).toMatchObject({ valid: true, requiresPassword: true, title: null });
+    expect(JSON.stringify(info)).not.toContain('Letra');
+  });
+
+  it('an invited viewer receives the music without the personal comments; a commenter still sees them', async () => {
+    const target = await h.newDocument(owner, 'Con notas', { ...content('con notas'), comments: [{ id: 'c9', text: 'NOTA-PERSONAL', createdAt: 1, updatedAt: 1 }] });
+    await accept(dave, (await invite(target, 'viewer')).token, 'Dave');
+    await accept(carol, (await invite(target, 'commenter')).token, 'Carol');
+    const viewer = await as(dave).rpc<{ content: Record<string, unknown> }>('collab_pull_document', { p_doc: target });
+    expect(JSON.stringify(viewer)).toContain('con notas');
+    expect(JSON.stringify(viewer)).not.toContain('NOTA-PERSONAL');
+    const commenter = await as(carol).rpc('collab_pull_document', { p_doc: target });
+    expect(JSON.stringify(commenter)).toContain('NOTA-PERSONAL');
+  });
+
+  it('an invitation cannot be created already expired or valid for more than 90 days', async () => {
+    const make = (when: string) => as(owner).rpc('share_create_invite', { p_kind: 'document', p_id: letra, p_role: 'viewer', p_expires: when });
+    await expect(make(new Date(Date.now() - 1000).toISOString())).rejects.toThrow(/expiry/);
+    await expect(make(new Date(Date.now() + 120 * 86400_000).toISOString())).rejects.toThrow(/expiry/);
+    await expect(make(new Date(Date.now() + 30 * 86400_000).toISOString())).resolves.toBeTruthy();
+  });
+});
