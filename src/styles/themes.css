@@ -1,0 +1,664 @@
+/* v0.7 — Artistic universes as visual SYSTEMS, not palettes.
+   Every universe sets the same token set (colour, surfaces, textures) and then its own expression:
+   typography (--display-*), shape (--radius-*), depth (--elev), the treatment of headers, folders, covers and controls.
+   Layout, controls and the harmonic colours (root / third / fifth / seventh) are identical everywhere.
+   All motifs are original CSS geometry: no covers, logos, photographs or characters from any band. */
+
+:root {
+  --display-weight: 600;
+  --display-style: normal;
+  --display-transform: none;
+  --display-tracking: -0.015em;
+  --kicker-font: var(--font-ui);
+  --radius-ctl: 6px;
+  --radius-card: 12px;
+  --elev: 0 1px 2px rgb(0 0 0 / 0.08);
+}
+
+/* Shared hooks the universes speak through. Defaults reproduce the previous look. */
+.hero-title,
+.folder-hero-title,
+.tool-title,
+.lib-head h1 button,
+.settings-body h2,
+.customize-head h2,
+.tools-head h2 {
+  font-family: var(--display-family, var(--font-display));
+  font-weight: var(--display-weight);
+  font-style: var(--display-style);
+  text-transform: var(--display-transform);
+  letter-spacing: var(--display-tracking);
+}
+.hero-kicker,
+.module-title,
+.cz-section h3 {
+  font-family: var(--kicker-font);
+}
+.btn,
+.icon-btn,
+.pill,
+.field input,
+.field select,
+.field textarea {
+  border-radius: var(--radius-ctl);
+}
+.folder-hero,
+.lib-hero,
+.entry-row,
+.voicing-card,
+.skin-card {
+  border-radius: var(--radius-card);
+}
+.entry-row,
+.voicing-card {
+  box-shadow: var(--elev);
+}
+
+/* ================================================================== ANALOG STUDIO (estudio, default)
+   Walnut, brass, paper. Long sessions: low glare, warm surfaces, brass details on what you touch. */
+[data-skin='estudio'] {
+  --folder-hero-wash:
+    repeating-linear-gradient(92deg, color-mix(in srgb, var(--walnut-700, #4a3523) 9%, transparent) 0 3px, transparent 3px 11px),
+    radial-gradient(70% 120% at 0% 0%, color-mix(in srgb, var(--brass, #c9a25a) 18%, transparent), transparent 70%);
+  --elev: 0 1px 0 rgb(255 255 255 / 0.5) inset, 0 1px 2px rgb(40 30 15 / 0.12);
+}
+[data-skin='estudio'] .folder-hero {
+  border-top: 3px solid var(--brass, #c9a25a);
+}
+[data-skin='estudio'] .btn-primary {
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.18), 0 1px 0 rgb(0 0 0 / 0.3);
+}
+[data-skin='estudio'] .module-title::before {
+  content: '';
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #fff6d8, var(--brass, #c9a25a) 55%, #6f5420);
+  vertical-align: 1px;
+}
+
+/* ================================================================== BRITISH INVASION (britanico)
+   A 60s music paper: cream stock, ink, deep red, mustard. Expressive serif headlines, printer's rules, square-ish
+   corners, halftone on the sleeves. Historic sensibility, modern spacing. */
+[data-skin='britanico'] {
+  --display-weight: 800;
+  --display-tracking: -0.02em;
+  --radius-ctl: 3px;
+  --radius-card: 4px;
+  --elev: none;
+  --cover-finish: radial-gradient(circle, rgb(0 0 0 / 0.16) 0.8px, transparent 1.2px) 0 0 / 5px 5px, linear-gradient(135deg, rgb(255 255 255 / 0.1), transparent 45%);
+  --folder-hero-wash:
+    linear-gradient(90deg, var(--accent) 0 6px, transparent 6px),
+    radial-gradient(circle, color-mix(in srgb, var(--ink) 9%, transparent) 0.9px, transparent 1.3px) 0 0 / 7px 7px;
+}
+[data-skin='britanico'] .folder-hero,
+[data-skin='britanico'] .lib-hero {
+  border: 0;
+  border-top: 3px double var(--ink);
+  border-bottom: 1px solid var(--ink);
+  padding-left: 30px;
+}
+[data-skin='britanico'] .folder-hero-title,
+[data-skin='britanico'] .hero-title {
+  font-variant-caps: small-caps;
+}
+[data-skin='britanico'] .module-title {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.06em;
+  border-bottom: 2px solid var(--accent);
+  padding-bottom: 2px;
+  display: inline-block;
+}
+[data-skin='britanico'] .hero-kicker {
+  color: var(--accent);
+  font-family: var(--font-display);
+  font-style: italic;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  font-size: 0.95rem;
+}
+[data-skin='britanico'] .entry-row {
+  border: 0;
+  border-bottom: 1px solid var(--line-2);
+  border-radius: 0;
+  background: transparent;
+}
+[data-skin='britanico'] .btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.82rem;
+}
+[data-skin='britanico'] .sleeve {
+  border-radius: 1px;
+  box-shadow: 3px 3px 0 color-mix(in srgb, var(--ink) 75%, transparent);
+}
+
+/* ================================================================== NEW WAVE (newwave)
+   Late-70s / 80s electric graphics: off-white and black, signal yellow and cyan used sparingly, hard geometry,
+   diagonal cuts, heavy uppercase sans, square corners and offset shadows. Energetic, never noisy. */
+[data-skin='newwave'] {
+  --bg: #f2f1ec;
+  --surface: #f8f7f3;
+  --raised: #ffffff;
+  --sunken: #e4e3dc;
+  --line: #cfcec6;
+  --line-2: #0d0d10;
+  --ink: #0d0d10;
+  --ink-2: #2e2e34;
+  --ink-3: #55555e;
+  --accent: #006f80;
+  --accent-ink: #005a68;
+  --accent-soft: #d3eef1;
+  --on-accent: #ffffff;
+  --walnut-950: #050506;
+  --walnut-900: #0d0d10;
+  --walnut-800: #16161b;
+  --walnut-700: #24242c;
+  --brass: #ffd400;
+  --brass-soft: #fff1a1;
+  --ivory: #f8f7f3;
+  --paper-line: #dcdbd3;
+  --paper-margin: #e2382b;
+  --dark-raised: #1b1b21;
+  --dark-sunken: #050506;
+  --dark-line: #2a2a31;
+  --dark-line-2: #44444d;
+  --dark-ink: #f4f3ee;
+  --dark-ink-2: #cfcec6;
+  --dark-ink-3: #9d9da5;
+  --stage-accent: #ffd400;
+  --stage-accent-ink: #ffe566;
+  --stage-glow: #00a3b8;
+  --grain: none;
+  --display-weight: 900;
+  --display-transform: uppercase;
+  --display-tracking: -0.01em;
+  --radius-ctl: 0;
+  --radius-card: 0;
+  --elev: 4px 4px 0 var(--ink);
+  --display-family: 'Figtree Variable', 'Segoe UI', system-ui, sans-serif;
+  --cover-finish: linear-gradient(115deg, transparent 0 62%, rgb(255 255 255 / 0.85) 62% 64%, transparent 64%);
+  --cover-pattern: repeating-linear-gradient(-45deg, color-mix(in srgb, var(--brass) 16%, transparent) 0 2px, transparent 2px 14px);
+  --body-wash: linear-gradient(115deg, transparent 0 78%, color-mix(in srgb, var(--brass) 18%, transparent) 78% 80%, transparent 80%);
+  --folder-hero-wash:
+    linear-gradient(115deg, transparent 0 70%, var(--brass) 70% 73%, transparent 73% 76%, var(--accent) 76% 77%, transparent 77%);
+}
+[data-theme='dark'][data-skin='newwave'],
+[data-theme='dark'] [data-skin='newwave'] {
+  --bg: #0b0b0d;
+  --surface: #131317;
+  --raised: #1b1b21;
+  --sunken: #060608;
+  --line: #2c2c33;
+  --line-2: #f4f3ee;
+  --ink: #f4f3ee;
+  --ink-2: #cfcec6;
+  --ink-3: #9d9da5;
+  --accent: #ffd400;
+  --accent-ink: #ffe566;
+  --accent-soft: #3a3200;
+  --on-accent: #0d0d10;
+  --paper-line: #2c2c33;
+  --paper-margin: #b0342a;
+  --elev: 4px 4px 0 #ffd400;
+}
+[data-skin='newwave'] .folder-hero,
+[data-skin='newwave'] .lib-hero {
+  border: 2px solid var(--ink);
+  box-shadow: 6px 6px 0 var(--ink);
+}
+[data-theme='dark'][data-skin='newwave'] .folder-hero,
+[data-theme='dark'][data-skin='newwave'] .lib-hero {
+  box-shadow: 6px 6px 0 var(--brass);
+}
+[data-skin='newwave'] .hero-kicker,
+[data-skin='newwave'] .module-title {
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: 0.78rem;
+}
+[data-skin='newwave'] .module-title::after {
+  content: '';
+  display: block;
+  width: 42px;
+  height: 4px;
+  margin-top: 4px;
+  background: var(--brass);
+  transform: skewX(-30deg);
+}
+[data-skin='newwave'] .entry-row,
+[data-skin='newwave'] .voicing-card {
+  border: 2px solid var(--line-2);
+}
+[data-skin='newwave'] .main .btn {
+  border-width: 2px;
+  border-color: var(--ink);
+  font-weight: 700;
+}
+[data-skin='newwave'] .btn-primary {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.82rem;
+}
+[data-skin='newwave'] .btn:active:not(:disabled) {
+  transform: translate(2px, 2px);
+}
+[data-skin='newwave'] .btn-primary {
+  background: var(--ink);
+  color: var(--surface);
+  box-shadow: 3px 3px 0 var(--brass);
+}
+[data-skin='newwave'] .sleeve {
+  border-radius: 0;
+  box-shadow: 4px 4px 0 var(--ink);
+}
+[data-skin='newwave'] .topbar {
+  background: var(--walnut-900);
+  border-bottom: 4px solid var(--brass);
+  box-shadow: none;
+}
+
+/* ================================================================== PSYCHEDELIC UNIVERSE (psicodelico, refined)
+   Depth and light: indigo space, magenta and amber glow, waves. Light, wide serif; soft rounded surfaces.
+   Slow movement only on the header art, and only when motion is allowed. */
+[data-skin='psicodelico'] {
+  --display-weight: 340;
+  --display-tracking: 0.01em;
+  --radius-ctl: 999px;
+  --radius-card: 20px;
+  --elev: 0 6px 22px -10px color-mix(in srgb, var(--stage-glow) 55%, transparent);
+  --cover-finish: radial-gradient(120% 80% at 30% 20%, rgb(255 255 255 / 0.25), transparent 50%);
+  --folder-hero-wash:
+    radial-gradient(60% 120% at 0% 100%, color-mix(in srgb, var(--stage-glow) 34%, transparent), transparent 70%),
+    radial-gradient(50% 90% at 100% 0%, color-mix(in srgb, var(--brass) 26%, transparent), transparent 70%),
+    repeating-radial-gradient(circle at 0% 100%, transparent 0 22px, color-mix(in srgb, var(--stage-accent) 10%, transparent) 22px 24px);
+}
+[data-skin='psicodelico'] .folder-hero-title,
+[data-skin='psicodelico'] .hero-title {
+  font-size: clamp(1.9rem, 3.8vw, 3rem);
+  background: linear-gradient(90deg, var(--ink), var(--accent) 60%, var(--brass));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+[data-skin='psicodelico'] .module-title {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-style: italic;
+  font-size: 1.15rem;
+}
+[data-skin='psicodelico'] .folder-hero-art {
+  animation: drift 18s ease-in-out infinite alternate;
+}
+@keyframes drift {
+  from { transform: rotate(-4deg) translateY(0); }
+  to { transform: rotate(3deg) translateY(-4px); }
+}
+html[data-motion='off'] [data-skin='psicodelico'] .folder-hero-art,
+html[data-motion='off'][data-skin='psicodelico'] .folder-hero-art,
+html[data-visible='false'] .folder-hero-art {
+  animation: none;
+}
+
+/* ================================================================== VINYL ARCHIVE (vinilo)
+   A personal record library: cardboard stock, black vinyl, label orange and teal, catalog typography in mono,
+   ring-wear on sleeves, index cards with catalogue numbers. Generous in the Library, quiet in the editors. */
+[data-skin='vinilo'] {
+  --bg: #e6dccb;
+  --surface: #eee6d8;
+  --raised: #f7f2e8;
+  --sunken: #d9cdb7;
+  --line: #cbbda3;
+  --line-2: #a8977a;
+  --ink: #1b1a18;
+  --ink-2: #3d3a34;
+  --ink-3: #5e584d;
+  --accent: #b6431c;
+  --accent-ink: #923414;
+  --accent-soft: #f3d9c9;
+  --on-accent: #ffffff;
+  --walnut-950: #0f0e0c;
+  --walnut-900: #1b1a18;
+  --walnut-800: #262420;
+  --walnut-700: #36332d;
+  --brass: #e08a3c;
+  --brass-soft: #f4d2a6;
+  --ivory: #f7f2e8;
+  --paper-line: #d6c9b1;
+  --paper-margin: #b6431c;
+  --dark-raised: #2a2824;
+  --dark-sunken: #0d0c0a;
+  --dark-line: #3a3731;
+  --dark-line-2: #57524a;
+  --dark-ink: #f1ebdf;
+  --dark-ink-2: #cfc6b5;
+  --dark-ink-3: #a59c8b;
+  --stage-accent: #f0a058;
+  --stage-accent-ink: #f6c18f;
+  --stage-glow: #2f7d7a;
+  --display-weight: 700;
+  --display-tracking: -0.01em;
+  --kicker-font: var(--font-mono);
+  --radius-ctl: 4px;
+  --radius-card: 6px;
+  --elev: 0 1px 0 rgb(255 255 255 / 0.6) inset, 0 2px 4px rgb(60 40 20 / 0.12);
+  --cover-radius: 2px;
+  --cover-finish:
+    radial-gradient(circle at 50% 50%, transparent 0 44%, rgb(255 255 255 / 0.13) 45% 46.5%, transparent 47.5%),
+    linear-gradient(160deg, rgb(255 255 255 / 0.08), transparent 40%, rgb(0 0 0 / 0.2));
+  --cover-pattern: repeating-radial-gradient(circle at 92% 50%, color-mix(in srgb, var(--ivory) 7%, transparent) 0 1px, transparent 1px 4px);
+  --folder-hero-wash:
+    radial-gradient(circle at 96% 50%, #111 0 17%, #1e1e1e 17.5% 18%, #111 18.5% 26%, var(--accent) 26.5% 33%, #111 33.5% 34%, transparent 34.5%),
+    linear-gradient(90deg, transparent 0 70%, color-mix(in srgb, var(--ink) 4%, transparent) 70%);
+}
+[data-theme='dark'][data-skin='vinilo'],
+[data-theme='dark'] [data-skin='vinilo'] {
+  --bg: #161512;
+  --surface: #1d1b18;
+  --raised: #25231f;
+  --sunken: #0f0e0c;
+  --line: #36332d;
+  --line-2: #524d44;
+  --ink: #f1ebdf;
+  --ink-2: #cfc6b5;
+  --ink-3: #a59c8b;
+  --accent: #f0a058;
+  --accent-ink: #f6c18f;
+  --accent-soft: #3b2615;
+  --on-accent: #1d0f06;
+  --paper-line: #36332d;
+  --paper-margin: #8c3f1d;
+}
+[data-skin='vinilo'] .hero-kicker,
+[data-skin='vinilo'] .module-title,
+[data-skin='vinilo'] .fact.kind,
+[data-skin='vinilo'] .fact.date {
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 0.72rem;
+}
+[data-skin='vinilo'] .folder-hero {
+  padding-right: min(26%, 220px);
+}
+[data-skin='vinilo'] .entry-list {
+  counter-reset: catalogue;
+}
+[data-skin='vinilo'] .entry-row.doc .entry-open::before {
+  counter-increment: catalogue;
+  content: 'Nº ' counter(catalogue, decimal-leading-zero);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  color: var(--ink-3);
+  min-width: 4.4ch;
+}
+[data-skin='vinilo'] .cover-card .sleeve {
+  box-shadow: 0 1px 0 rgb(255 255 255 / 0.4) inset, 6px 0 0 -2px #121212, 0 6px 14px -6px rgb(0 0 0 / 0.45);
+}
+[data-skin='vinilo'] .cover-card:hover .sleeve {
+  box-shadow: 0 1px 0 rgb(255 255 255 / 0.4) inset, 18px 0 0 -4px #121212, 0 10px 20px -8px rgb(0 0 0 / 0.5);
+}
+[data-skin='vinilo'] .cover-grid {
+  gap: 22px 18px;
+}
+
+/* ================================================================== SONGWRITER'S NOTEBOOK (cuaderno)
+   An intimate writing room: ruled paper, blue ink, a red margin, pen italics. Writing lyrics here should feel like
+   writing in a real notebook: the lyrics field gets wider rules and a pen-like face. */
+[data-skin='cuaderno'] {
+  --bg: #f6f2e6;
+  --surface: #fbf8ef;
+  --raised: #fffdf6;
+  --sunken: #ece6d4;
+  --line: #ddd5c0;
+  --line-2: #c4b99e;
+  --ink: #1d2233;
+  --ink-2: #3c4258;
+  --ink-3: #5f6478;
+  --accent: #1f3a8a;
+  --accent-ink: #1f3a8a;
+  --accent-soft: #dfe5f6;
+  --on-accent: #ffffff;
+  --walnut-950: #151a2b;
+  --walnut-900: #1c2236;
+  --walnut-800: #252c44;
+  --walnut-700: #323b5a;
+  --brass: #c2463c;
+  --brass-soft: #f2cfcb;
+  --ivory: #fbf8ef;
+  --paper-line: #c9d6ee;
+  --paper-margin: #d9625a;
+  --dark-raised: #232a40;
+  --dark-sunken: #10131f;
+  --dark-line: #2f3752;
+  --dark-line-2: #47527a;
+  --dark-ink: #f3efe2;
+  --dark-ink-2: #cfcabb;
+  --dark-ink-3: #a29d8f;
+  --stage-accent: #8fb0ff;
+  --stage-accent-ink: #b8ccff;
+  --stage-glow: #1f3a8a;
+  --display-weight: 500;
+  --display-style: italic;
+  --display-tracking: 0;
+  --radius-ctl: 4px;
+  --radius-card: 2px;
+  --elev: none;
+  --body-wash: repeating-linear-gradient(180deg, transparent 0 31px, color-mix(in srgb, var(--paper-line) 55%, transparent) 31px 32px);
+  --folder-hero-wash:
+    linear-gradient(90deg, transparent 0 18px, var(--paper-margin) 18px 19.5px, transparent 19.5px),
+    repeating-linear-gradient(180deg, transparent 0 27px, var(--paper-line) 27px 28px);
+  --cover-finish: linear-gradient(180deg, rgb(255 255 255 / 0.06), rgb(0 0 0 / 0.08));
+}
+[data-theme='dark'][data-skin='cuaderno'],
+[data-theme='dark'] [data-skin='cuaderno'] {
+  --bg: #12151f;
+  --surface: #181c29;
+  --raised: #1f2433;
+  --sunken: #0c0e16;
+  --line: #2c3246;
+  --line-2: #454e6c;
+  --ink: #f1ede0;
+  --ink-2: #c9c4b4;
+  --ink-3: #9f9a8c;
+  --accent: #8fb0ff;
+  --accent-ink: #b8ccff;
+  --accent-soft: #1d2847;
+  --on-accent: #0c1430;
+  --paper-line: #262c40;
+  --paper-margin: #7a3a36;
+}
+[data-skin='cuaderno'] .folder-hero,
+[data-skin='cuaderno'] .lib-hero {
+  border: 0;
+  border-radius: 2px;
+  box-shadow: 0 1px 0 var(--line-2), 0 3px 0 -1px var(--raised), 0 4px 0 -1px var(--line);
+  padding-left: 38px;
+}
+[data-skin='cuaderno'] .module-title,
+[data-skin='cuaderno'] .hero-kicker {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--accent-ink);
+}
+[data-skin='cuaderno'] .hero-kicker {
+  font-size: 1rem;
+}
+[data-skin='cuaderno'] .entry-row {
+  border: 0;
+  border-bottom: 1px solid var(--paper-line);
+  border-radius: 0;
+  background: transparent;
+}
+[data-skin='cuaderno'] .lyrics-text {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: clamp(1.3rem, 1.15rem + 0.55vw, 1.55rem);
+  color: var(--accent-ink);
+  line-height: 2.25rem;
+  background-image:
+    linear-gradient(90deg, transparent 52px, var(--paper-margin) 52px 53.5px, transparent 53.5px),
+    repeating-linear-gradient(180deg, transparent 0 calc(2.25rem - 1px), var(--paper-line) calc(2.25rem - 1px) 2.25rem);
+}
+[data-skin='cuaderno'] .btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+[data-skin='cuaderno'] .sleeve {
+  border-radius: 1px;
+  transform: rotate(-0.8deg);
+}
+[data-skin='cuaderno'] .cover-card:nth-child(2n) .sleeve {
+  transform: rotate(0.9deg);
+}
+
+/* ================================================================== theme picker v0.7: mini library + mini editor */
+.theme-preview-bar {
+  position: sticky;
+  top: calc(var(--topbar-h) + 6px);
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 10px 14px;
+  border: 2px solid var(--accent);
+  border-radius: var(--radius-card);
+  background: var(--raised);
+  box-shadow: var(--shadow-pop);
+}
+.theme-preview-bar .spacer {
+  flex: 1;
+}
+.skin-card {
+  min-width: 0;
+}
+.skin-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+}
+.skin-card .mini {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 6px;
+}
+.mini-title,
+.mini-line {
+  overflow-wrap: anywhere;
+}
+.mini-lib,
+.mini-editor {
+  display: grid;
+  gap: 4px;
+  padding: 6px;
+  border-radius: calc(var(--radius-card) * 0.6);
+  background: var(--raised);
+  border: 1px solid var(--line);
+}
+.mini-lib .mini-sleeves {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+}
+.mini-lib .sleeve {
+  width: 100%;
+  min-width: 0;
+}
+.mini-title {
+  font-family: var(--display-family, var(--font-display));
+  font-weight: var(--display-weight);
+  font-style: var(--display-style);
+  text-transform: var(--display-transform);
+  letter-spacing: var(--display-tracking);
+  font-size: 0.9rem;
+  line-height: 1.1;
+  color: var(--ink);
+}
+.mini-line {
+  font-family: var(--font-display);
+  font-style: var(--display-style);
+  font-size: 0.74rem;
+  color: var(--ink-2);
+  border-bottom: 1px solid var(--paper-line);
+  padding-bottom: 2px;
+}
+.mini-chords {
+  display: flex;
+  gap: 3px;
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+}
+.mini-chords span {
+  padding: 0 4px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-ctl);
+  color: var(--accent-ink);
+}
+.skin-swatches {
+  display: flex;
+  gap: 4px;
+}
+.skin-swatches i {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid rgb(0 0 0 / 0.2);
+}
+.skin-card .era {
+  font-size: 0.78rem;
+  color: var(--ink-3);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.skin-card .type-sample {
+  font-size: 0.78rem;
+  color: var(--ink-2);
+  font-style: italic;
+}
+.skin-card[data-trying='true'] {
+  outline: 3px dashed var(--accent);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-skin] .folder-hero-art {
+    animation: none !important;
+  }
+  [data-skin='newwave'] .btn:active:not(:disabled) {
+    transform: none;
+  }
+}
+
+/* a fieldset is min-content wide by default: let the picker shrink on phones */
+.skin-picker {
+  min-width: 0;
+}
+.settings-body,
+.skin-preview,
+.skin-card .mini > * {
+  min-width: 0;
+}
+.settings-body > *,
+.settings-body .stack,
+.settings-body .stack > * {
+  min-width: 0;
+  max-width: 100%;
+}
+/* long settings buttons wrap instead of pushing the page sideways on phones */
+.settings-body .btn {
+  white-space: normal;
+  height: auto;
+  min-height: 32px;
+  max-width: 100%;
+}

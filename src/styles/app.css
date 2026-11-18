@@ -872,7 +872,7 @@ html[data-focus='true'] .main {
     width: 100%;
   }
   .settings {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .settings-nav {
     display: flex;

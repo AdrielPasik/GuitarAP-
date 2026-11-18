@@ -40,6 +40,29 @@ export const QUALITIES: ChordQuality[] = [
   q('9', '9', [0, 4, 7, 10, 14], ['1', '3', '5', '♭7', '9'], 'Dominante 9', 'other'),
   q('maj9', 'maj9', [0, 4, 7, 11, 14], ['1', '3', '5', '7', '9'], 'Mayor 9', 'other'),
   q('m9', 'm9', [0, 3, 7, 10, 14], ['1', '♭3', '5', '♭7', '9'], 'Menor 9', 'other'),
+  // v0.7: the laboratory's catalog. Only qualities whose formula and spelling are standard and unambiguous.
+  q('madd9', 'm(add9)', [0, 3, 7, 14], ['1', '♭3', '5', '9'], 'Menor con novena añadida', 'other'),
+  q('69', '6/9', [0, 4, 7, 9, 14], ['1', '3', '5', '6', '9'], 'Seis nueve', 'other'),
+  q('7sus4', '7sus4', [0, 5, 7, 10], ['1', '4', '5', '♭7'], 'Dominante 7 sus4', 'seventh'),
+  q('7b5', '7♭5', [0, 4, 6, 10], ['1', '3', '♭5', '♭7'], 'Dominante 7 con quinta disminuida', 'seventh'),
+  q('7#5', '7♯5', [0, 4, 8, 10], ['1', '3', '♯5', '♭7'], 'Dominante 7 con quinta aumentada', 'seventh'),
+  q('7b9', '7♭9', [0, 4, 7, 10, 13], ['1', '3', '5', '♭7', '♭9'], 'Dominante 7 con novena menor', 'other'),
+  q('7#9', '7♯9', [0, 4, 7, 10, 15], ['1', '3', '5', '♭7', '♯9'], 'Dominante 7 con novena aumentada', 'other'),
+  q('mMaj9', 'm(maj9)', [0, 3, 7, 11, 14], ['1', '♭3', '5', '7', '9'], 'Menor con 7 mayor y 9', 'other'),
+  q('11', '11', [0, 7, 10, 14, 17], ['1', '5', '♭7', '9', '11'], 'Dominante 11 (sin tercera)', 'other'),
+  q('m11', 'm11', [0, 3, 7, 10, 14, 17], ['1', '♭3', '5', '♭7', '9', '11'], 'Menor 11', 'other'),
+  q('13', '13', [0, 4, 7, 10, 14, 21], ['1', '3', '5', '♭7', '9', '13'], 'Dominante 13', 'other'),
+  q('maj13', 'maj13', [0, 4, 7, 11, 14, 21], ['1', '3', '5', '7', '9', '13'], 'Mayor 13', 'other'),
+];
+
+/** Grouping for pickers: the order a guitarist studies them in. */
+export const QUALITY_GROUPS: Array<{ name: string; ids: string[] }> = [
+  { name: 'Tríadas', ids: ['maj', 'min', 'dim', 'aug'] },
+  { name: 'Suspendidos y añadidos', ids: ['sus2', 'sus4', '5', 'add9', 'madd9', '6', 'm6', '69'] },
+  { name: 'Séptimas', ids: ['maj7', '7', 'm7', 'mMaj7', 'm7b5', 'dim7', '7sus4'] },
+  { name: 'Novenas', ids: ['maj9', '9', 'm9', 'mMaj9'] },
+  { name: 'Dominantes alterados', ids: ['7b5', '7#5', '7b9', '7#9'] },
+  { name: 'Undécimas y trecenas', ids: ['11', 'm11', '13', 'maj13'] },
 ];
 
 /** Spellings accepted when typing, mapped to a quality id. Longest first at match time. */
@@ -56,6 +79,11 @@ const ALIASES: Array<[string, string]> = [
   ['mMaj7', 'mMaj7'], ['mM7', 'mMaj7'], ['m(maj7)', 'mMaj7'],
   ['m7b5', 'm7b5'], ['m7♭5', 'm7b5'], ['ø', 'm7b5'], ['ø7', 'm7b5'],
   ['dim7', 'dim7'], ['°7', 'dim7'], ['o7', 'dim7'],
+  ['madd9', 'madd9'], ['m(add9)', 'madd9'], ['madd9', 'madd9'], ['6/9', '69'], ['69', '69'],
+  ['7sus4', '7sus4'], ['7sus', '7sus4'], ['7b5', '7b5'], ['7(b5)', '7b5'], ['7#5', '7#5'], ['7+5', '7#5'], ['7(#5)', '7#5'], ['aug7', '7#5'],
+  ['7b9', '7b9'], ['7(b9)', '7b9'], ['7#9', '7#9'], ['7(#9)', '7#9'],
+  ['mMaj9', 'mMaj9'], ['m(maj9)', 'mMaj9'], ['mM9', 'mMaj9'],
+  ['11', '11'], ['m11', 'm11'], ['min11', 'm11'], ['13', '13'], ['maj13', 'maj13'], ['M13', 'maj13'],
   ['add9', 'add9'], ['9', '9'], ['maj9', 'maj9'], ['M9', 'maj9'], ['m9', 'm9'], ['min9', 'm9'],
 ];
 const ALIAS_MAP = new Map(ALIASES);
@@ -89,7 +117,8 @@ export const prettyRoot = (root: string) => root.replace('#', '♯').replace(/(?
  * such as "C4"), so a melody can never be mistaken for a progression.
  */
 export function parseChord(text: string): Chord | null {
-  const clean = text.trim().replace(/♯/g, '#').replace(/♭/g, 'b');
+  // «6/9» is a quality, not a slash chord with a bass of «9».
+  const clean = text.trim().replace(/♯/g, '#').replace(/♭/g, 'b').replace('6/9', '69');
   const root = ROOT_RE.exec(clean);
   if (!root) return null;
   const rootName = root[1] + root[2];
@@ -102,7 +131,7 @@ export function parseChord(text: string): Chord | null {
     if (!/^[A-G][#b]?$/.test(bass)) return null;
   }
   // "C4" is a note, not a chord: a bare octave number is rejected.
-  if (/^\d$/.test(rest) && !['5', '6', '7', '9'].includes(rest)) return null;
+  if (/^\d+$/.test(rest) && !['5', '6', '7', '9', '11', '13', '69'].includes(rest)) return null;
   const id = ALIAS_MAP.get(rest);
   const quality = id ? BY_ID.get(id) : undefined;
   if (!quality) return null;
@@ -127,6 +156,8 @@ const ROLE_OF_DEGREE: Record<string, ChordTone['role']> = {
   '1': 'root', '3': 'third', '♭3': 'third', '5': 'fifth', '♭5': 'fifth', '♯5': 'fifth',
   '7': 'seventh', '♭7': 'seventh', '♭♭7': 'seventh',
 };
+/** Harmonic function of one degree label (tensions — 9, 11, 13 and alterations — are «other»). */
+export const roleOfDegree = (degree: string): ChordTone['role'] => ROLE_OF_DEGREE[degree] ?? 'other';
 
 const LETTERS = 'CDEFGAB';
 /** Spells a pitch class on a given letter, so "Eb" stays "E♭" and never "D♯". */
@@ -138,7 +169,10 @@ function spellOnLetter(pc: number, letterIndex: number) {
   return `${LETTERS[letterIndex]}${mark}`;
 }
 
-const DEGREE_STEPS: Record<string, number> = { '1': 0, '2': 1, '♭3': 2, '3': 2, '4': 3, '♭5': 4, '5': 4, '♯5': 4, '6': 5, '♭♭7': 6, '♭7': 6, '7': 6, '9': 1 };
+const DEGREE_STEPS: Record<string, number> = {
+  '1': 0, '2': 1, '♭3': 2, '3': 2, '4': 3, '♭5': 4, '5': 4, '♯5': 4, '6': 5, '♭♭7': 6, '♭7': 6, '7': 6,
+  '♭9': 1, '9': 1, '♯9': 1, '11': 3, '♯11': 3, '13': 5, '♭13': 5,
+};
 
 /** The notes of a chord with correct letter names (a C♭ chord uses F♭, not E). */
 export function chordTones(chord: Chord): ChordTone[] {

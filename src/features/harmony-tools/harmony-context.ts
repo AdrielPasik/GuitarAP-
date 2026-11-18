@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect } from 'react';
 import type { ToolsActions, ToolsContext } from '@/features/harmony-tools/HarmonyTools';
 
-export type HarmonyRegistration = { id: string; context: Pick<ToolsContext, 'key' | 'bpm'>; actions?: ToolsActions };
+export type HarmonyRegistration = { id: string; context: Pick<ToolsContext, 'key' | 'bpm' | 'tuning'>; actions?: ToolsActions };
 export type Host = {
   open: boolean;
   toggle: () => void;

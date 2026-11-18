@@ -124,6 +124,25 @@ export function NotebookEditor({
     doc.change((current) => insertBlock(current, { ...block, title: `${keyTitle(key, style)}`, content }));
     toast.show('Se agregó un mapa de la escala al cuaderno.');
   };
+  /** Explicit «Guardar como mapa» from the harmony lab: one new map block holding exactly that shape. */
+  const createVoicingMap = (title: string, rootPc: number, notes: Array<{ string: number; fret: number; root: boolean }>) => {
+    const block = newBlock('map');
+    if (block.kind !== 'map') return;
+    const frets = notes.map((note) => note.fret);
+    const low = Math.max(0, Math.min(...frets) - 1);
+    const content = {
+      ...block.content,
+      root: rootPc,
+      latin: style === 'latin',
+      minFret: low === 1 ? 0 : low,
+      maxFret: Math.max(5, Math.max(...frets) + 1),
+      view: { guide: false, labels: 'intervals' as const },
+    };
+    const placed = applyNotes(content, content.selectedPositionId, notes.map((note) => ({ string: note.string - 1, fret: note.fret, root: note.root || undefined })), 'replace');
+    doc.change((current) => insertBlock(current, { ...block, title, content: placed }));
+    toast.show(`Se agregó «${title}» al cuaderno como mapa.`);
+  };
+  const documentTuning = doc.notebook.blocks.find((block) => block.kind === 'map' || block.kind === 'tablature')?.content as { tuning?: string[] } | undefined;
   const kind = documentKind({ ...record, content: doc.notebook });
 
   useEffect(() => {
@@ -149,8 +168,9 @@ export function NotebookEditor({
 
   useHarmonyDocument({
     id: record.id,
-    context: { key: doc.notebook.meta?.key, bpm: doc.notebook.meta?.bpm },
+    context: { key: doc.notebook.meta?.key, bpm: doc.notebook.meta?.bpm, tuning: documentTuning?.tuning },
     actions: {
+      onSaveVoicing: createVoicingMap,
       canAddChord: Boolean(chordsBlock),
       onAddChord: (symbol) => addChords([symbol]),
       onAddProgression: addChords,

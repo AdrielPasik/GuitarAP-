@@ -1,5 +1,6 @@
 import { createContext, useContext } from 'react';
 import type { TempoSource } from '@/audio/tempo';
+import type { ClickSound } from '@/audio/webaudio-backend';
 
 export type Metro = {
   running: boolean;
@@ -17,6 +18,11 @@ export type Metro = {
   /** Stronger, higher first beat of each bar. */
   accent: boolean;
   setAccent: (on: boolean) => void;
+  /** Timbre of the click: a device preference. */
+  sound: ClickSound;
+  setSound: (sound: ClickSound) => void;
+  /** One accented and one weak click, so the timbre and level can be judged without starting. */
+  testClick: () => void;
   beatsPerMeasure: number;
   /** Changing the metronome tempo is a practice tempo: it does not touch any document. */
   setBpm: (value: number) => void;

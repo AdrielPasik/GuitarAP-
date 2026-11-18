@@ -54,13 +54,102 @@ export function setClickAccent(on: boolean) {
   accentOn = on;
 }
 
+/**
+ * Click timbres, all synthesised here (nothing downloaded, nothing copied from a commercial metronome).
+ * Each one is tuned to a similar PEAK, so switching timbre never jumps the level, but they differ in body and length:
+ * a longer, denser body (woodblock, analog) is heard as louder over a guitar at the same peak, without clipping.
+ */
+export type ClickSound = 'digital' | 'woodblock' | 'analog' | 'dry';
+export const CLICK_SOUNDS: Array<{ id: ClickSound; name: string; blurb: string }> = [
+  { id: 'digital', name: 'Clic digital', blurb: 'Agudo y definido. El de siempre.' },
+  { id: 'woodblock', name: 'Woodblock', blurb: 'Madera seca con cuerpo: se oye sobre una guitarra con distorsión.' },
+  { id: 'analog', name: 'Clic analógico', blurb: 'Tic-tac de metrónomo de péndulo, cálido y redondo.' },
+  { id: 'dry', name: 'Percusión seca', blurb: 'Golpe corto tipo aro de caja, muy preciso.' },
+];
+let clickSound: ClickSound = 'digital';
+export function setClickSound(next: ClickSound) {
+  clickSound = CLICK_SOUNDS.some((sound) => sound.id === next) ? next : 'digital';
+}
+
+function seededNoise(ctx: BaseAudioContext, seconds: number) {
+  const buffer = ctx.createBuffer(1, Math.max(1, Math.floor(ctx.sampleRate * seconds)), ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  let seed = 424242;
+  for (let i = 0; i < data.length; i += 1) {
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    data[i] = (seed / 0xffffffff) * 2 - 1;
+  }
+  return buffer;
+}
+let longNoise: AudioBuffer | null = null;
+
+type ClickParts = { tone: OscillatorNode; burst: AudioBufferSourceNode; toneGain: GainNode; burstGain: GainNode; extra?: AudioNode[] };
+
+function toneVoice(ctx: BaseAudioContext, out: AudioNode, when: number, type: OscillatorType, freq: number, endFreq: number, peak: number, decay: number) {
+  const tone = ctx.createOscillator();
+  tone.type = type;
+  tone.frequency.setValueAtTime(freq, when);
+  if (endFreq !== freq) tone.frequency.exponentialRampToValueAtTime(endFreq, when + decay * 0.6);
+  const gain = ctx.createGain();
+  gain.gain.setValueAtTime(0.0001, when);
+  gain.gain.linearRampToValueAtTime(peak, when + 0.0015);
+  gain.gain.exponentialRampToValueAtTime(0.0001, when + decay);
+  tone.connect(gain).connect(out);
+  tone.start(when);
+  tone.stop(when + decay + 0.01);
+  return { tone, gain };
+}
+
+function noiseVoice(ctx: BaseAudioContext, out: AudioNode, when: number, filter: BiquadFilterType, freq: number, q: number, peak: number, decay: number) {
+  if (!longNoise || longNoise.sampleRate !== ctx.sampleRate) longNoise = seededNoise(ctx, 0.12);
+  const burst = ctx.createBufferSource();
+  burst.buffer = longNoise;
+  const band = ctx.createBiquadFilter();
+  band.type = filter;
+  band.frequency.value = freq;
+  band.Q.value = q;
+  const gain = ctx.createGain();
+  gain.gain.setValueAtTime(peak, when);
+  gain.gain.exponentialRampToValueAtTime(0.0001, when + decay);
+  burst.connect(band).connect(gain).connect(out);
+  burst.start(when);
+  burst.stop(when + decay + 0.01);
+  return { burst, gain, band };
+}
+
+function scheduleAltClick(ctx: BaseAudioContext, out: AudioNode, when: number, accent: boolean, sound: Exclude<ClickSound, 'digital'>): ClickParts {
+  if (sound === 'woodblock') {
+    // Two inharmonic modes of a struck block, a fast pitch drop and a filtered knock.
+    const base = accent ? 1250 : 900;
+    const a = toneVoice(ctx, out, when, 'sine', base * 1.12, base, accent ? 0.62 : 0.52, 0.09);
+    const b = toneVoice(ctx, out, when, 'sine', base * 2.76, base * 2.7, accent ? 0.22 : 0.18, 0.045);
+    const n = noiseVoice(ctx, out, when, 'bandpass', base * 2, 2.5, accent ? 0.35 : 0.28, 0.012);
+    return { tone: a.tone, toneGain: a.gain, burst: n.burst, burstGain: n.gain, extra: [b.tone, b.gain, n.band] };
+  }
+  if (sound === 'analog') {
+    // A soft, rounded «tock»: triangle body through a low-pass, a little lower for the weak beats.
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = accent ? 3200 : 2400;
+    lp.connect(out);
+    const a = toneVoice(ctx, lp, when, 'triangle', accent ? 1050 : 760, accent ? 980 : 700, accent ? 0.78 : 0.68, 0.075);
+    const n = noiseVoice(ctx, lp, when, 'lowpass', 1800, 0.7, accent ? 0.3 : 0.24, 0.008);
+    return { tone: a.tone, toneGain: a.gain, burst: n.burst, burstGain: n.gain, extra: [lp, n.band] };
+  }
+  // dry: a short, bright rim-like crack with a tiny pitched body.
+  const a = toneVoice(ctx, out, when, 'square', accent ? 520 : 400, accent ? 420 : 330, accent ? 0.22 : 0.18, 0.03);
+  const n = noiseVoice(ctx, out, when, 'highpass', accent ? 2400 : 1800, 0.8, accent ? 0.7 : 0.58, 0.028);
+  return { tone: a.tone, toneGain: a.gain, burst: n.burst, burstGain: n.gain, extra: [n.band] };
+}
+
 let noiseBuffer: AudioBuffer | null = null;
 /**
  * One click: a short pitched tick with a crisp noise transient on top (so the beat is felt even over a loud guitar),
  * 1 ms attack and a ~60 ms decay. The first beat is higher and a little stronger. Peak before the bus is 1.05 at most;
  * the bus ceiling (0.85) keeps the maximum setting under full scale. Works on any BaseAudioContext (tests render it offline).
  */
-export function scheduleClick(ctx: BaseAudioContext, out: AudioNode, when: number, accent: boolean) {
+export function scheduleClick(ctx: BaseAudioContext, out: AudioNode, when: number, accent: boolean, sound: ClickSound = clickSound): ClickParts {
+  if (sound !== 'digital') return scheduleAltClick(ctx, out, when, accent, sound);
   const tone = ctx.createOscillator();
   const toneGain = ctx.createGain();
   tone.frequency.value = accent ? 1760 : 1175;
@@ -265,10 +354,11 @@ export class WebAudioBackend implements AudioBackend {
         parts.burst.disconnect();
         parts.toneGain.disconnect();
         parts.burstGain.disconnect();
+        parts.extra?.forEach((node) => node.disconnect());
       },
     };
     this.track(voice, when + 0.08, ctx);
-    this.log({ type: 'click', when, accent: strong });
+    this.log({ type: 'click', when, accent: strong, sound: clickSound });
   }
 
   stopAll() {
@@ -287,7 +377,7 @@ export class WebAudioBackend implements AudioBackend {
 
 if (typeof window !== 'undefined') {
   /** Read-only probe for browser tests: renders one click offline through the bus ceiling and the limiter and returns its peak. */
-  (window as unknown as Record<string, unknown>).__guitarapMeasureClick = async (accent: boolean, level: number) => {
+  (window as unknown as Record<string, unknown>).__guitarapMeasureClick = async (accent: boolean, level: number, sound?: ClickSound) => {
     const ctx = new OfflineAudioContext(1, 4410, 44100);
     const limiter = ctx.createDynamicsCompressor();
     limiter.threshold.value = -14;
@@ -296,7 +386,7 @@ if (typeof window !== 'undefined') {
     const bus = ctx.createGain();
     bus.gain.value = CLICK_CEILING * level;
     bus.connect(limiter);
-    scheduleClick(ctx, bus, 0.001, accent);
+    scheduleClick(ctx, bus, 0.001, accent, sound ?? clickSound);
     const rendered = await ctx.startRendering();
     let peak = 0;
     for (const value of rendered.getChannelData(0)) peak = Math.max(peak, Math.abs(value));

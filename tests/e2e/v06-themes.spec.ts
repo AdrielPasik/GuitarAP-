@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { openLibrary } from './helpers';
 
-const SKINS = ['estudio', 'britanico', 'psicodelico'] as const;
+const SKINS = ['estudio', 'britanico', 'newwave', 'psicodelico', 'vinilo', 'cuaderno'] as const;
 
 /** WCAG relative luminance contrast between two #rrggbb colours. */
 const contrast = (a: string, b: string) => {
@@ -36,10 +36,15 @@ test('Escenario E — los temas musicales: se eligen con vista previa, persisten
   // Three universes, each previewed before choosing.
   const group = page.getByRole('group', { name: 'Universo visual' });
   await expect(group.getByRole('button', { name: /Estudio analógico/ })).toHaveAttribute('aria-pressed', 'true'); // the default is the look the app had
+  // v0.7: a click previews the universe on the whole app without saving; «Cancelar» returns, «Aplicar» keeps it.
   await group.getByRole('button', { name: /Rock británico/ }).click();
   await expect(page.locator('html')).toHaveAttribute('data-skin', 'britanico');
-  await group.getByRole('button', { name: /Psicodelia progresiva/ }).click();
+  expect(await page.evaluate(() => window.localStorage.getItem('guitarap.pref.appearance.skin'))).toBeNull();
+  await page.getByRole('button', { name: 'Cancelar', exact: true }).click();
+  await expect(page.locator('html')).toHaveAttribute('data-skin', 'estudio');
+  await group.getByRole('button', { name: /Psicodelia/ }).click();
   await expect(page.locator('html')).toHaveAttribute('data-skin', 'psicodelico');
+  await page.getByRole('button', { name: /Aplicar Psychedelic Universe/ }).click();
 
   // It persists across a reload and across screens (and before React paints: no flash of another look).
   await page.reload();

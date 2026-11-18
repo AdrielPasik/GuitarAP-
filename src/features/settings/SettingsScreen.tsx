@@ -24,7 +24,8 @@ import { libraryRepository } from '@/data/library-repository';
 import { belongsToOwner, libraryScope } from '@/data/library-scope';
 import { describeLastSync } from '@/features/account/account-status';
 import { diagnosticText } from '@/features/sync/diagnostic';
-import { SKINS, useSkin } from '@/features/theme/skin';
+import { previewSkin, SKINS, useSkin, type Skin } from '@/features/theme/skin';
+import { Cover } from '@/features/library/Cover';
 import { ConflictsSection } from '@/features/settings/ConflictsSection';
 import { DataSection } from '@/features/settings/DataSection';
 import { INSTRUMENT_KINDS, SYSTEM_INSTRUMENT } from '@/audio/instruments';
@@ -482,6 +483,79 @@ function CollaborationSection() {
   );
 }
 
+/**
+ * Level A personalisation. Choosing a card PREVIEWS the universe on the whole app (nothing saved); «Aplicar» keeps it,
+ * «Cancelar» (or leaving the page) returns to the saved one. Folders keep their own organisation either way.
+ */
+function ThemePicker({ skin, setSkin, theme }: { skin: Skin; setSkin: (skin: Skin) => void; theme: 'light' | 'dark' }) {
+  const [trying, setTrying] = useState<Skin | null>(null);
+  useEffect(() => {
+    previewSkin(trying, skin);
+  }, [trying, skin]);
+  useEffect(() => () => previewSkin(null, skin), [skin]);
+  const tryingInfo = SKINS.find((item) => item.id === trying);
+  return (
+    <fieldset className="skin-picker">
+      <legend>Universo visual</legend>
+      <p className="muted small">Cambia tipografía, superficies, texturas, encabezados y portadas en toda la app. Los controles, el orden de la pantalla y los colores de tónica, tercera, quinta y séptima son los mismos en todos. La organización de tus carpetas no cambia. Se guarda en este dispositivo.</p>
+      {tryingInfo && trying !== skin && (
+        <div className="theme-preview-bar" role="status">
+          <span>Probando <b>{tryingInfo.name}</b> en toda la app. Todavía no se guardó.</span>
+          <span className="spacer" />
+          <button type="button" className="btn" onClick={() => setTrying(null)}>Cancelar</button>
+          <button type="button" className="btn btn-primary" onClick={() => { setSkin(tryingInfo.id); setTrying(null); }}>Aplicar {tryingInfo.name}</button>
+        </div>
+      )}
+      <div className="skin-grid" role="group" aria-label="Universo visual">
+        {SKINS.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            className="skin-card"
+            aria-pressed={skin === item.id}
+            data-trying={trying === item.id && trying !== skin}
+            aria-label={`${item.name}, ${item.era}${skin === item.id ? ', en uso' : ''}`}
+            onClick={() => setTrying(item.id === skin ? null : item.id)}
+          >
+            <span className="skin-preview" data-skin={item.id} data-theme={theme} aria-hidden="true">
+              <span className="cover"><span>{item.name}</span></span>
+              <span className="mini">
+                <span className="mini-lib">
+                  <span className="mini-title">Canciones</span>
+                  <span className="mini-sleeves">
+                    <Cover title="A" style="sun" hue={18} size="sm" />
+                    <Cover title="B" style="grooves" hue={200} size="sm" />
+                    <Cover title="C" style="type" hue={320} size="sm" />
+                  </span>
+                </span>
+                <span className="mini-editor">
+                  <span className="mini-title">Letra</span>
+                  <span className="mini-line">La noche cae despacio</span>
+                  <span className="mini-chords"><span>Am</span><span>F</span><span>C</span><span>G</span></span>
+                </span>
+              </span>
+              <span className="page">
+                <span className="dot root">1</span>
+                <span className="dot third">3</span>
+                <span className="dot fifth">5</span>
+                <span className="dot seventh">7</span>
+                <span className="btn-mini">Play</span>
+              </span>
+            </span>
+            <span className="era">{item.era}</span>
+            <strong>{item.name}</strong>
+            <span className="skin-swatches" aria-hidden="true">{item.swatches.map((color) => <i key={color} style={{ background: color }} />)}</span>
+            <small>{item.blurb}</small>
+            <span className="type-sample">{item.type}</span>
+            {skin === item.id && <span className="muted small">✓ En uso</span>}
+            {trying === item.id && trying !== skin && <span className="muted small">Vista previa activa</span>}
+          </button>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
 function AppearanceSection() {
   const theme = useContext(ThemeContext);
   const fx = useFxPrefs();
@@ -491,28 +565,7 @@ function AppearanceSection() {
     <>
       <h2>Apariencia</h2>
       <div className="stack">
-        <fieldset className="skin-picker">
-          <legend>Universo visual</legend>
-          <p className="muted small">Cambia los colores, las texturas y el ambiente. Los controles, el orden de la pantalla y los colores de tónica, tercera, quinta y séptima son los mismos en todos. Se guarda en este dispositivo.</p>
-          <div className="skin-grid" role="group" aria-label="Universo visual">
-            {SKINS.map((item) => (
-              <button key={item.id} type="button" className="skin-card" aria-pressed={skin === item.id} onClick={() => setSkin(item.id)}>
-                <span className="skin-preview" data-skin={item.id} data-theme={theme?.theme ?? 'light'} aria-hidden="true">
-                  <span className="cover"><span>Tema 1</span></span>
-                  <span className="page">
-                    <span className="dot root">1</span>
-                    <span className="dot third">3</span>
-                    <span className="dot fifth">5</span>
-                    <span className="dot seventh">7</span>
-                    <span className="btn-mini">Play</span>
-                  </span>
-                </span>
-                <strong>{item.name}</strong>
-                <small>{item.blurb}</small>
-              </button>
-            ))}
-          </div>
-        </fieldset>
+        <ThemePicker skin={skin} setSkin={setSkin} theme={theme?.theme ?? 'light'} />
         <div className="field">
           <span>Claro u oscuro</span>
           <Segmented<'light' | 'dark'>

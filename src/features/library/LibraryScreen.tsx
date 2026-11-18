@@ -19,6 +19,14 @@ import { libraryRepository, type MaterialTemplate } from '@/data/library-reposit
 import { ancestry, pathOf } from '@/data/paths';
 import { useLibrary } from '@/data/use-library';
 import { useAccount } from '@/features/account/account-context';
+import {
+  applyToDescendants, clonePresentation, DEFAULT_PRESENTATION, resolvePresentation, ROOT_KEY, SORT_NAMES, type Presentation, type PresentationMap,
+  type SortKey,
+} from '@/core/presentation';
+import { CustomizePanel, type DraftMode } from '@/features/library/CustomizePanel';
+import { FolderView } from '@/features/library/FolderView';
+import { availability, docEntry, nodeEntry, type Entry } from '@/features/library/folder-entries';
+import { canEditMeta, MetaDialog } from '@/features/library/MetaDialog';
 
 type Naming = { mode: 'folder' | 'song' | 'rename-node' | 'rename-doc'; id?: string; initial?: string } | null;
 
@@ -78,7 +86,12 @@ export function LibraryScreen() {
     };
   }, [collab, signedIn, gateway, sharing]);
   const [moving, setMoving] = useState<{ kind: 'doc' | 'node'; id: string; title: string; from: string | null } | null>(null);
-  const [sort, setSort] = usePref<'recent' | 'name'>('library-sort', 'recent');
+  const [sort] = usePref<'recent' | 'name'>('library-sort', 'recent');
+  // Level B personalisation: how each folder shows itself. Per person and per device, never inside a document.
+  const [presentations, setPresentations] = usePref<PresentationMap>('folder-presentations', {});
+  const [featuredMap, setFeaturedMap] = usePref<Record<string, string[]>>('folder-featured', {});
+  const [customizing, setCustomizing] = useState<{ mode: DraftMode; draft: Presentation } | null>(null);
+  const [metaFor, setMetaFor] = useState<MusicalDocument | null>(null);
   const [bannerHidden, setBannerHidden] = usePref('local-banner-hidden', false);
   const current = nodes.find((node) => node.id === folderId) ?? null;
   const trail = useMemo(() => ancestry(nodes, folderId), [nodes, folderId]);
@@ -122,6 +135,49 @@ export function LibraryScreen() {
   const countIn = (node: LibraryNode) =>
     documents.filter((item) => item.nodeId === node.id || item.songId === node.id).length;
   const everything = documents.length + nodes.length;
+  const parentOf = (id: string) => nodes.find((node) => node.id === id)?.parentId;
+  const folderKey = folderId ?? ROOT_KEY;
+  const resolved = useMemo(() => resolvePresentation(presentations, folderId, (id) => nodes.find((node) => node.id === id)?.parentId), [presentations, folderId, nodes]);
+  const storedEntry = presentations[folderKey];
+  const currentMode: DraftMode = storedEntry?.mode ?? (folderId && parentOf(folderId) ? 'inherit' : 'default');
+  const parentNode = current?.parentId ? nodes.find((node) => node.id === current.parentId) ?? null : null;
+  /** While the editor is open its draft IS the folder: the preview is the real view. */
+  const presentation: Presentation = customizing
+    ? customizing.mode === 'own'
+      ? customizing.draft
+      : customizing.mode === 'inherit'
+        ? resolvePresentation({ ...presentations, [folderKey]: { mode: 'inherit' } }, folderId, parentOf).presentation
+        : DEFAULT_PRESENTATION
+    : resolved.presentation;
+  const entries = useMemo<Entry[]>(() => {
+    if (text) return [];
+    return [
+      ...children.map((node) => nodeEntry(node, countIn(node), shared.has(node.id))),
+      ...items.map((item, index) => docEntry(item, shared.has(item.id), index)),
+    ];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [text, children.length, nodes, items, shared, documents]);
+  const featuredIds = featuredMap[folderKey] ?? [];
+  const toggleFeatured = (entry: Entry) => {
+    const list = featuredMap[folderKey] ?? [];
+    setFeaturedMap({ ...featuredMap, [folderKey]: list.includes(entry.id) ? list.filter((id) => id !== entry.id) : [...list, entry.id].slice(-24) });
+  };
+  const startCustomizing = () => setCustomizing({ mode: currentMode, draft: clonePresentation(resolved.presentation) });
+  const saveCustomizing = () => {
+    if (!customizing) return;
+    const next = { ...presentations };
+    if (customizing.mode === 'own') next[folderKey] = { mode: 'own', presentation: clonePresentation(customizing.draft) };
+    else if (customizing.mode === 'default') next[folderKey] = { mode: 'default' };
+    else delete next[folderKey];
+    setPresentations(next);
+    setCustomizing(null);
+    toast.show('Se guardó la presentación de la carpeta.');
+  };
+  /** «Ordenar» is a quick edit of this folder's presentation: explicit, and only this folder. */
+  const setFolderSort = (value: SortKey) => {
+    setPresentations({ ...presentations, [folderKey]: { mode: 'own', presentation: { ...clonePresentation(resolved.presentation), sort: value } } });
+  };
+  const available = availability(entries);
   /** The song or folder a part belongs to: the container that «share my song» means. */
   const partOf = (item: { songId?: string | null; nodeId?: string | null }): ShareProject | undefined => {
     const container = nodes.find((node) => node.id === (item.songId ?? item.nodeId) && !node.deletedAt);
@@ -146,6 +202,52 @@ export function LibraryScreen() {
     setParams(id ? { c: id } : {});
     setQuery('');
   }
+
+  const nodeMenu = (node: LibraryNode) => (
+                <Menu
+                  label={`Opciones de ${node.name}`}
+                  align="end"
+                  triggerClassName="icon-btn row-menu"
+                  trigger={<Icon name="more" />}
+                  items={[
+                    { label: 'Abrir', icon: 'folder', onSelect: () => goTo(node.id) },
+                    { label: 'Renombrar', icon: 'pencil', onSelect: () => setNaming({ mode: 'rename-node', id: node.id, initial: node.name }) },
+                    { label: 'Duplicar', icon: 'copy', onSelect: () => void libraryRepository.duplicateNode(node.id) },
+                    { label: 'Personalizar…', icon: 'palette', onSelect: () => goTo(node.id) },
+                    { label: 'Mover a…', onSelect: () => setMoving({ kind: 'node', id: node.id, title: node.name, from: node.parentId }) },
+                    { label: node.kind === 'song' ? 'Compartir proyecto…' : 'Compartir carpeta…', icon: 'share', onSelect: () => setSharing({ kind: 'node', id: node.id, title: node.name, nodeKind: node.kind === 'song' ? 'song' : 'folder' }) },
+                    {
+                      label: 'Enviar a la papelera',
+                      icon: 'trash',
+                      danger: true,
+                      onSelect: () => void libraryRepository.trashNode(node.id).then(() => toast.show(`«${node.name}» está en la papelera.`, { label: 'Deshacer', onAction: () => void libraryRepository.restoreNode(node.id) })),
+                    },
+                  ]}
+                />
+  );
+  const docMenu = (item: MusicalDocument) => (
+                  <Menu
+                    label={`Opciones de ${item.title || 'material sin título'}`}
+                    align="end"
+                    triggerClassName="icon-btn row-menu"
+                    trigger={<Icon name="more" />}
+                    items={[
+                      { label: 'Abrir', icon: 'pencil', onSelect: () => open(item) },
+                      { label: 'Practicar', icon: 'practice', onSelect: () => navigate(`/practica/${item.id}`) },
+                      { label: 'Renombrar', onSelect: () => setNaming({ mode: 'rename-doc', id: item.id, initial: item.title }) },
+                      ...(canEditMeta(item) ? [{ label: 'Ficha (artista, portada…)', icon: 'pencil' as const, onSelect: () => setMetaFor(item) }] : []),
+                      { label: 'Compartir…', icon: 'share', onSelect: () => setSharing({ kind: 'document', id: item.id, title: item.title, project: partOf(item) }) },
+                      { label: 'Duplicar', icon: 'copy', onSelect: () => void libraryRepository.duplicateDocument(item.id) },
+                      { label: 'Mover a…', onSelect: () => setMoving({ kind: 'doc', id: item.id, title: item.title, from: item.nodeId }) },
+                      {
+                        label: 'Enviar a la papelera',
+                        icon: 'trash',
+                        danger: true,
+                        onSelect: () => void libraryRepository.trashDocument(item.id).then(() => toast.show(`«${item.title || 'Material'}» está en la papelera.`, { label: 'Deshacer', onAction: () => void libraryRepository.restoreDocument(item.id) })),
+                      },
+                    ]}
+                  />
+  );
 
   const createMenu = (
     <Menu
@@ -238,14 +340,18 @@ export function LibraryScreen() {
             triggerClassName="btn btn-ghost"
             trigger={
               <>
-                {sort === 'recent' ? 'Recientes' : 'Nombre'} <Icon name="chevron-down" size={12} />
+                {SORT_NAMES[presentation.sort]} <Icon name="chevron-down" size={12} />
               </>
             }
-            items={[
-              { label: 'Más recientes primero', checked: sort === 'recent', onSelect: () => setSort('recent') },
-              { label: 'Por nombre', checked: sort === 'name', onSelect: () => setSort('name') },
-            ]}
+            items={(['updated', 'name', 'created', 'manual', 'kind', 'artist', 'key'] as SortKey[])
+              .filter((key) => (key === 'artist' ? available.artist : key === 'key' ? available.key : true))
+              .map((key) => ({ label: SORT_NAMES[key], checked: presentation.sort === key, onSelect: () => setFolderSort(key) }))}
           />
+          {!text && (
+            <button type="button" className="btn btn-ghost" aria-label="Personalizar carpeta" title="Personalizar cómo se ve esta carpeta" aria-pressed={Boolean(customizing)} onClick={() => (customizing ? setCustomizing(null) : startCustomizing())}>
+              <Icon name="palette" size={14} /> <span className="hide-narrow">Personalizar</span>
+            </button>
+          )}
           {current && current.kind !== 'song' && (
             <button type="button" className="btn" onClick={() => setSharing({ kind: 'node', id: current.id, title: current.name, nodeKind: 'folder' })}>
               <Icon name="share" size={14} /> Compartir carpeta
@@ -330,7 +436,7 @@ export function LibraryScreen() {
           </div>
         )}
 
-        {everything === 0 && !text ? (
+        {everything === 0 && !text && folderId === null ? (
           <div className="lib-empty scenic">
             <StudioScene variant="compact" />
             <h2>Tu estudio está vacío</h2>
@@ -354,95 +460,171 @@ export function LibraryScreen() {
             </div>
           </div>
         ) : (
+          text ? (
           <ul className="lib-list" aria-label={text ? 'Resultados de la búsqueda' : 'Contenido'}>
-            {children.map((node) => (
-              <li key={node.id} className={`lib-row node kind-${node.kind}`} style={{ ['--hue' as string]: hueOf(node.name) }}>
-                <button type="button" className="lib-open" onClick={() => goTo(node.id)}>
-                  <Glyph kind={node.kind} />
-                  <span className="lib-title">{node.name}</span>
-                  {shared.has(node.id) && <span className="lib-shared" role="img" aria-label="Compartida" title="Compartida"><Icon name="users" size={13} /></span>}
-                  <span className="lib-meta">
-                    {kindInfo[node.kind].label} · {countIn(node)} {countIn(node) === 1 ? 'elemento' : 'elementos'}
-                  </span>
-                  <span className="lib-date">{when(node.updatedAt)}</span>
-                </button>
-                <Menu
-                  label={`Opciones de ${node.name}`}
-                  align="end"
-                  triggerClassName="icon-btn row-menu"
-                  trigger={<Icon name="more" />}
-                  items={[
-                    { label: 'Abrir', icon: 'folder', onSelect: () => goTo(node.id) },
-                    { label: 'Renombrar', icon: 'pencil', onSelect: () => setNaming({ mode: 'rename-node', id: node.id, initial: node.name }) },
-                    { label: 'Duplicar', icon: 'copy', onSelect: () => void libraryRepository.duplicateNode(node.id) },
-                    { label: 'Mover a…', onSelect: () => setMoving({ kind: 'node', id: node.id, title: node.name, from: node.parentId }) },
-                    { label: node.kind === 'song' ? 'Compartir proyecto…' : 'Compartir carpeta…', icon: 'share', onSelect: () => setSharing({ kind: 'node', id: node.id, title: node.name, nodeKind: node.kind === 'song' ? 'song' : 'folder' }) },
-                    {
-                      label: 'Enviar a la papelera',
-                      icon: 'trash',
-                      danger: true,
-                      onSelect: () => void libraryRepository.trashNode(node.id).then(() => toast.show(`«${node.name}» está en la papelera.`, { label: 'Deshacer', onAction: () => void libraryRepository.restoreNode(node.id) })),
-                    },
-                  ]}
-                />
-              </li>
-            ))}
-            {items.map((item) => {
-              const kind = documentKind(item);
-              return (
-                <li key={item.id} className={`lib-row doc kind-${kind}`}>
-                  <button type="button" className="lib-open" onClick={() => open(item)}>
-                    <Glyph kind={kind} />
-                    <span className="lib-title">{item.title || 'Sin título'}</span>
-                    {shared.has(item.id) && <span className="lib-shared" role="img" aria-label="Compartido" title="Compartido"><Icon name="users" size={13} /></span>}
+              {children.map((node) => (
+                <li key={node.id} className={`lib-row node kind-${node.kind}`} style={{ ['--hue' as string]: hueOf(node.name) }}>
+                  <button type="button" className="lib-open" onClick={() => goTo(node.id)}>
+                    <Glyph kind={node.kind} />
+                    <span className="lib-title">{node.name}</span>
+                    {shared.has(node.id) && <span className="lib-shared" role="img" aria-label="Compartida" title="Compartida"><Icon name="users" size={13} /></span>}
                     <span className="lib-meta">
-                      {kindInfo[kind].label}
-                      {text || current === null ? (pathOf(nodes, item.songId ?? item.nodeId) ? ` · ${pathOf(nodes, item.songId ?? item.nodeId)}` : '') : ''}
+                      {kindInfo[node.kind].label} · {countIn(node)} {countIn(node) === 1 ? 'elemento' : 'elementos'}
                     </span>
-                    <span className="lib-date">{when(item.updatedAt)}</span>
+                    <span className="lib-date">{when(node.updatedAt)}</span>
                   </button>
                   <Menu
-                    label={`Opciones de ${item.title || 'material sin título'}`}
+                    label={`Opciones de ${node.name}`}
                     align="end"
                     triggerClassName="icon-btn row-menu"
                     trigger={<Icon name="more" />}
                     items={[
-                      { label: 'Abrir', icon: 'pencil', onSelect: () => open(item) },
-                      { label: 'Practicar', icon: 'practice', onSelect: () => navigate(`/practica/${item.id}`) },
-                      { label: 'Renombrar', onSelect: () => setNaming({ mode: 'rename-doc', id: item.id, initial: item.title }) },
-                      { label: 'Compartir…', icon: 'share', onSelect: () => setSharing({ kind: 'document', id: item.id, title: item.title, project: partOf(item) }) },
-                      { label: 'Duplicar', icon: 'copy', onSelect: () => void libraryRepository.duplicateDocument(item.id) },
-                      { label: 'Mover a…', onSelect: () => setMoving({ kind: 'doc', id: item.id, title: item.title, from: item.nodeId }) },
+                      { label: 'Abrir', icon: 'folder', onSelect: () => goTo(node.id) },
+                      { label: 'Renombrar', icon: 'pencil', onSelect: () => setNaming({ mode: 'rename-node', id: node.id, initial: node.name }) },
+                      { label: 'Duplicar', icon: 'copy', onSelect: () => void libraryRepository.duplicateNode(node.id) },
+                      { label: 'Mover a…', onSelect: () => setMoving({ kind: 'node', id: node.id, title: node.name, from: node.parentId }) },
+                      { label: node.kind === 'song' ? 'Compartir proyecto…' : 'Compartir carpeta…', icon: 'share', onSelect: () => setSharing({ kind: 'node', id: node.id, title: node.name, nodeKind: node.kind === 'song' ? 'song' : 'folder' }) },
                       {
                         label: 'Enviar a la papelera',
                         icon: 'trash',
                         danger: true,
-                        onSelect: () => void libraryRepository.trashDocument(item.id).then(() => toast.show(`«${item.title || 'Material'}» está en la papelera.`, { label: 'Deshacer', onAction: () => void libraryRepository.restoreDocument(item.id) })),
+                        onSelect: () => void libraryRepository.trashNode(node.id).then(() => toast.show(`«${node.name}» está en la papelera.`, { label: 'Deshacer', onAction: () => void libraryRepository.restoreNode(node.id) })),
                       },
                     ]}
                   />
                 </li>
-              );
-            })}
-            {!children.length && !items.length && (
-              <li className="lib-none">
-                {text ? 'No encontramos materiales con ese nombre.' : 'Todavía no hay nada acá.'}
-                {!text && (
-                  <span className="empty-actions inline">
-                    <button type="button" className="btn btn-link" onClick={() => void createFrom('riff')}>
-                      Escribir una tablatura
+              ))}
+              {items.map((item) => {
+                const kind = documentKind(item);
+                return (
+                  <li key={item.id} className={`lib-row doc kind-${kind}`}>
+                    <button type="button" className="lib-open" onClick={() => open(item)}>
+                      <Glyph kind={kind} />
+                      <span className="lib-title">{item.title || 'Sin título'}</span>
+                      {shared.has(item.id) && <span className="lib-shared" role="img" aria-label="Compartido" title="Compartido"><Icon name="users" size={13} /></span>}
+                      <span className="lib-meta">
+                        {kindInfo[kind].label}
+                        {text || current === null ? (pathOf(nodes, item.songId ?? item.nodeId) ? ` · ${pathOf(nodes, item.songId ?? item.nodeId)}` : '') : ''}
+                      </span>
+                      <span className="lib-date">{when(item.updatedAt)}</span>
                     </button>
-                    <button type="button" className="btn btn-link" onClick={() => void createFrom('scale')}>
-                      Marcar una escala
-                    </button>
-                  </span>
-                )}
-              </li>
-            )}
-          </ul>
+                    <Menu
+                      label={`Opciones de ${item.title || 'material sin título'}`}
+                      align="end"
+                      triggerClassName="icon-btn row-menu"
+                      trigger={<Icon name="more" />}
+                      items={[
+                        { label: 'Abrir', icon: 'pencil', onSelect: () => open(item) },
+                        { label: 'Practicar', icon: 'practice', onSelect: () => navigate(`/practica/${item.id}`) },
+                        { label: 'Renombrar', onSelect: () => setNaming({ mode: 'rename-doc', id: item.id, initial: item.title }) },
+                        { label: 'Compartir…', icon: 'share', onSelect: () => setSharing({ kind: 'document', id: item.id, title: item.title, project: partOf(item) }) },
+                        { label: 'Duplicar', icon: 'copy', onSelect: () => void libraryRepository.duplicateDocument(item.id) },
+                        { label: 'Mover a…', onSelect: () => setMoving({ kind: 'doc', id: item.id, title: item.title, from: item.nodeId }) },
+                        {
+                          label: 'Enviar a la papelera',
+                          icon: 'trash',
+                          danger: true,
+                          onSelect: () => void libraryRepository.trashDocument(item.id).then(() => toast.show(`«${item.title || 'Material'}» está en la papelera.`, { label: 'Deshacer', onAction: () => void libraryRepository.restoreDocument(item.id) })),
+                        },
+                      ]}
+                    />
+                  </li>
+                );
+              })}
+              {!children.length && !items.length && (
+                <li className="lib-none">
+                  {text ? 'No encontramos materiales con ese nombre.' : 'Todavía no hay nada acá.'}
+                  {!text && (
+                    <span className="empty-actions inline">
+                      <button type="button" className="btn btn-link" onClick={() => void createFrom('riff')}>
+                        Escribir una tablatura
+                      </button>
+                      <button type="button" className="btn btn-link" onClick={() => void createFrom('scale')}>
+                        Marcar una escala
+                      </button>
+                    </span>
+                  )}
+                </li>
+              )}
+            </ul>
+          ) : (
+            <FolderView
+              folder={{
+                id: folderId,
+                name: current?.name ?? 'Biblioteca',
+                kind: current ? (current.kind === 'song' ? 'song' : 'folder') : 'root',
+                shared: current ? shared.has(current.id) : false,
+                hue: hueOf(current?.name ?? 'Biblioteca'),
+              }}
+              entries={entries}
+              presentation={folderId === null ? { ...presentation, modules: presentation.modules.filter((key) => key !== 'header') } : presentation}
+              featuredIds={featuredIds}
+              onShare={current ? () => setSharing({ kind: 'node', id: current.id, title: current.name, nodeKind: current.kind === 'song' ? 'song' : 'folder' }) : undefined}
+              header={
+                <>
+                  <button type="button" className="btn btn-primary" onClick={() => setNewSong(true)}><Icon name="song" size={14} /> Nueva canción</button>
+                  <button type="button" className="btn" onClick={() => void createFrom('melody')}><Icon name="melody" size={14} /> Melodía</button>
+                  <button type="button" className="btn" onClick={() => void createFrom('scale')}><Icon name="map" size={14} /> Escala</button>
+                  <button type="button" className="btn btn-ghost" onClick={() => (customizing ? setCustomizing(null) : startCustomizing())}><Icon name="palette" size={14} /> Personalizar</button>
+                </>
+              }
+              emptyActions={
+                <>
+                  <button type="button" className="btn btn-link" onClick={() => setNewSong(true)}><Icon name="plus" size={13} /> Nueva canción</button>
+                  <button type="button" className="btn btn-link" onClick={() => void createFrom('riff')}>Escribir una tablatura</button>
+                  <button type="button" className="btn btn-link" onClick={() => void createFrom('scale')}>Marcar una escala</button>
+                </>
+              }
+              actions={{
+                open: (entry) => (entry.type === 'node' ? goTo(entry.id) : navigate(`/material/${entry.id}`)),
+                practice: (entry) => navigate(`/practica/${entry.id}`),
+                isFeatured: (entry) => featuredIds.includes(entry.id),
+                toggleFeatured,
+                menu: (entry) => (entry.node ? nodeMenu(entry.node) : entry.doc ? docMenu(entry.doc) : null),
+              }}
+            />
+          )
         )}
       </section>
 
+      {customizing && (
+        <CustomizePanel
+          folderName={current?.name ?? 'Biblioteca'}
+          parentName={folderId && parentNode ? parentNode.name : null}
+          isRoot={folderId === null}
+          mode={customizing.mode}
+          setMode={(mode) => setCustomizing((value) => (value ? { ...value, mode, draft: mode === 'own' ? value.draft : clonePresentation(mode === 'default' ? DEFAULT_PRESENTATION : resolvePresentation({ ...presentations, [folderKey]: { mode: 'inherit' } }, folderId, parentOf).presentation) } : value))}
+          draft={customizing.draft}
+          setDraft={(draft) => setCustomizing((value) => (value ? { ...value, draft } : value))}
+          available={available}
+          folders={nodes.filter((node) => node.kind === 'folder' && node.id !== folderId && !node.deletedAt).map((node) => ({ id: node.id, path: pathOf(nodes, node.id) }))}
+          hasChildren={folderId !== null && nodes.some((node) => node.parentId === folderId)}
+          onCancel={() => setCustomizing(null)}
+          onSave={saveCustomizing}
+          onCopyTo={(id) => {
+            setPresentations({ ...presentations, [id]: { mode: 'own', presentation: clonePresentation(customizing.draft) } });
+            toast.show(`Se copió la presentación a «${nodes.find((node) => node.id === id)?.name ?? 'la carpeta'}».`);
+          }}
+          onApplyToChildren={() => {
+            if (!folderId) return;
+            const next = applyToDescendants({ ...presentations, [folderKey]: { mode: 'own', presentation: clonePresentation(customizing.draft) } }, folderId, (id) => nodes.filter((node) => node.parentId === id).map((node) => node.id));
+            setPresentations(next);
+            setCustomizing((value) => (value ? { ...value, mode: 'own' } : value));
+            toast.show('Las subcarpetas ahora heredan esta presentación.');
+          }}
+        />
+      )}
+      {metaFor && (
+        <MetaDialog
+          doc={metaFor}
+          onClose={() => setMetaFor(null)}
+          onSave={async (next) => {
+            await libraryRepository.saveDocument(next, 'manual');
+            setMetaFor(null);
+            toast.show('Ficha guardada. La música no cambió.');
+          }}
+        />
+      )}
       {sharing && (
         <Suspense fallback={null}>
           <ShareDialog kind={sharing.kind} id={sharing.id} title={sharing.title} project={sharing.project} nodeKind={sharing.nodeKind} onClose={() => setSharing(null)} />

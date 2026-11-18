@@ -943,7 +943,7 @@
 /* the notebook leaves room for the explorer instead of hiding behind it */
 @media (min-width: 1100px) {
   .nb-page.with-tools {
-    margin-right: 410px;
+    margin-right: calc(var(--tools-w, 400px) + 10px);
   }
 }
 @media (max-width: 1099px) {

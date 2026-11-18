@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { backend, transport } from '@/audio/engine';
 import { baseTempo, clampBpm, effectiveTempo } from '@/audio/tempo';
-import { getAudioContext, setClickAccent, setClickVolume } from '@/audio/webaudio-backend';
+import { getAudioContext, setClickAccent, setClickSound, setClickVolume, type ClickSound } from '@/audio/webaudio-backend';
 import { usePref } from '@/core/prefs';
 import { MetronomeContext as Context, type Metro } from '@/features/metronome/metronome-context';
 
@@ -18,7 +18,8 @@ export function MetronomeProvider({ children }: { children: ReactNode }) {
   // Remembered per device. Moderate by default; the person raises it. Independent of the instruments' volume.
   const [volume, setVolumeState] = usePref<number>('metronome.volume', 0.6);
   const [accent, setAccentState] = usePref<boolean>('metronome.accent', true);
-  const [beatsPerMeasure, setBeatsPerMeasureState] = useState(4);
+  const [sound, setSoundState] = usePref<ClickSound>('metronome.sound', 'digital');
+  const [beatsPerMeasure, setBeatsPerMeasureState] = usePref<number>('metronome.beats', 4);
   const [practiceBpm, setPracticeBpm] = useState<number | undefined>(undefined);
   const [song, setSong] = useState<{ id: string | null; bpm?: number }>({ id: null });
   const timer = useRef<number | undefined>(undefined);
@@ -32,6 +33,9 @@ export function MetronomeProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     setClickAccent(accent);
   }, [accent]);
+  useEffect(() => {
+    setClickSound(sound);
+  }, [sound]);
 
   const inputs = { practice: practiceBpm, song: song.bpm, preference };
   const { bpm, source } = effectiveTempo(inputs);
@@ -93,6 +97,14 @@ export function MetronomeProvider({ children }: { children: ReactNode }) {
       resetPractice,
       setSongContext,
       accent,
+      sound,
+      setSound: (next: ClickSound) => setSoundState(next),
+      testClick: () => {
+        const ctx = getAudioContext();
+        void ctx.resume();
+        backend.playClick(ctx.currentTime + 0.03, true);
+        backend.playClick(ctx.currentTime + 0.43, false);
+      },
       setAccent: (on: boolean) => setAccentState(on),
       setVolume: (next_: number) => setVolumeState(Math.max(0, Math.min(1, next_))),
       setBeatsPerMeasure: (next_: number) => setBeatsPerMeasureState(Math.max(2, Math.min(12, next_))),
@@ -106,7 +118,7 @@ export function MetronomeProvider({ children }: { children: ReactNode }) {
         }
       },
     }),
-    [running, bpm, source, practiceBpm, song.bpm, baseBpm, beat, volume, accent, beatsPerMeasure, setBpm, resetPractice, setSongContext, setVolumeState, setAccentState],
+    [running, bpm, source, practiceBpm, song.bpm, baseBpm, beat, volume, accent, sound, setSoundState, setBeatsPerMeasureState, beatsPerMeasure, setBpm, resetPractice, setSongContext, setVolumeState, setAccentState],
   );
   return <Context value={value}>{children}</Context>;
 }

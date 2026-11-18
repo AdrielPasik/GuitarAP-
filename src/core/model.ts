@@ -141,7 +141,16 @@ export type SongMeta = {
   timeSignature?: string;
   status?: 'idea' | 'progress' | 'done';
   tags?: string[];
+  /** v0.7, all optional and never inferred: who recorded it when the song is someone else's. */
+  artist?: string;
+  album?: string;
+  year?: number;
+  /** An original abstract cover drawn by the interface (no image is stored in the document). */
+  cover?: { style: CoverStyle; hue?: number };
+  /** Personal notes shown in the library (study goals, what to practise). */
+  notes?: string;
 };
+export type CoverStyle = 'grooves' | 'bands' | 'sun' | 'grid' | 'wave' | 'type';
 
 /** A musical block inside a study notebook. Existing content models are reused as-is. */
 export type NotebookBlock =

@@ -1,0 +1,260 @@
+/* v0.7 — Harmony laboratory: three panel sizes, a large neck, shape cards, comparison. */
+
+.tools-panel {
+  width: var(--tools-w, 400px);
+  container: tools / inline-size;
+}
+.tools-head {
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.tools-modes {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  margin-left: auto;
+}
+.tools-modes .segmented button {
+  padding: 4px 8px;
+}
+.tools-resizer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 10px;
+  cursor: col-resize;
+  touch-action: none;
+  z-index: 2;
+}
+.tools-resizer::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 50%;
+  width: 3px;
+  height: 46px;
+  transform: translateY(-50%);
+  border-radius: 3px;
+  background: var(--line-2);
+  transition: background 0.15s;
+}
+.tools-resizer:hover::after,
+.tools-resizer:focus-visible::after {
+  background: var(--accent);
+}
+.tools-panel.mode-full {
+  left: 0;
+  width: auto !important;
+  padding: 18px clamp(16px, 4vw, 48px);
+  border-left: none;
+}
+.tools-panel.mode-full .tools-body {
+  width: min(1240px, 100%);
+  margin: 0 auto;
+}
+.tools-panel.mode-full .tools-head,
+.tools-panel.mode-full .tools-note,
+.tools-panel.mode-full > .segmented {
+  width: min(1240px, 100%);
+  margin-inline: auto;
+}
+@media (min-width: 1100px) {
+  html[data-harmony='open'] .main {
+    margin-right: calc(var(--tools-w, 400px) + 10px);
+  }
+  html[data-harmony='full'] .main {
+    margin-right: 0;
+  }
+}
+@media (max-width: 1099px) {
+  .tools-panel.mode-wide {
+    height: calc(100dvh - var(--topbar-h));
+    width: 100vw !important;
+  }
+  .tools-resizer {
+    display: none;
+  }
+  .tools-panel.mode-full {
+    top: var(--topbar-h);
+    height: auto;
+    border-radius: 0;
+  }
+}
+
+/* --- chord lab --- */
+.lab-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 14px;
+}
+.lab-formula {
+  margin: 0;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.95rem;
+  color: var(--ink-2);
+  letter-spacing: 0.02em;
+}
+.lab-change {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  font-size: 0.9rem;
+}
+.lab-change .chip {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 0.82rem;
+}
+.lab-change .chip.add {
+  background: color-mix(in srgb, var(--h-fifth) 18%, transparent);
+  color: var(--ink);
+  border: 1px solid var(--h-fifth);
+}
+.lab-change .chip.del {
+  background: color-mix(in srgb, var(--h-seventh) 14%, transparent);
+  color: var(--ink);
+  border: 1px dashed var(--h-seventh);
+}
+.lab-quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.lab-quick .pill.on {
+  background: var(--accent);
+  color: var(--on-accent);
+  border-color: var(--accent);
+}
+.lab-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 8px;
+}
+.lab-shape-facts {
+  margin: 0;
+  font-size: 0.92rem;
+}
+.voicing-omit {
+  color: var(--h-seventh);
+  font-weight: 600;
+  font-size: 0.8rem;
+}
+.voicing-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(124px, 1fr));
+  gap: 8px;
+}
+.voicing-card {
+  position: relative;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--raised);
+  display: grid;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.voicing-card.on {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+.voicing-card.cmp {
+  outline: 2px dashed var(--brass, var(--accent));
+  outline-offset: 2px;
+}
+.voicing-pick {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  padding: 8px 6px 4px;
+  background: none;
+  border: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.voicing-shape {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-weight: 700;
+  font-size: 0.86rem;
+}
+.voicing-meta {
+  font-size: 0.74rem;
+  color: var(--ink-3);
+}
+.voicing-actions {
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+  padding: 0 0 6px;
+}
+.voicing-actions .icon-btn.on {
+  color: var(--accent);
+}
+.chord-diagram text {
+  font-family: var(--font-ui, system-ui, sans-serif);
+}
+.lab-compare {
+  border: 1px solid var(--line-2);
+  border-radius: 12px;
+  padding: 10px 14px;
+  background: var(--sunken);
+}
+.lab-compare-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+}
+.lab-compare figure {
+  margin: 0;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+.lab-compare figcaption {
+  display: grid;
+  gap: 2px;
+  font-size: 0.9rem;
+}
+.inversion-legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  font-size: 0.9rem;
+}
+.inversion-legend span {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  margin-left: 4px;
+}
+
+/* In the wide panel and the full lab the neck gets room and the shapes sit beside it. */
+@container tools (min-width: 760px) {
+  .voicing-grid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  }
+  .lab .chord-tones {
+    flex-wrap: nowrap;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .voicing-card,
+  .tools-resizer::after {
+    transition: none;
+  }
+}
+
+/* Metronome sounds */
+.metro-sounds { border: 1px solid var(--line); border-radius: 10px; padding: 6px 10px 8px; margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px; }
+.metro-sounds legend { font-size: 0.78rem; color: var(--ink-3); padding: 0 4px; }
+.metro-sound { display: flex; gap: 6px; align-items: center; font-size: 0.9rem; cursor: pointer; }
+.metro-vol { min-width: 3ch; font-variant-numeric: tabular-nums; font-size: 0.85rem; color: var(--ink-2); }

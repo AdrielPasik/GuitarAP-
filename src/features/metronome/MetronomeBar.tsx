@@ -1,3 +1,4 @@
+import { CLICK_SOUNDS } from '@/audio/webaudio-backend';
 import { useState } from 'react';
 import { Icon } from '@/components/ui/Icon';
 import { Popover } from '@/components/ui/Popover';
@@ -116,7 +117,21 @@ export function MetronomeBar() {
                 value={metro.volume}
                 onChange={(event) => metro.setVolume(Number(event.target.value))}
               />
+              <output className="metro-vol" aria-hidden="true">{Math.round(metro.volume * 100)}%</output>
             </label>
+            <fieldset className="metro-sounds">
+              <legend>Sonido del clic</legend>
+              {CLICK_SOUNDS.map((sound) => (
+                <label key={sound.id} className="metro-sound" title={sound.blurb}>
+                  <input type="radio" name="metro-sound" value={sound.id} checked={metro.sound === sound.id} onChange={() => metro.setSound(sound.id)} />
+                  <span>{sound.name}</span>
+                </label>
+              ))}
+            </fieldset>
+            <button type="button" className="btn" onClick={metro.testClick}>
+              <Icon name="play" size={12} /> Probar sonido
+            </button>
+            <p className="muted small">El tempo que ajustás acá es de práctica: no cambia el BPM guardado en la canción.</p>
           </div>
         )}
       </Popover>

@@ -59,6 +59,11 @@ const paths = {
   fretboard: 'M2 3.5h12v9H2zM5.3 3.5v9M8.6 3.5v9M11.9 3.5v9M2 6.5h12M2 9.5h12',
   home: 'M2.5 7.5L8 2.8l5.5 4.7V13h-3.5V9.5H6V13H2.5z',
   signin: 'M6 3.5H3.5v9H6M7 8h6.5M11 5.5L13.5 8 11 10.5',
+  columns: 'M2.5 3h4.5v10H2.5zM9 3h4.5v10H9z',
+  expand: 'M9.5 2.5h4v4M13.5 2.5L9 7M6.5 13.5h-4v-4M2.5 13.5L7 9',
+  shrink: 'M13.5 6.5h-4v-4M9.5 6.5L14 2M2.5 9.5h4v4M6.5 9.5L2 14',
+  sidebar: 'M2.5 3h11v10h-11zM9.5 3v10',
+  palette: 'M8 2.5a5.5 5.5 0 100 11c1 0 1.2-.8.8-1.5-.5-.8 0-1.8 1-1.8h1.4a2.3 2.3 0 002.3-2.3C13.5 4.8 11 2.5 8 2.5zM5 8a.8.8 0 100-.1M6.5 5a.8.8 0 100-.1M9.5 5a.8.8 0 100-.1',
 } as const;
 
 export type IconName = keyof typeof paths | 'pick';
