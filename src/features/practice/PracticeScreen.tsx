@@ -12,6 +12,7 @@ import { MaterialExplorer } from '@/features/practice/MaterialExplorer';
 import { partsOf } from '@/features/practice/practice-tree';
 import { collabApi, type SharedDocument } from '@/features/share/collab-api';
 import { useGateway } from '@/features/share/use-collab';
+import { useHarmonyDocument } from '@/features/harmony-tools/harmony-context';
 import { everything } from '@/features/export/export-plan';
 
 const ExportDialog = lazy(() => import('@/features/export/ExportDialog').then((module) => ({ default: module.ExportDialog })));
@@ -66,6 +67,9 @@ export function PracticeScreen() {
   const outline = notebook ? notebookOutline(notebook) : [];
   const title = current?.title ?? sharedDoc?.title ?? '';
   const material = current?.id ?? sharedDoc?.id ?? '';
+
+  // Harmony is one tap away while practising: it opens on the material's key, as a free explorer (nothing to apply here).
+  useHarmonyDocument(notebook ? { id: `practica:${material}`, context: { key: notebook.meta?.key, bpm: notebook.meta?.bpm } } : null);
 
   const go = (target: string) => {
     setLast(target);

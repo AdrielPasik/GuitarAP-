@@ -13,9 +13,8 @@ describe('instrument resolution', () => {
     expect(resolveInstrument({ kind: 'melody', preference: 'guitar', explicit: 'piano' })).toEqual({ id: 'piano', source: 'block' });
     expect(resolveInstrument({ kind: 'tablature', explicit: 'piano' })).toEqual({ id: 'piano', source: 'block' });
   });
-  it('the old single global setting is respected only if the person had set it, below the new per-kind preference', () => {
-    expect(resolveInstrument({ kind: 'tablature', legacy: 'piano' })).toEqual({ id: 'piano', source: 'legacy' });
-    expect(resolveInstrument({ kind: 'tablature', legacy: 'piano', preference: 'guitar' })).toEqual({ id: 'guitar', source: 'preference' });
-    expect(resolveInstrument({ kind: 'melody', legacy: null })).toEqual({ id: 'piano', source: 'system' });
+  it('a tablature or a chord progression with no choice of its own is a guitar, whatever else was ever stored', () => {
+    expect(resolveInstrument({ kind: 'tablature', explicit: null, preference: null })).toEqual({ id: 'guitar', source: 'system' });
+    expect(resolveInstrument({ kind: 'chords', explicit: undefined })).toEqual({ id: 'guitar', source: 'system' });
   });
 });

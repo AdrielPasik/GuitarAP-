@@ -1271,3 +1271,85 @@ html[data-focus='true'] .practice-bar {
     grid-template-columns: 1fr;
   }
 }
+
+/* ================================================================ Armonía: a door in the top bar, a panel beside the work */
+.topbar-nav .nav-tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 11px;
+  border-radius: 6px;
+  color: var(--ink-2);
+  font-weight: 500;
+}
+.topbar-nav .nav-tool:hover {
+  background: rgb(255 255 255 / 0.07);
+  color: var(--ivory);
+}
+.topbar-nav .nav-tool[aria-pressed='true'] {
+  color: var(--ivory);
+  box-shadow: inset 0 -2px 0 var(--brass);
+  background: color-mix(in srgb, var(--brass) 14%, transparent);
+}
+@media (min-width: 1100px) {
+  html[data-harmony='open'] .main {
+    margin-right: 410px;
+  }
+}
+@media (max-width: 640px) {
+  .topbar-nav .nav-tool span {
+    display: none;
+  }
+}
+
+/* Instrument beside the play controls: a quick try-out, with an explicit way to keep it */
+.instrument-pick {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--line-2);
+  border-radius: 9px;
+  background: var(--sunken);
+}
+.instrument-pick button {
+  min-height: 26px;
+  padding: 0 9px;
+  border-radius: 7px;
+  color: var(--ink-2);
+  font-size: 0.82rem;
+  font-weight: 560;
+}
+.instrument-pick button.on {
+  background: var(--raised);
+  color: var(--ink);
+  font-weight: 700;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.2), inset 0 -2px 0 var(--accent);
+}
+.instrument-pick .instrument-note {
+  padding: 0 6px;
+  color: var(--accent-ink);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.instrument-pick .pin {
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 700;
+}
+
+.kb-target.play {
+  color: var(--stage-accent-ink);
+}
+.melody-keys {
+  margin: 4px 2px 0;
+}
+.melody-keys kbd {
+  padding: 0 5px;
+  border: 1px solid var(--line-2);
+  border-radius: 4px;
+  background: var(--sunken);
+  font: 0.78rem var(--font-mono);
+}

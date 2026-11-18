@@ -14,6 +14,9 @@ export type Metro = {
   baseBpm: number;
   beat: number;
   volume: number;
+  /** Stronger, higher first beat of each bar. */
+  accent: boolean;
+  setAccent: (on: boolean) => void;
   beatsPerMeasure: number;
   /** Changing the metronome tempo is a practice tempo: it does not touch any document. */
   setBpm: (value: number) => void;

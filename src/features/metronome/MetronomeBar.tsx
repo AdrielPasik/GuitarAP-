@@ -102,8 +102,11 @@ export function MetronomeBar() {
                 ))}
               </select>
             </label>
+            <label className="check">
+              <input type="checkbox" checked={metro.accent} onChange={(event) => metro.setAccent(event.target.checked)} /> Acentuar el primer tiempo
+            </label>
             <label className="field inline">
-              <span>Volumen</span>
+              <span>Volumen del clic</span>
               <input
                 aria-label="Volumen del metrónomo"
                 type="range"

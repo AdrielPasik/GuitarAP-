@@ -290,7 +290,7 @@ function ModulationTab({ from, setFrom, to, setTo, actions, style, listen }: {
  * The harmony explorer. It opens beside the notebook, starts from the notebook's key when there is one, and
  * changes nothing by itself: every effect on the music is a button with a name.
  */
-export function HarmonyTools({ context, actions, onClose }: { context: ToolsContext; actions: ToolsActions; onClose: () => void }) {
+export function HarmonyTools({ context, actions, hasDocument = true, onClose }: { context: ToolsContext; actions: ToolsActions; hasDocument?: boolean; onClose: () => void }) {
   const [style] = useNoteStyle();
   const metro = useMetronome();
   const [tab, setTab] = useState<Tab>(context.chord ? 'chords' : 'circle');
@@ -307,7 +307,7 @@ export function HarmonyTools({ context, actions, onClose }: { context: ToolsCont
         <h2><Icon name="circle" size={16} /> Explorar armonía</h2>
         <button type="button" className="icon-btn" aria-label="Cerrar herramientas musicales" onClick={onClose}><Icon name="close" size={16} /></button>
       </header>
-      <p className="muted small tools-note">Explorar no modifica tu composición. Solo los botones con nombre lo hacen.</p>
+      <p className="muted small tools-note">{hasDocument ? 'Explorar no modifica tu composición. Solo los botones con nombre lo hacen.' : 'Explorá libremente: no hay nada que modificar. Abrí una canción para poder agregar acordes o usar una tonalidad.'}</p>
       <Segmented<Tab>
         label="Herramienta"
         value={tab}

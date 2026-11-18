@@ -56,6 +56,8 @@ export function MelodyBlock({
   const [errors, setErrors] = useState<Array<{ token: string; reason: string }>>([]);
   const [keyboard, setKeyboard] = usePref<boolean>('melody.keyboard', true);
   const [mode, setMode] = useState<'add' | 'replace'>('add');
+  // Escribir (default): every key writes into the melody. Tocar: a free keyboard, nothing is written, saved or synced.
+  const [inputMode, setInputMode] = useState<'write' | 'play'>('write');
   const [nextBeats, setNextBeats] = useState(1);
   const [fresh, setFresh] = useState<string | null>(null);
   const [showLyrics, setShowLyrics] = useState(Boolean(content.phrase) || content.events.some((event) => event.lyric));
@@ -96,6 +98,11 @@ export function MelodyBlock({
   }
   /** One key of the keyboard: it sounds first (so it feels instant), then it writes or replaces. */
   function pressKey(midi: number) {
+    if (inputMode === 'play') {
+      // Free play: sound only. No selection, no onChange, no fresh-note highlight: the document is not touched at all.
+      void previewNote(midi, player.instrument, 0.9);
+      return;
+    }
     if (readOnly) return;
     hear(midi);
     if (replacing && onlyOneSelected) {
@@ -108,7 +115,9 @@ export function MelodyBlock({
   const onlyOneSelected = selection.length === 1 ? last : null;
   const replacing = mode === 'replace' && Boolean(onlyOneSelected && onlyOneSelected.type !== 'rest');
   const lastName = last && last.midi !== undefined ? formatNote(last.midi, style, last.accidental ?? 'sharp') : null;
-  const target = replacing && lastName
+  const target = inputMode === 'play'
+    ? { text: 'Tocando libremente: lo que toques no se agrega a la melodía', tone: 'play' }
+    : replacing && lastName
     ? { text: `Cada tecla reemplaza «${lastName}»`, tone: 'replace' }
     : last
       ? { text: `Cada tecla agrega una nota después de «${lastName ?? 'silencio'}»`, tone: 'add' }
@@ -176,6 +185,8 @@ export function MelodyBlock({
     const modifier = event.ctrlKey || event.metaKey;
     const key = event.key;
     if (modifier && key.toLowerCase() === 'c') { copy(); return; }
+    if (modifier && key.toLowerCase() === 'x' && !readOnly) { event.preventDefault(); if (selection.length) { copy(); remove(); } return; }
+    if (modifier && key.toLowerCase() === 'a') { event.preventDefault(); select(events.map((item) => item.id), events[0]?.id ?? null); return; }
     if (modifier && key.toLowerCase() === 'v' && !readOnly) { event.preventDefault(); paste(); return; }
     if (modifier && key.toLowerCase() === 'd' && !readOnly) { event.preventDefault(); duplicate(); return; }
     if (modifier || event.altKey) return;
@@ -306,8 +317,17 @@ export function MelodyBlock({
       {!readOnly && (
         <section className="kb-panel nb-chrome" aria-label="Escribir con el teclado">
           <div className="kb-bar">
+            <Segmented<'write' | 'play'>
+              label="Qué hace el teclado"
+              value={inputMode}
+              onChange={setInputMode}
+              options={[
+                { value: 'write', label: 'Escribir', title: 'Cada tecla agrega o reemplaza una nota de la melodía' },
+                { value: 'play', label: 'Tocar libremente', title: 'Explorá sonidos: nada se agrega ni se guarda' },
+              ]}
+            />
             <span className={`kb-target ${target.tone}`} role="status">{target.text}</span>
-            {onlyOneSelected && onlyOneSelected.type !== 'rest' && (
+            {inputMode === 'write' && onlyOneSelected && onlyOneSelected.type !== 'rest' && (
               <Segmented<'add' | 'replace'>
                 label="Qué hace cada tecla"
                 value={mode}
@@ -318,14 +338,14 @@ export function MelodyBlock({
                 ]}
               />
             )}
-            <Segmented<string>
+            {inputMode === 'write' && <Segmented<string>
               label="Duración de las notas nuevas"
               value={String(nextBeats)}
               onChange={(value) => setNextBeats(Number(value))}
               options={DURATIONS.map((item) => ({ value: String(item.beats), label: item.label, title: item.hint }))}
-            />
-            <button type="button" className="btn btn-ghost" title="Agregar un silencio" onClick={() => add([restEvent(nextBeats)], false, true)}>Silencio</button>
-            <label className="check small" title="Escuchar cada nota al tocarla o escribirla">
+            />}
+            {inputMode === 'write' && <button type="button" className="btn btn-ghost" title="Agregar un silencio" onClick={() => add([restEvent(nextBeats)], false, true)}>Silencio</button>}
+            <label className="check small" title="Escuchar cada nota al escribirla (en «Tocar libremente» siempre suena)">
               <input type="checkbox" checked={player.prefs.preview} onChange={(event) => player.prefs.setPreview(event.target.checked)} />
               <span>Escuchar al escribir</span>
             </label>
@@ -339,6 +359,11 @@ export function MelodyBlock({
         </section>
       )}
 
+      {!readOnly && selection.length > 0 && (
+        <p className="melody-keys muted small" aria-label="Atajos para editar notas">
+          <kbd>Supr</kbd> borra · <kbd>Ctrl</kbd>+<kbd>X</kbd> corta · <kbd>Ctrl</kbd>+<kbd>C</kbd>/<kbd>V</kbd> copia y pega · <kbd>Ctrl</kbd>+<kbd>D</kbd> duplica · <kbd>↑</kbd>/<kbd>↓</kbd> sube o baja medio tono · <kbd>Shift</kbd>+flechas elige varias
+        </p>
+      )}
       <div className="melody-info muted small" aria-live="polite">
         {events.length > 0 && (
           <span>

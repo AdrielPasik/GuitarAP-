@@ -24,10 +24,9 @@ import { usePref } from '@/core/prefs';
 import { applyNotes, generatedScaleNotes } from '@/features/fretboard/operations';
 import { keyTitle, tonicPc, type KeyRef } from '@/core/theory/keys';
 import { useNoteStyle } from '@/features/melody/note-style';
-import type { ToolsContext } from '@/features/harmony-tools/HarmonyTools';
+import { useHarmony, useHarmonyDocument } from '@/features/harmony-tools/harmony-context';
 import { everything, onlyBlock, type ExportSelection } from '@/features/export/export-plan';
 
-const HarmonyTools = lazy(() => import('@/features/harmony-tools/HarmonyTools').then((module) => ({ default: module.HarmonyTools })));
 const ShareDialog = lazy(() => import('@/features/share/ShareDialog').then((module) => ({ default: module.ShareDialog })));
 const ExportDialog = lazy(() => import('@/features/export/ExportDialog').then((module) => ({ default: module.ExportDialog })));
 
@@ -70,7 +69,7 @@ export function NotebookEditor({
   const [dialog, setDialog] = useState<null | 'history' | 'shortcuts'>(null);
   const [exportFor, setExportFor] = useState<ExportSelection | null>(null);
   const [activeBlock, setActiveBlock] = useState<string | null>(null);
-  const [tools, setTools] = useState<ToolsContext | null>(null);
+  const harmony = useHarmony();
   const [transfer, setTransfer] = useState<{ blockId: string; mode: TransferMode } | null>(null);
   const [outline, setOutline] = usePref<boolean>('outline-open', false);
   const [sharing, setSharing] = useState(false);
@@ -148,6 +147,21 @@ export function NotebookEditor({
     setExportFor(blockId ? onlyBlock(blockId) : everything(doc.notebook));
   }
 
+  useHarmonyDocument({
+    id: record.id,
+    context: { key: doc.notebook.meta?.key, bpm: doc.notebook.meta?.bpm },
+    actions: {
+      canAddChord: Boolean(chordsBlock),
+      onAddChord: (symbol) => addChords([symbol]),
+      onAddProgression: addChords,
+      onUseKey: (key) => {
+        doc.change((current) => setMeta(current, { key }));
+        toast.show(`Tonalidad del cuaderno: ${keyTitle(key, style)}. No se transpuso nada.`);
+      },
+      onCreateMap: createScaleMap,
+    },
+  });
+
   return (
     <section className="notebook" aria-label={`Material: ${doc.title}`}>
       <header className="doc-head">
@@ -181,9 +195,6 @@ export function NotebookEditor({
           </Link>
           <button type="button" className="btn" aria-pressed={outline} onClick={() => setOutline(!outline)}>
             <Icon name="index" size={14} /> <span className="btn-label">Índice</span>
-          </button>
-          <button type="button" className="btn" aria-pressed={Boolean(tools)} onClick={() => setTools((current) => (current ? null : { key: doc.notebook.meta?.key, bpm: doc.notebook.meta?.bpm }))}>
-            <Icon name="circle" size={14} /> <span className="btn-label">Armonía</span>
           </button>
           <button type="button" className="btn" onClick={() => setSharing(true)}>
             <Icon name="share" size={14} /> <span className="btn-label">Compartir</span>
@@ -224,7 +235,7 @@ export function NotebookEditor({
         </div>
       </header>
 
-      <div className={`nb-page${tools ? ' with-tools' : ''}${outline ? ' with-outline' : ''}`}>
+      <div className={`nb-page${outline ? ' with-outline' : ''}`}>
         {outline && <NotebookOutline notebook={doc.notebook} onClose={() => setOutline(false)} />}
         <div className="nb-main">
         <NotebookBlocks
@@ -235,7 +246,7 @@ export function NotebookEditor({
           onRequestTransfer={(blockId, mode) => setTransfer({ blockId, mode })}
           onExportBlock={openExport}
           onActiveChange={setActiveBlock}
-          onOpenTools={(context) => setTools({ key: doc.notebook.meta?.key, bpm: doc.notebook.meta?.bpm, ...context })}
+          onOpenTools={(context) => (context?.chord ? harmony.openChord(context.chord) : harmony.toggle())}
         />
         </div>
       </div>
@@ -256,26 +267,6 @@ export function NotebookEditor({
           onPick={(id, title) => void performTransfer(id, title)}
         />
       )}
-      {tools && (
-        <Suspense fallback={null}>
-          <HarmonyTools
-            key={`${tools.chord ?? ''}`}
-            context={{ ...tools, key: doc.notebook.meta?.key, bpm: doc.notebook.meta?.bpm }}
-            actions={{
-              canAddChord: Boolean(chordsBlock),
-              onAddChord: (symbol) => addChords([symbol]),
-              onAddProgression: addChords,
-              onUseKey: (key) => {
-                doc.change((current) => setMeta(current, { key }));
-                toast.show(`Tonalidad del cuaderno: ${keyTitle(key, style)}. No se transpuso nada.`);
-              },
-              onCreateMap: createScaleMap,
-            }}
-            onClose={() => setTools(null)}
-          />
-        </Suspense>
-      )}
-
       {dialog === 'history' && <HistoryDialog documentId={record.id} onClose={() => setDialog(null)} onRestored={onRestored} />}
       {dialog === 'shortcuts' && <ShortcutsDialog onClose={() => setDialog(null)} />}
       {exportFor && (

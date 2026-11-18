@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { transport } from '@/audio/engine';
+import { backend, transport } from '@/audio/engine';
 import { baseTempo, clampBpm, effectiveTempo } from '@/audio/tempo';
-import { getAudioContext } from '@/audio/webaudio-backend';
+import { getAudioContext, setClickAccent, setClickVolume } from '@/audio/webaudio-backend';
 import { usePref } from '@/core/prefs';
 import { MetronomeContext as Context, type Metro } from '@/features/metronome/metronome-context';
 
@@ -15,7 +15,9 @@ export function MetronomeProvider({ children }: { children: ReactNode }) {
   const [preference] = usePref<number>('default-bpm', 96);
   const [running, setRunning] = useState(false);
   const [beat, setBeat] = useState(0);
-  const [volume, setVolumeState] = useState(0.45);
+  // Remembered per device. Moderate by default; the person raises it. Independent of the instruments' volume.
+  const [volume, setVolumeState] = usePref<number>('metronome.volume', 0.6);
+  const [accent, setAccentState] = usePref<boolean>('metronome.accent', true);
   const [beatsPerMeasure, setBeatsPerMeasureState] = useState(4);
   const [practiceBpm, setPracticeBpm] = useState<number | undefined>(undefined);
   const [song, setSong] = useState<{ id: string | null; bpm?: number }>({ id: null });
@@ -23,6 +25,13 @@ export function MetronomeProvider({ children }: { children: ReactNode }) {
   const next = useRef(0);
   const count = useRef(0);
   const taps = useRef<number[]>([]);
+
+  useEffect(() => {
+    setClickVolume(volume);
+  }, [volume]);
+  useEffect(() => {
+    setClickAccent(accent);
+  }, [accent]);
 
   const inputs = { practice: practiceBpm, song: song.bpm, preference };
   const { bpm, source } = effectiveTempo(inputs);
@@ -35,16 +44,8 @@ export function MetronomeProvider({ children }: { children: ReactNode }) {
     next.current = ctx.currentTime + 0.05;
     const schedule = () => {
       while (next.current < ctx.currentTime + 0.12) {
-        const accented = count.current % beatsPerMeasure === 0;
-        const oscillator = ctx.createOscillator();
-        const gain = ctx.createGain();
-        oscillator.frequency.value = accented ? 1050 : 720;
-        gain.gain.setValueAtTime(0.0001, next.current);
-        gain.gain.exponentialRampToValueAtTime(volume * (accented ? 0.22 : 0.13), next.current + 0.004);
-        gain.gain.exponentialRampToValueAtTime(0.0001, next.current + 0.04);
-        oscillator.connect(gain).connect(ctx.destination);
-        oscillator.start(next.current);
-        oscillator.stop(next.current + 0.05);
+        // The same click as when music plays: one synth, one level, one accent rule.
+        backend.playClick(next.current, count.current % beatsPerMeasure === 0);
         const current = count.current;
         count.current += 1;
         window.setTimeout(() => setBeat(current % beatsPerMeasure), Math.max(0, (next.current - ctx.currentTime) * 1000));
@@ -91,6 +92,8 @@ export function MetronomeProvider({ children }: { children: ReactNode }) {
       setBpm,
       resetPractice,
       setSongContext,
+      accent,
+      setAccent: (on: boolean) => setAccentState(on),
       setVolume: (next_: number) => setVolumeState(Math.max(0, Math.min(1, next_))),
       setBeatsPerMeasure: (next_: number) => setBeatsPerMeasureState(Math.max(2, Math.min(12, next_))),
       toggle: () => setRunning((current) => !current),
@@ -103,7 +106,7 @@ export function MetronomeProvider({ children }: { children: ReactNode }) {
         }
       },
     }),
-    [running, bpm, source, practiceBpm, song.bpm, baseBpm, beat, volume, beatsPerMeasure, setBpm, resetPractice, setSongContext],
+    [running, bpm, source, practiceBpm, song.bpm, baseBpm, beat, volume, accent, beatsPerMeasure, setBpm, resetPractice, setSongContext, setVolumeState, setAccentState],
   );
   return <Context value={value}>{children}</Context>;
 }

@@ -18,6 +18,11 @@ declare global {
 let shared: AudioContext | null = null;
 let master: GainNode | null = null;
 let volume = 0.7;
+let clickBus: GainNode | null = null;
+let clickVolume = 0.6;
+let accentOn = true;
+/** Highest gain the click bus can reach: with the soft limiter after it, the loudest setting still cannot clip. */
+const CLICK_CEILING = 0.85;
 
 /** The one AudioContext of the app (metronome and instruments share it). Created lazily, on a gesture. */
 export function getAudioContext() {
@@ -29,6 +34,10 @@ export function getAudioContext() {
     limiter.threshold.value = -14;
     limiter.ratio.value = 6;
     master.connect(limiter).connect(shared.destination);
+    // The metronome has its OWN level: it joins after the instruments' master gain, before the shared limiter.
+    clickBus = shared.createGain();
+    clickBus.gain.value = CLICK_CEILING * clickVolume;
+    clickBus.connect(limiter);
   }
   return shared;
 }
@@ -36,6 +45,54 @@ export function getMaster() {
   getAudioContext();
   return master!;
 }
+/** 0..1. Independent of the instruments' volume. */
+export function setClickVolume(next: number) {
+  clickVolume = Math.max(0, Math.min(1, next));
+  if (clickBus) clickBus.gain.value = CLICK_CEILING * clickVolume;
+}
+export function setClickAccent(on: boolean) {
+  accentOn = on;
+}
+
+let noiseBuffer: AudioBuffer | null = null;
+/**
+ * One click: a short pitched tick with a crisp noise transient on top (so the beat is felt even over a loud guitar),
+ * 1 ms attack and a ~60 ms decay. The first beat is higher and a little stronger. Peak before the bus is 1.05 at most;
+ * the bus ceiling (0.85) keeps the maximum setting under full scale. Works on any BaseAudioContext (tests render it offline).
+ */
+export function scheduleClick(ctx: BaseAudioContext, out: AudioNode, when: number, accent: boolean) {
+  const tone = ctx.createOscillator();
+  const toneGain = ctx.createGain();
+  tone.frequency.value = accent ? 1760 : 1175;
+  toneGain.gain.setValueAtTime(0.0001, when);
+  toneGain.gain.linearRampToValueAtTime(accent ? 0.75 : 0.6, when + 0.001);
+  toneGain.gain.exponentialRampToValueAtTime(0.0001, when + 0.06);
+  tone.connect(toneGain).connect(out);
+  tone.start(when);
+  tone.stop(when + 0.07);
+  if (!noiseBuffer || noiseBuffer.sampleRate !== ctx.sampleRate) {
+    noiseBuffer = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.02), ctx.sampleRate);
+    const data = noiseBuffer.getChannelData(0);
+    let seed = 99991;
+    for (let i = 0; i < data.length; i += 1) {
+      seed = (seed * 1664525 + 1013904223) >>> 0;
+      data[i] = (seed / 0xffffffff) * 2 - 1;
+    }
+  }
+  const burst = ctx.createBufferSource();
+  burst.buffer = noiseBuffer;
+  const band = ctx.createBiquadFilter();
+  band.type = 'bandpass';
+  band.frequency.value = accent ? 4200 : 3200;
+  band.Q.value = 0.8;
+  const burstGain = ctx.createGain();
+  burstGain.gain.setValueAtTime(accent ? 0.3 : 0.25, when);
+  burstGain.gain.exponentialRampToValueAtTime(0.0001, when + 0.014);
+  burst.connect(band).connect(burstGain).connect(out);
+  burst.start(when);
+  return { tone, burst, toneGain, burstGain };
+}
+
 export function setMasterVolume(next: number) {
   volume = Math.max(0, Math.min(1, next));
   if (master) master.gain.value = volume;
@@ -199,18 +256,19 @@ export class WebAudioBackend implements AudioBackend {
 
   playClick(when: number, accent: boolean) {
     const ctx = getAudioContext();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.frequency.value = accent ? 1050 : 720;
-    gain.gain.setValueAtTime(0.0001, when);
-    gain.gain.exponentialRampToValueAtTime(accent ? 0.16 : 0.1, when + 0.004);
-    gain.gain.exponentialRampToValueAtTime(0.0001, when + 0.04);
-    osc.connect(gain).connect(getMaster());
-    osc.start(when);
-    osc.stop(when + 0.05);
-    const voice: Voice = { stop: (at) => osc.stop(at), kill: () => { osc.disconnect(); gain.disconnect(); } };
-    this.track(voice, when + 0.05, ctx);
-    this.log({ type: 'click', when, accent });
+    const strong = accent && accentOn;
+    const parts = scheduleClick(ctx, clickBus!, when, strong);
+    const voice: Voice = {
+      stop: (at) => parts.tone.stop(at),
+      kill: () => {
+        parts.tone.disconnect();
+        parts.burst.disconnect();
+        parts.toneGain.disconnect();
+        parts.burstGain.disconnect();
+      },
+    };
+    this.track(voice, when + 0.08, ctx);
+    this.log({ type: 'click', when, accent: strong });
   }
 
   stopAll() {
@@ -225,4 +283,23 @@ export class WebAudioBackend implements AudioBackend {
     }
     this.log({ type: 'stopAll', voices: voices.length });
   }
+}
+
+if (typeof window !== 'undefined') {
+  /** Read-only probe for browser tests: renders one click offline through the bus ceiling and the limiter and returns its peak. */
+  (window as unknown as Record<string, unknown>).__guitarapMeasureClick = async (accent: boolean, level: number) => {
+    const ctx = new OfflineAudioContext(1, 4410, 44100);
+    const limiter = ctx.createDynamicsCompressor();
+    limiter.threshold.value = -14;
+    limiter.ratio.value = 6;
+    limiter.connect(ctx.destination);
+    const bus = ctx.createGain();
+    bus.gain.value = CLICK_CEILING * level;
+    bus.connect(limiter);
+    scheduleClick(ctx, bus, 0.001, accent);
+    const rendered = await ctx.startRendering();
+    let peak = 0;
+    for (const value of rendered.getChannelData(0)) peak = Math.max(peak, Math.abs(value));
+    return { peak };
+  };
 }

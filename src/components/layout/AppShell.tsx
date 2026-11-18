@@ -4,6 +4,7 @@ import { Icon } from '@/components/ui/Icon';
 import { AccountMenu } from '@/features/account/AccountMenu';
 import { AuthDialog } from '@/features/account/AuthDialog';
 import { MetronomeBar } from '@/features/metronome/MetronomeBar';
+import { useHarmony } from '@/features/harmony-tools/harmony-context';
 import { ThemeToggle } from '@/features/theme/ThemeToggle';
 
 const navigation = [
@@ -14,6 +15,7 @@ const navigation = [
 
 /** One slim bar: identity, the two places you work in, the metronome, and your account. */
 export function AppShell() {
+  const harmony = useHarmony();
   return (
     <div className="app">
       <a className="skip-link" href="#contenido">
@@ -33,6 +35,10 @@ export function AppShell() {
               <span>{item.label}</span>
             </NavLink>
           ))}
+          <button type="button" className="nav-tool" aria-pressed={harmony.open} aria-keyshortcuts="H" title="Armonía: círculo de quintas, acordes y modulación (H)" onClick={harmony.toggle}>
+            <Icon name="circle" size={16} />
+            <span>Armonía</span>
+          </button>
         </nav>
         <div className="topbar-right">
           <MetronomeBar />

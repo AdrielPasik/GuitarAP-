@@ -18,19 +18,16 @@ export const SYSTEM_INSTRUMENT: Record<InstrumentKind, InstrumentId> = { melody:
 export const instrumentPrefKey = (kind: InstrumentKind) => `sound.instrument.${kind}`;
 export const INSTRUMENT_LABEL: Record<InstrumentId, string> = { piano: 'Piano', guitar: 'Guitarra' };
 
-export type InstrumentSource = 'block' | 'preference' | 'legacy' | 'system';
+export type InstrumentSource = 'temporary' | 'block' | 'preference' | 'system';
 export function resolveInstrument(input: {
   kind: InstrumentKind;
   /** Chosen for this block, saved in the document. */
   explicit?: InstrumentId | null;
   /** Chosen on this device for this kind of block. */
   preference?: InstrumentId | null;
-  /** The single global choice of versions before 0.6, honoured only if the person had set it. */
-  legacy?: InstrumentId | null;
 }): { id: InstrumentId; source: InstrumentSource } {
   if (input.explicit) return { id: input.explicit, source: 'block' };
   if (input.preference) return { id: input.preference, source: 'preference' };
-  if (input.legacy) return { id: input.legacy, source: 'legacy' };
   return { id: SYSTEM_INSTRUMENT[input.kind], source: 'system' };
 }
 

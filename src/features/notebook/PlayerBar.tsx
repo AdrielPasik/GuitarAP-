@@ -64,6 +64,39 @@ export function PlayerBar({
       <button type="button" className="icon-btn" aria-label={`Detener ${label}`} disabled={state === 'idle'} onClick={player.stop}>
         <Icon name="stop" size={14} />
       </button>
+      <span className="instrument-pick" role="group" aria-label={`Instrumento de ${label}`}>
+        {(['piano', 'guitar'] as const).map((id) => (
+          <button
+            key={id}
+            type="button"
+            className={player.instrument === id ? 'on' : ''}
+            aria-pressed={player.instrument === id}
+            title={`Escuchar con ${id === 'piano' ? 'piano' : 'guitarra'} (solo para probar: no cambia la canción)`}
+            onClick={() => player.setTemporaryInstrument(id === player.savedInstrument.id ? undefined : id)}
+          >
+            {id === 'piano' ? 'Piano' : 'Guitarra'}
+          </button>
+        ))}
+        {player.instrumentSource === 'temporary' && (
+          <>
+            <span className="instrument-note" role="status">probando</span>
+            {onInstrument && (
+              <button
+                type="button"
+                className="pin"
+                title={`Fijar ${player.instrument === 'piano' ? 'piano' : 'guitarra'} en este bloque (se guarda en la canción)`}
+                aria-label={`Fijar ${player.instrument === 'piano' ? 'piano' : 'guitarra'} en este bloque`}
+                onClick={() => {
+                  onInstrument(player.instrument);
+                  player.setTemporaryInstrument(undefined);
+                }}
+              >
+                Fijar
+              </button>
+            )}
+          </>
+        )}
+      </span>
       <span className={`bpm-stepper compact${practice ? ' practice' : hasOwn ? ' own' : ''}`}>
         <button type="button" className="icon-btn" aria-label={`Bajar BPM de ${label}`} onClick={() => player.setPractice(player.bpm - 2)}>
           <Icon name="minus" size={12} />
@@ -149,8 +182,12 @@ export function PlayerBar({
             )}
             <Segmented<'piano' | 'guitar'>
               label="Instrumento"
-              value={player.instrument}
-              onChange={(value) => (onInstrument ? onInstrument(value) : player.prefs.setInstrumentFor(player.kind, value))}
+              value={player.savedInstrument.id}
+              onChange={(value) => {
+                player.setTemporaryInstrument(undefined);
+                if (onInstrument) onInstrument(value);
+                else player.prefs.setInstrumentFor(player.kind, value);
+              }}
               options={[
                 { value: 'piano', label: 'Piano', title: 'Piano sintetizado en tu navegador' },
                 { value: 'guitar', label: 'Guitarra', title: 'Cuerda pulsada sintetizada: una aproximación, no una guitarra real' },

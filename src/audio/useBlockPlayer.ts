@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { transport, useTransport } from '@/audio/engine';
 import { baseTempo, effectiveTempo } from '@/audio/tempo';
 import type { InstrumentId, Sequence } from '@/audio/types';
@@ -28,7 +28,7 @@ export function useSoundPrefs() {
   const perKind = { melody: melodyInstrument, tablature: tablatureInstrument, chords: chordsInstrument } as const;
   const setPerKind = { melody: setMelodyInstrument, tablature: setTablatureInstrument, chords: setChordsInstrument } as const;
   /** The instrument for a kind of block with no explicit choice (preference, then legacy, then system default). */
-  const instrumentFor = (kind: InstrumentKind) => resolveInstrument({ kind, preference: perKind[kind], legacy }).id;
+  const instrumentFor = (kind: InstrumentKind) => resolveInstrument({ kind, preference: perKind[kind] }).id;
   const setInstrumentFor = (kind: InstrumentKind, value: InstrumentId | null) => setPerKind[kind](value);
   const instrument: InstrumentId = legacy ?? 'piano';
   const [click, setClick] = usePref<boolean>('sound.click', false);
@@ -51,7 +51,9 @@ export function useBlockPlayer({ owner, sequence, blockBpm, instrument, kind }: 
   const inputs = { practice: metro.practiceBpm, block: blockBpm, song: docBpm, preference };
   const tempo = effectiveTempo(inputs);
   const base = baseTempo(inputs);
-  const resolved = resolveInstrument({ kind, explicit: instrument, preference: prefs.preferenceFor(kind), legacy: prefs.legacy });
+  // Hearing another sound is a try-out: it lives here, in memory, and touches neither the song nor the preferences.
+  const [temporary, setTemporary] = useState<InstrumentId | undefined>();
+  const resolved = temporary ? { id: temporary, source: 'temporary' as const } : resolveInstrument({ kind, explicit: instrument, preference: prefs.preferenceFor(kind) });
   const chosen = resolved.id;
   const mine = snapshot.owner === owner;
   const state = mine ? snapshot.state : 'idle';
@@ -104,6 +106,9 @@ export function useBlockPlayer({ owner, sequence, blockBpm, instrument, kind }: 
     resetPractice: metro.resetPractice,
     instrument: chosen,
     instrumentSource: resolved.source,
+    setTemporaryInstrument: setTemporary,
+    /** What the block would sound like with no try-out: its own choice, else the preference, else the default. */
+    savedInstrument: resolveInstrument({ kind, explicit: instrument, preference: prefs.preferenceFor(kind) }),
     kind,
     play,
     pause: () => transport.pause(),

@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AppShell } from '@/components/layout/AppShell';
 import { ToastProvider } from '@/components/ui/Toast';
 import { AccountProvider } from '@/features/account/AccountProvider';
+import { HarmonyProvider } from '@/features/harmony-tools/harmony-host';
 import { MetronomeProvider } from '@/features/metronome/Metronome';
 import { PwaRegistration } from '@/features/pwa/PwaRegistration';
 import { FxEffects } from '@/features/theme/fx';
@@ -45,6 +46,7 @@ export function App() {
         <MetronomeProvider>
           <BrowserRouter>
             <AccountProvider>
+              <HarmonyProvider>
               <Routes>
                 {/* A shared link opens a calm, read-only presentation with no app chrome. */}
                 <Route path="c/:token" element={deferred(<GuestScreen />)} />
@@ -68,6 +70,7 @@ export function App() {
                   <Route path="*" element={<Navigate replace to="/biblioteca" />} />
                 </Route>
               </Routes>
+              </HarmonyProvider>
             </AccountProvider>
           </BrowserRouter>
         </MetronomeProvider>

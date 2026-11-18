@@ -56,7 +56,7 @@ test('un instrumento elegido para un bloque se guarda, sobrevive a la recarga y 
 
   // This melody is listened to on guitar, explicitly.
   await page.getByRole('button', { name: 'Sonido y tempo de melodía' }).click();
-  await page.getByRole('group', { name: 'Instrumento' }).getByRole('button', { name: 'Guitarra' }).click();
+  await page.getByRole('group', { name: 'Instrumento', exact: true }).getByRole('button', { name: 'Guitarra' }).click();
   expect((await storedBlock(page, 'melody'))?.instrument).toBe('guitar');
   await page.keyboard.press('Escape');
 
