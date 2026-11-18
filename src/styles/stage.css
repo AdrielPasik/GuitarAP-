@@ -413,7 +413,9 @@ body {
 /* ---------------------------------------------------------------- Letra + melodía: a composing desk */
 .vocal-view {
   padding: 0;
-  overflow: hidden;
+  /* clip, not hidden: it rounds the corners without becoming a scroll container, so the sticky player bar keeps
+     sticking to the screen (overflow:hidden here made Stop scroll away while the melody followed along). */
+  overflow: clip;
   border: 1px solid #000;
   border-radius: 24px;
   background: var(--walnut-900);

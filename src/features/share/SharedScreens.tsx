@@ -246,7 +246,8 @@ export function SharedNotebookScreen() {
   async function keepMine() {
     if (!copy) return;
     const created = await libraryRepository.createStudyMaterial(`${copy.localTitle || copy.title} (mi copia)`);
-    await libraryRepository.saveDocument({ ...created, content: copy.content });
+    // What is on screen, not what autosave last wrote: an edit typed less than a moment ago must not be lost.
+    await libraryRepository.saveDocument({ ...created, content: canEdit ? history.value : copy.content });
     toast.show('Guardé tu copia en tu biblioteca.');
     navigate(`/material/${created.id}`);
   }

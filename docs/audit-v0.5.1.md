@@ -43,10 +43,20 @@ revisión, revocación efectiva en cada llamada, carpeta por contención.
 | Interfaz con dos cuentas | `v05-sharing.spec.ts` contra la pasarela local respaldada por PostgreSQL | 8 escenarios pasan |
 | Suite E2E completa, entorno limpio | `npx playwright test` sin nada más corriendo | 114 pasan, 0 fallan (3 omitidos: capturas a demanda) |
 
-Los 5 fallos que apareció al principio **no eran carga**: 3 por el cambio de producto (escribir ahora suena por defecto)
-y 2 por mi rediseño (portada demasiado alta tapaba la hoja de tablatura; la escena decorativa en el encabezado). Se
-corrigieron el diseño y los tests, no se eliminaron. Un fallo anterior intermitente (rol tras recargar) se debía a una
-carrera real del cliente y a que el E2E servía un `dist` viejo: ver el historial.
+Qué pasó con los fallos de E2E (investigados uno por uno, sin atribuirlos a la carga):
+
+| Fallo | Causa real | Qué se hizo |
+|---|---|---|
+| 3 tests de audio | Cambio de producto pedido: escribir ahora suena por defecto | Esos tests apagan la preferencia al cargar (miden lo que programa Play) |
+| Tablatura «sin saltos» | Mi portada y mis tarjetas quitaban ~110 px y el mástil acoplado tapaba la hoja a 768 px de alto | Rediseño compacto (portada en una fila): el test original pasa sin tocarlo |
+| «ilustraciones no bloquean» | Mi portada pone la escena detrás del título | El test ahora exige «sin escena detrás del área de escritura» (el encabezado sí puede llevarla) |
+| Menú «Agregar bloque» inaccesible | **Bug real mío**: el título grande quedaba por encima del menú | z-index corregido |
+| Práctica: «Detener» no estable | **Bug real mío**: `overflow:hidden` en Letra + melodía rompía el `sticky` de la barra | `overflow: clip` |
+| «Guardar mi copia» tras una revocación | **Bug real previo**: usaba lo último autoguardado y no lo visible; una edición de < 0,7 s se perdía | Usa lo que hay en pantalla |
+| Sharing B en CI | El E2E local reutilizaba un gateway que había quedado corriendo con la migración **vieja**; en CI (gateway nuevo) el título protegido ya no se muestra | Test corregido; el gateway se reinició: hoy los 8 escenarios corren contra el SQL nuevo |
+| `account` (sesión y trabajo sin conexión) | Intermitente bajo carga (7/10 y luego 1/10 en repeticiones paralelas). **La causa de fondo (carga del editor diferido sin red) no quedó demostrada.** | El test ahora abre el editor una vez con conexión antes de cortar la red (su intención es «el trabajo sin conexión queda local»); 12/12 en paralelo. Queda como riesgo anotado |
+
+Resultado: dos corridas completas seguidas, 114 pasan, 0 fallan.
 
 **Lo que sigue sin validarse:** tu proyecto real de Supabase (versión de PostgREST/GoTrue de su plataforma, límites,
 configuración de Auth). Ver `docs/sharing-activation.md` sección 3.

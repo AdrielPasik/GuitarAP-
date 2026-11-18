@@ -85,8 +85,10 @@ test('Escenario B — la contraseña se valida en el servidor: sin ella no viaja
     if (response.url().includes('/rest/v1/rpc/')) bodies.push(await response.text().catch(() => ''));
   });
   await guest.goto(url);
-  await expect(guest.getByRole('heading', { name: 'Protegida' })).toBeVisible();
+  // Before the password even the project's title stays on the server.
+  await expect(guest.getByRole('heading', { name: 'Proyecto protegido' })).toBeVisible();
   await expect(guest.getByText('Este proyecto está protegido')).toBeVisible();
+  await expect(guest.getByText('Protegida', { exact: true })).toHaveCount(0);
   await expect(guest.getByText('TEXTO-QUE-NO-DEBE-FILTRARSE')).toHaveCount(0);
   expect(await guest.content()).not.toContain('TEXTO-QUE-NO-DEBE-FILTRARSE');
   expect(bodies.join('')).not.toContain('TEXTO-QUE-NO-DEBE-FILTRARSE');

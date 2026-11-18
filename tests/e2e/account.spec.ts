@@ -113,6 +113,12 @@ test('the session is restored, signing out keeps every material, and offline wor
   await expect(topbar(page).getByRole('button', { name: 'Cuenta y sincronización' })).toBeVisible();
   await expect(topbar(page).getByRole('button', { name: 'Iniciar sesión' })).toHaveCount(0);
 
+  // This test is about work staying local while offline, not about the first download of a lazily loaded editor.
+  // Open the tablature editor once while online (its code is then in memory), come back, and only then cut the network.
+  await page.locator('.lib-open', { hasText: 'Sigue acá' }).click();
+  await expect(cell(page, 1, 1)).toBeVisible();
+  await page.getByRole('link', { name: /Volver a la biblioteca/ }).click();
+  await expect(page.locator('.lib-open', { hasText: 'Sigue acá' })).toBeVisible();
   await context.setOffline(true);
   await expect(topbar(page).getByText(/Sin conexión/)).toBeVisible();
   await page.locator('.lib-open', { hasText: 'Sigue acá' }).click();
