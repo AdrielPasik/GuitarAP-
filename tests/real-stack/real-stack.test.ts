@@ -200,6 +200,7 @@ describe.skipIf(!enabled)('sharing against real Postgres + GoTrue + PostgREST', 
     expect(fingerprint()).toBe(mid);
     expect((await rpc('collab_capabilities')).status).toBeGreaterThanOrEqual(400); // sharing is gone, and PostgREST noticed
     psql(migrations('0007_sharing.sql'));
+    psql(migrations('0008_sync_library_fix.sql')); // 0007 redefines shared_with_me: 0008 is applied after it, always
     await new Promise((resolve) => setTimeout(resolve, 1500)); // PostgREST reloads its schema cache on NOTIFY
     expect(fingerprint()).toBe(mid);
     expect((await rpc('collab_capabilities')).body).toEqual({ sharing: 1 });

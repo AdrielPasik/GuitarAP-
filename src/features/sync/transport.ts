@@ -25,16 +25,60 @@ export interface SyncTransport {
   push(ownerId: string, opId: string, snapshot: SyncSnapshot): Promise<PushResult>;
   pull(ownerId: string, cursor: string, limit: number): Promise<PullPage>;
 }
+export type SyncErrorKind = 'network' | 'auth' | 'permission' | 'schema' | 'data' | 'conflict' | 'too-large' | 'server' | 'unknown';
+
+/**
+ * What a failed request carries, without anything private: which operation and RPC, the HTTP status, the
+ * PostgreSQL/PostgREST code and a redacted, short server message. Never a token, an e-mail, or document content.
+ */
+export type SyncErrorDetail = {
+  operation: 'push' | 'pull';
+  rpc: string;
+  status?: number;
+  code?: string;
+  message?: string;
+  hint?: string;
+  kind: SyncErrorKind;
+};
+
 export class SyncTransportError extends Error {
   constructor(
     message: string,
     readonly retryable: boolean,
     readonly status?: number,
+    readonly detail?: SyncErrorDetail,
   ) {
     super(message);
     this.name = 'SyncTransportError';
   }
 }
+
+/** Removes anything that could identify the person or authorise a request, and keeps the message short. */
+export function redact(text: unknown, max = 240): string {
+  return String(text ?? '')
+    .replace(/eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]*/g, '[token]')
+    .replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, '[correo]')
+    .replace(/\b(?:sb|sk|pk)_[A-Za-z0-9_-]{16,}\b/g, '[clave]')
+    .replace(/\b[A-Za-z0-9_-]{40,}\b/g, '[secreto]')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, max);
+}
+
+/** Maps a PostgREST/PostgreSQL failure to something the person can act on. */
+export function classify(status: number | undefined, code: string | undefined): SyncErrorKind {
+  if (status === undefined) return 'network';
+  if (status === 401 || code === 'PGRST301' || code === 'PGRST303') return 'auth';
+  if (status === 413) return 'too-large';
+  if (code === '42501' || status === 403) return 'permission';
+  if (code === 'PGRST202' || code === '42883' || code === '42P01' || code === '42703' || code === 'PGRST200' || status === 404) return 'schema';
+  if (code === '40001' || code === '40P01' || code === '23505' || status === 409) return code === '23503' ? 'data' : 'conflict';
+  if (code && /^(22|23)/.test(code)) return 'data';
+  if (status === 400) return 'data';
+  if (status === 408 || status === 429 || status >= 500) return 'server';
+  return 'unknown';
+}
+
 const copy = <T>(item: T) => structuredClone(item);
 export class FakeTransport implements SyncTransport {
   private documents = new Map<string, RemoteDocument>();
@@ -57,9 +101,11 @@ export class FakeTransport implements SyncTransport {
     const prior = this.operations.get(`${ownerId}:${opId}`);
     if (prior) return copy(prior);
     const result: PushResult = { documents: [], nodes: [], versions: [], conflicts: [] };
-    for (const node of snapshot.nodes.sort(
-      (a, b) => Number(Boolean(a.parentId)) - Number(Boolean(b.parentId)),
-    )) {
+    // Like the real server (0006): nodes are checked in the order they arrive, so a child that comes before its
+    // parent is refused. The client is responsible for sending parents first.
+    for (const node of snapshot.nodes) {
+      if (node.parentId && !this.nodes.has(node.parentId))
+        throw new SyncTransportError('node parent does not exist in this account', false, 409, { operation: 'push', rpc: 'sync_library', status: 409, code: '23503', message: 'node parent does not exist in this account', kind: 'data' });
       const current = this.nodes.get(node.id);
       if (current && current.rev !== (node.rev ?? 1) - 1) result.conflicts.push(copy(current));
       else {
@@ -113,7 +159,7 @@ export class SupabaseTransport implements SyncTransport {
     private readonly anonKey: string,
     private readonly accessToken: string,
   ) {}
-  private async rpc<T>(method: string, body: unknown): Promise<T> {
+  private async rpc<T>(method: string, body: unknown, operation: 'push' | 'pull'): Promise<T> {
     let response: Response;
     try {
       response = await fetch(`${this.url.replace(/\/$/, '')}/rest/v1/rpc/${method}`, {
@@ -129,33 +175,43 @@ export class SupabaseTransport implements SyncTransport {
       throw new SyncTransportError(
         'No se pudo conectar con Supabase. Los cambios permanecen guardados localmente.',
         true,
+        undefined,
+        { operation, rpc: method, kind: 'network' },
       );
     }
     if (!response.ok) {
-      const retryable =
-        response.status === 408 || response.status === 429 || response.status >= 500;
+      let parsed: { code?: string; message?: string; hint?: string; details?: string } = {};
+      try {
+        parsed = (await response.json()) as typeof parsed;
+      } catch {
+        /* a gateway error page: only the status is known */
+      }
+      const kind = classify(response.status, parsed.code);
+      const retryable = kind === 'server' || (kind === 'conflict' && parsed.code === '40001');
+      const detail: SyncErrorDetail = {
+        operation,
+        rpc: method,
+        status: response.status,
+        code: parsed.code ? redact(parsed.code, 16) : undefined,
+        message: parsed.message ? redact([parsed.message, parsed.details].filter(Boolean).join(' · ')) : undefined,
+        hint: parsed.hint ? redact(parsed.hint, 160) : undefined,
+        kind,
+      };
       throw new SyncTransportError(
         retryable
           ? `Supabase no está disponible temporalmente (${response.status}).`
-          : `Supabase rechazó la sincronización (${response.status}). Revisá las migraciones y permisos del proyecto.`,
+          : `Supabase rechazó la sincronización (${response.status}${detail.code ? `, ${detail.code}` : ''}).`,
         retryable,
         response.status,
+        detail,
       );
     }
     return response.json() as Promise<T>;
   }
   async push(ownerId: string, opId: string, snapshot: SyncSnapshot) {
-    return this.rpc<PushResult>('sync_library', {
-      p_owner_id: ownerId,
-      p_op_id: opId,
-      p_snapshot: snapshot,
-    });
+    return this.rpc<PushResult>('sync_library', { p_owner_id: ownerId, p_op_id: opId, p_snapshot: snapshot }, 'push');
   }
   async pull(ownerId: string, cursor: string, limit: number) {
-    return this.rpc<PullPage>('pull_library', {
-      p_owner_id: ownerId,
-      p_after: cursor,
-      p_limit: limit,
-    });
+    return this.rpc<PullPage>('pull_library', { p_owner_id: ownerId, p_after: cursor, p_limit: limit }, 'pull');
   }
 }

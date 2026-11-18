@@ -16,12 +16,14 @@ import { useLibrary } from '@/data/use-library';
 import { collabApi } from '@/features/share/collab-api';
 import { useCollabState, useGateway } from '@/features/share/use-collab';
 import { Dialog } from '@/components/ui/Dialog';
+import { useToast } from '@/components/ui/toast-context';
 import { Icon } from '@/components/ui/Icon';
 import { Segmented } from '@/components/ui/Segmented';
 import { db } from '@/data/database';
 import { libraryRepository } from '@/data/library-repository';
 import { belongsToOwner, libraryScope } from '@/data/library-scope';
 import { describeLastSync } from '@/features/account/account-status';
+import { diagnosticText } from '@/features/sync/diagnostic';
 import { StatusChip } from '@/features/account/AccountMenu';
 import { useAccount } from '@/features/account/account-context';
 import { LinkWizard } from '@/features/account/LinkWizard';
@@ -80,6 +82,70 @@ function AccountSection() {
   );
 }
 
+/** The one manual step when the server still has the defective sync function: what to run, and a button that copies it. */
+function MigrationHelp() {
+  const toast = useToast();
+  return (
+    <div className="notice" role="note">
+      <Icon name="alert" size={16} />
+      <div>
+        <p>
+          <strong>Qué hacer (una sola vez):</strong> en Supabase → SQL Editor, pegá y ejecutá la migración <code>0008_sync_library_fix.sql</code>. Solo reemplaza una función: no toca tus tablas ni tus datos.
+        </p>
+        <button
+          type="button"
+          className="btn"
+          onClick={async () => {
+            try {
+              const sql = (await import('../../../supabase/migrations/0008_sync_library_fix.sql?raw')).default;
+              await navigator.clipboard.writeText(sql);
+              toast.show('Migración copiada. Pegala en el SQL Editor de Supabase y ejecutala.');
+            } catch {
+              toast.show('No se pudo copiar. El archivo está en supabase/migrations/0008_sync_library_fix.sql.');
+            }
+          }}
+        >
+          Copiar la migración 0008
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** Technical detail of the last attempt, redacted: operation, function, HTTP status and PostgreSQL code. Safe to paste in a message. */
+function SyncDiagnosticPanel() {
+  const account = useAccount();
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  const text = diagnosticText(account.syncDiagnostic, APP_VERSION);
+  const server = account.syncDiagnostic?.server;
+  return (
+    <details className="share-section">
+      <summary>Detalle técnico del último intento</summary>
+      <pre className="diagnostic" aria-label="Diagnóstico de sincronización">{text}</pre>
+      <p className="muted small">No incluye contraseñas, sesiones, correos ni el contenido de tus canciones.</p>
+      <div className="row">
+        <button type="button" className="btn" onClick={async () => toast.show((await navigator.clipboard.writeText(text).then(() => true, () => false)) ? 'Detalle copiado.' : 'No se pudo copiar.')}>
+          Copiar detalle
+        </button>
+        <button
+          type="button"
+          className="btn btn-ghost"
+          disabled={busy}
+          onClick={async () => {
+            setBusy(true);
+            await account.probeServer().catch(() => undefined);
+            setBusy(false);
+          }}
+        >
+          Comprobar el servidor
+        </button>
+        {server && <span className="muted small">{server === 'repaired' ? 'Servidor: sincronización reparada (0008)' : server === 'needs-0008' ? 'Servidor: falta la migración 0008' : 'Servidor: no se pudo determinar'}</span>}
+      </div>
+    </details>
+  );
+}
+
 function SyncSection() {
   const account = useAccount();
   return (
@@ -88,7 +154,7 @@ function SyncSection() {
       <p className="status-hero">
         <StatusChip />
       </p>
-      <p className="muted">{account.status.detail}</p>
+      {!account.syncProblem && <p className="muted">{account.status.detail}</p>}
       {!account.session && (
         <button type="button" className="btn btn-primary" onClick={() => account.openDialog('sign-in')}>
           Iniciar sesión
@@ -115,9 +181,11 @@ function SyncSection() {
           {account.message && (
             <p role="status" className="notice warn">
               <Icon name="alert" size={16} />
-              <span>{account.message}</span>
+              <span>{account.syncProblem ? <strong>{account.syncProblem.headline}. </strong> : null}{account.message}</span>
             </p>
           )}
+          {account.syncProblem?.action === 'run-migration' && <MigrationHelp />}
+          <SyncDiagnosticPanel />
           <div className="row">
             <button type="button" className="btn btn-primary" disabled={account.status.kind === 'syncing'} onClick={() => void account.syncNow()}>
               Sincronizar ahora

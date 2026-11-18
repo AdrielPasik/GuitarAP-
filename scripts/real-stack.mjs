@@ -14,6 +14,7 @@ const psqlFile = (file) =>
 
 let code = 1;
 try {
+  run([...compose, 'down', '-v']); // always from scratch: the migrations are applied to an empty database
   run([...compose, 'up', '-d', '--wait']);
   const files = readdirSync('supabase/migrations').filter((f) => /^000\d_.*\.sql$/.test(f) && !f.includes('rollback')).sort();
   for (const file of files) {

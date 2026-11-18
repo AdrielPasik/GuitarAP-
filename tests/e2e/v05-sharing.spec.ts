@@ -287,7 +287,7 @@ test('Escenario G — compartir una carpeta muestra qué se comparte, alcanza so
 
   await ownerPage.goto('/biblioteca');
   await ownerPage.locator('.lib-row', { hasText: 'Colaboraciones' }).getByRole('button', { name: /Opciones de Colaboraciones/ }).click();
-  await ownerPage.getByRole('menuitem', { name: 'Compartir…' }).click();
+  await ownerPage.getByRole('menuitem', { name: 'Compartir carpeta…' }).click();
   const dialog = ownerPage.getByRole('dialog', { name: /^Compartir «Colaboraciones»/ });
   await expect(dialog.getByText('Esto compartirá 1 material')).toBeVisible();
   await expect(dialog.getByRole('listitem').filter({ hasText: 'Dentro' })).toBeVisible();

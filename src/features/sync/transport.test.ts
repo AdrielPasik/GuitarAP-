@@ -143,3 +143,49 @@ describe('SupabaseTransport', () => {
     >({ retryable: true });
   });
 });
+
+describe('SupabaseTransport errors keep their cause (redacted)', () => {
+  const failWith = (status: number, body: unknown) =>
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(typeof body === 'string' ? body : JSON.stringify(body), { status })));
+  const transport = () => new SupabaseTransport('https://x.supabase.co', 'anon', 'jwt');
+  const empty = { documents: [], nodes: [], versions: [] };
+
+  it('reports the PostgreSQL code and message of a rejected push', async () => {
+    failWith(400, { code: '42702', message: 'column reference "parent_id" is ambiguous', details: 'It could refer to either a PL/pgSQL variable or a table column.' });
+    const error = (await transport().push('u', 'op', empty).catch((e: unknown) => e)) as SyncTransportError;
+    expect(error.retryable).toBe(false);
+    expect(error.detail).toMatchObject({ operation: 'push', rpc: 'sync_library', status: 400, code: '42702', kind: 'data' });
+    expect(error.detail?.message).toContain('ambiguous');
+  });
+
+  it('classifies the failures the interface must tell apart', async () => {
+    const kindOf = async (status: number, body: unknown) => {
+      failWith(status, body);
+      return ((await transport().pull('u', '0', 10).catch((e: unknown) => e)) as SyncTransportError).detail?.kind;
+    };
+    expect(await kindOf(401, { code: 'PGRST301', message: 'JWT expired' })).toBe('auth');
+    expect(await kindOf(403, { code: '42501', message: 'owner mismatch' })).toBe('permission');
+    expect(await kindOf(404, { code: 'PGRST202', message: 'Could not find the function' })).toBe('schema');
+    expect(await kindOf(409, { code: '23503', message: 'fk' })).toBe('data');
+    expect(await kindOf(500, { code: '57014', message: 'statement timeout' })).toBe('server');
+    expect(await kindOf(502, 'bad gateway')).toBe('server');
+    expect(await kindOf(413, 'too large')).toBe('too-large');
+  });
+
+  it('never keeps tokens, e-mail addresses or long secrets in what it reports', async () => {
+    failWith(400, { code: '22P02', message: 'invalid input for ana@example.com with eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0In0.c2lnbmF0dXJl and ' + 'A'.repeat(60) });
+    const error = (await transport().push('u', 'op', empty).catch((e: unknown) => e)) as SyncTransportError;
+    const shown = JSON.stringify(error.detail);
+    expect(shown).not.toContain('ana@example.com');
+    expect(shown).not.toContain('eyJhbGci');
+    expect(shown).not.toContain('AAAAAAAAAA');
+    expect(shown).not.toContain('jwt');
+  });
+
+  it('a lost connection is retryable and says so', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('network'); }));
+    const error = (await transport().push('u', 'op', empty).catch((e: unknown) => e)) as SyncTransportError;
+    expect(error.retryable).toBe(true);
+    expect(error.detail?.kind).toBe('network');
+  });
+});

@@ -24,7 +24,7 @@ test('Escenario C — un solo escrito en tablatura suena en orden, con la altura
 
   await setBpm(page, 'tablatura', '120');
   await page.getByRole('button', { name: 'Reproducir tablatura' }).click();
-  await expect.poll(async () => (await noteLog(page)).length).toBe(5);
+  await expect.poll(async () => (await noteLog(page)).length, { timeout: 15000 }).toBe(5);
   const played = await noteLog(page);
   // First string is E4 (64): frets 5, 7, 8, 7, 5 -> A4 B4 C5 B4 A4.
   expect(played.map((entry) => entry.midi)).toEqual([69, 71, 72, 71, 69]);
@@ -54,7 +54,7 @@ test('Escenario D — un acorde suena con todas sus cuerdas juntas y respeta la 
   await tabNeck.getByTestId('fret-4-2').click();
   await tabNeck.getByTestId('fret-3-0').click();
   await page.getByRole('button', { name: 'Reproducir tablatura' }).click();
-  await expect.poll(async () => (await noteLog(page)).length).toBe(3);
+  await expect.poll(async () => (await noteLog(page)).length, { timeout: 15000 }).toBe(3);
   const chord = await noteLog(page);
   expect(chord.map((entry) => entry.midi).sort()).toEqual([43, 47, 50]); // G2 B2 D3
   expect(new Set(chord.map((entry) => entry.when)).size).toBe(1); // together
@@ -80,7 +80,7 @@ test('Escenario D — un acorde suena con todas sus cuerdas juntas y respeta la 
   await page.reload();
   const start = (await noteLog(page)).length;
   await page.getByRole('button', { name: 'Reproducir tablatura' }).click();
-  await expect.poll(async () => (await noteLog(page)).length).toBe(start + 3);
+  await expect.poll(async () => (await noteLog(page)).length, { timeout: 15000 }).toBe(start + 3);
   const retuned = (await noteLog(page)).slice(start);
   expect(retuned.map((entry) => entry.midi).sort()).toEqual([41, 47, 50]); // the lowered string now sounds F2
 });

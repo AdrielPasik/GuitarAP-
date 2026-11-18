@@ -1,62 +1,64 @@
-# Activar Compartir (lo único que tenés que hacer)
+# Sincronizar y compartir: lo que tenés que hacer
 
-Compartir está **construido, auditado y probado, pero apagado** en tu Supabase hasta que apliques una migración.
-Mientras no la apliques, la app dice «Compartir todavía no está disponible en este proyecto» y no ofrece nada que no
-funcione. La migración solo **agrega** tablas y funciones: no modifica ni borra ninguna tabla, fila, documento ni
-política existente.
+Estado de tu Supabase de producción: `0001`–`0007` están aplicadas (confirmaste `collab_capabilities()` = `{"sharing":1}`).
+Falta **una sola migración**: `0008_sync_library_fix.sql`. Sin ella la sincronización de cualquier biblioteca con
+carpetas o canciones falla, y por eso Compartir te pedía «sincronizá primero».
 
-## 1. Activar (una sola acción, ~2 minutos)
+## La única acción: aplicar 0008 (1 minuto, no toca tus datos)
 
-1. Hacé un backup: GuitarAP → Configuración → Copias de seguridad.
-2. Supabase → **SQL Editor** → pegá **todo** el contenido de `supabase/migrations/0007_sharing.sql` → **Run**.
-   Es repetible: si se corta a medias, volvé a ejecutarlo.
-3. Comprobá, en el mismo editor:
+1. En GuitarAP: Configuración → Sincronización → **Copiar la migración 0008** (aparece cuando el servidor tiene el defecto).
+   También podés copiar el contenido de `supabase/migrations/0008_sync_library_fix.sql`.
+2. Supabase → **SQL Editor** → pegá → **Run**. Solo reemplaza cuatro funciones (`sync_library`, `shared_with_me`,
+   `share_read`, `share_preview_scope`) y agrega `sync_capabilities`. No crea, modifica ni borra tablas, filas, documentos
+   ni políticas. Es repetible.
+3. Comprobá en el mismo editor:
    ```sql
-   select public.collab_capabilities();   -- debe devolver {"sharing": 1}
+   select public.sync_capabilities();   -- {"syncLibrary": 2}
    ```
-4. Recargá GuitarAP. En una canción aparece **Compartir** con enlace de lectura, contraseña, invitaciones y permisos.
+4. En GuitarAP: **Sincronizar ahora**. La primera vez sube tu biblioteca por partes (carpetas, documentos, historial).
+   Tu biblioteca local no se modifica ni se vacía: sólo se envía. Cuando el estado diga «Todo sincronizado» el servidor
+   confirmó cada parte.
 
-Para deshacerlo: pegá `supabase/migrations/0007_sharing_rollback.sql` y ejecutalo. Quita solo lo que agregó 0007 (y por
-lo tanto corta todos los accesos compartidos); tus documentos no se tocan.
+Si el servidor todavía tuviera el defecto, la app ya no dice «No pudimos sincronizar»: dice *«Falta aplicar una
+reparación en Supabase»* y muestra el código (42702) y esta instrucción.
 
-## 2. Para que tu amigo pueda **editar** (por cada persona)
+> Si alguna vez volvés a ejecutar `0007_sharing.sql`, ejecutá `0008` después (0007 redefine `shared_with_me`).
 
-El enlace de solo lectura funciona sin cuenta. Editar requiere que la persona **tenga una cuenta en tu proyecto**, y
-GuitarAP no tiene registro (a propósito: el registro público sigue cerrado). Entonces:
+## Compartir «Tema 1 ft Gottya» entero
 
-1. Supabase → **Authentication → Users → Add user** → email y contraseña, con *Auto Confirm User* marcado.
-2. Pasale ese email y contraseña a tu amigo. Entra en GuitarAP con «Iniciar sesión».
-3. En «Tema 1 FT Goti» → **Compartir → Invitar a un colaborador → Editor** → copiás el enlace de invitación y se lo
-   mandás. Él lo abre con su sesión iniciada y acepta.
+1. Biblioteca → abrí la canción → **Compartir proyecto** (también está en el menú «⋯» de la canción, y en cualquier parte
+   de la canción el botón Compartir ofrece «Todo el proyecto»).
+2. El diálogo dice «Compartir el proyecto «Tema 1 ft Gottya»» y lista las partes que se comparten. Si alguna parte todavía
+   no está en la nube, lo avisa y ofrece **Sincronizar para compartir**: no se crea ningún enlace hasta que el servidor
+   confirme todas las partes.
+3. Copiás **un** enlace de lectura (con contraseña si querés) y se lo mandás a tu amigo: ve todas las partes.
 
-Limitación honesta: la app todavía no permite cambiar la contraseña desde la interfaz; esa cuenta solo sirve para
-colaborar (no tiene tu biblioteca: ve únicamente lo que le compartas).
+**Regla de herencia:** se comparte todo lo que esté dentro del proyecto, ahora y mientras siga dentro. Una parte nueva
+queda compartida en cuanto se sincronice; si la sacás, deja de compartirse. Nada de tus otras canciones o carpetas es accesible.
 
-## 3. Cómo comprobar que no se expone el resto de tu biblioteca
+### Para que tu amigo edite
+Necesita una cuenta en tu proyecto (la app no tiene registro): Supabase → Authentication → Users → *Add user* (email y
+contraseña, con *Auto Confirm User*). Después, en Compartir proyecto → *Invitar* → Editor → le pasás el enlace de
+invitación. Una sola invitación le da las partes del proyecto; las ve agrupadas en «Compartidos conmigo».
 
-Hacelo con una canción de prueba, no con las tuyas:
-
-1. Creá dos canciones: «Prueba compartida» y «Prueba privada». Compartí solo la primera (enlace + invitación).
-2. Abrí el enlace de lectura en una ventana privada: ves solo «Prueba compartida» y **ningún comentario tuyo**.
-3. Con la cuenta de tu amigo: **Compartidos conmigo** lista solo «Prueba compartida». Si pegás en la barra la dirección de
-   otra canción tuya, no abre nada.
-4. En **Compartir** → **Revocar**: recargá la ventana de tu amigo; ya no lee ni guarda.
-
-Si compartís una **carpeta**, el diálogo te muestra antes la lista exacta de lo que se comparte; solo alcanza lo que está
-dentro de esa carpeta (y lo que muevas adentro después).
+## Carpetas normales
+Biblioteca → abrí la carpeta (por ejemplo ESCALAS) → **Compartir carpeta**. Antes de crear el enlace se muestra la lista
+exacta de materiales; no incluye carpetas hermanas, otras canciones, ni materiales en la papelera.
 
 ## Qué protege cada capa (y qué no)
 
 | Capa | Qué hace |
 |---|---|
 | RLS + funciones | Las tablas nuevas no tienen políticas para `anon`/`authenticated`; todo pasa por funciones que verifican `auth.uid()` y el rol **en cada llamada** (un JWT viejo no sirve tras revocar). |
-| Enlaces | Token aleatorio de 256 bits; en la base solo se guarda su hash. Los lectores no reciben tus comentarios. Si el enlace tiene contraseña, ni siquiera se muestra el título antes de ingresarla. |
-| Contraseñas | bcrypt; se verifican en el servidor. 5 errores bloquean el enlace 15 min y cada bloqueo siguiente dura el doble (hasta 24 h). |
-| Límite por dirección de red | **En la base de datos**: 20 intentos fallidos por hora desde una misma IP (hasheada) bloquean esa IP en cualquier enlace. Lee `cf-connecting-ip` (que Supabase/Cloudflare fijan, el cliente no puede elegirlo) o el último salto de `x-forwarded-for`. Cloudflare Pages **no** ve estas peticiones (van directo al dominio de Supabase), por eso el límite vive en la base. |
-| Lo que no hace | No limita peticiones por segundo (un atacante puede seguir *enviándolas*, y cada intento fallido cuesta 0,25 s en el servidor). Para limitar a nivel de red haría falta un dominio propio delante de Supabase (plan de pago de Supabase o Cloudflare delante); no es necesario para la seguridad de las contraseñas. No impide capturas de pantalla ni que alguien guarde una copia de lo que ya vio: revocar corta lecturas nuevas, no borra copias ya descargadas. |
+| Enlaces | Token aleatorio de 256 bits; en la base solo se guarda su hash. Los lectores no reciben tus comentarios. Con contraseña, ni siquiera se muestra el título antes de ingresarla. |
+| Contraseñas | bcrypt; se verifican en el servidor. 5 errores bloquean el enlace 15 min y cada bloqueo siguiente dura el doble (hasta 24 h); 20 intentos fallidos por hora desde una misma IP bloquean esa IP. Cloudflare Pages no ve estas peticiones (van directo a Supabase), por eso el límite vive en la base. |
+| Revocar | Corta lecturas y escrituras nuevas al instante. No borra lo que alguien ya vio o guardó. |
 
-## Lo que validé y con qué
+## Deshacer
+`0007_sharing_rollback.sql` quita solo lo que agregó 0007 (y corta todos los accesos compartidos). `0008` no necesita
+rollback: volver al cuerpo de 0006 traería de vuelta el defecto de sincronización.
 
-Ver `docs/audit-v0.5.1.md`: 35 pruebas de base de datos en PostgreSQL (WASM) y 7 pruebas contra **Postgres de Supabase +
-GoTrue + PostgREST reales en contenedores aislados** (`npm run test:real-stack`, requiere Docker). Eso **no** es tu
-proyecto de Supabase: por eso, después de activar, conviene repetir la sección 3 con canciones de prueba.
+## Cómo se validó
+Ver `docs/audit-v0.5.2.md`. `npm run test:real-stack` (Docker) corre Postgres de Supabase + GoTrue + PostgREST reales en
+contenedores aislados. Eso **no** es tu proyecto de Supabase: después de aplicar 0008 conviene probar con una canción de
+prueba antes de usar las reales.

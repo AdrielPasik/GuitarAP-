@@ -711,3 +711,92 @@ body {
 .section-head {
   margin: 30px 0 10px;
 }
+
+/* Redacted sync diagnostic: monospace, selectable, never wider than the page. */
+.diagnostic {
+  margin: 8px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--sunken);
+  font: 0.82rem/1.5 var(--font-mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* ---- sharing a whole project ---- */
+.share-target {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 8px;
+  margin: 4px 0 10px;
+}
+.share-target-opt {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-2);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+.share-target-opt span {
+  color: var(--ink-3);
+  font-size: 0.82rem;
+}
+.share-target-opt.on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.share-sync {
+  display: grid;
+  gap: 8px;
+  border-left: 3px solid var(--accent);
+}
+.share-sync ul {
+  margin: 0;
+  padding-left: 18px;
+}
+.shared-parts {
+  list-style: none;
+  margin: 4px 0 6px 40px;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+.shared-parts a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  text-decoration: none;
+  color: var(--accent-ink);
+}
+.shared-parts a:hover {
+  background: var(--accent-soft);
+}
+.lib-row.shared-project {
+  display: block;
+}
+.guest-parts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+.guest-parts .chip-btn {
+  text-decoration: none;
+  background: rgb(255 255 255 / 0.08);
+  border-color: rgb(217 166 90 / 0.5);
+  color: var(--ivory);
+}
+.guest-parts .chip-btn:hover {
+  background: rgb(217 166 90 / 0.25);
+}
+.guest-doc-title {
+  font-style: italic;
+}

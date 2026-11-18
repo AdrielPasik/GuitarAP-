@@ -32,7 +32,7 @@ grant execute on function auth.uid() to anon, authenticated, service_role;
 const migrationsDir = path.resolve('supabase/migrations');
 export const migrationFiles = () => readdirSync(migrationsDir).filter((file) => /^000\d_.*\.sql$/.test(file) && !file.includes('rollback')).sort();
 
-export async function createHarness(upTo = '0007') {
+export async function createHarness(upTo = '0008') {
   const db = new PGlite({ extensions: { pgcrypto } });
   await db.exec(SHIM);
   for (const file of migrationFiles()) {

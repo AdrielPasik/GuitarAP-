@@ -109,3 +109,11 @@ Comparar por número: `03` canción, `05` letra + melodía, `11` práctica, `13`
 editoriales, cuaderno de letra rayado con margen y chips de estructura, consola oscura de melodía con teclado de marfil y
 ébano, mesa de composición para Letra + melodía, configuración y pantalla del invitado con portada.
 Qué **no** cambió: la biblioteca (se conservó a propósito), las tablaturas y el mapa del mástil (solo marco).
+
+## v0.5.2 — sincronización y compartir proyectos (`docs/evidence/v0.5.2/`)
+
+`CAPTURE_EVIDENCE=1 npx playwright test tests/e2e/visual-evidence-v052.spec.ts`. `01`/`02` error de sincronización explicado y
+luego reparado, `03` encabezado de la canción con «Compartir proyecto», `04`/`05` diálogo del proyecto completo (alcance,
+regla de herencia, enlace e invitación), `06` desde una parte, `07` lo que recibe el invitado con un solo enlace, `08`
+«Compartidos conmigo» con el proyecto y sus partes, `09` compartir antes de sincronizar. (La cuenta y la sincronización se
+responden con la pasarela de pruebas respaldada por PostgreSQL: ninguna cuenta ni biblioteca real.)

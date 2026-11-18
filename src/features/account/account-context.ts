@@ -1,6 +1,7 @@
 import { createContext, useContext } from 'react';
 import type { BackupSummary } from '@/features/backup/backup-download';
 import type { StatusView } from '@/features/account/account-status';
+import type { SyncDiagnostic, Explained } from '@/features/sync/diagnostic';
 import type { SupabaseSession } from '@/features/sync/supabase-auth';
 
 export type Dialog = null | 'sign-in' | 'protect';
@@ -29,7 +30,11 @@ export type Account = {
   closeDialog: () => void;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => void;
-  syncNow: () => Promise<void>;
+  /** Resolves true only when the server confirmed the round trip (nothing pending, nothing failed). */
+  syncNow: () => Promise<boolean>;
+  syncDiagnostic: SyncDiagnostic | undefined;
+  syncProblem: Explained | undefined;
+  probeServer: () => Promise<void>;
   backup: BackupFlow;
   prepareBackup: () => Promise<void>;
   setBackupConfirmed: (value: boolean) => void;

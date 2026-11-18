@@ -10,6 +10,7 @@ import { collabApi } from '@/features/share/collab-api';
 import { useCollabState, useGateway } from '@/features/share/use-collab';
 import { lazy, Suspense } from 'react';
 
+import type { ShareProject } from '@/features/share/ShareDialog';
 const ShareDialog = lazy(() => import('@/features/share/ShareDialog').then((module) => ({ default: module.ShareDialog })));
 import { Icon, type IconName } from '@/components/ui/Icon';
 import { Menu } from '@/components/ui/Popover';
@@ -60,7 +61,7 @@ export function LibraryScreen() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [naming, setNaming] = useState<Naming>(null);
   const [newSong, setNewSong] = useState(false);
-  const [sharing, setSharing] = useState<{ kind: 'document' | 'node'; id: string; title: string } | null>(null);
+  const [sharing, setSharing] = useState<{ kind: 'document' | 'node'; id: string; title: string; project?: ShareProject; nodeKind?: 'song' | 'folder' } | null>(null);
   const gateway = useGateway();
   const collab = useCollabState();
   const [shared, setShared] = useState<Map<string, { links: number; members: number; invites: number }>>(new Map());
@@ -118,6 +119,11 @@ export function LibraryScreen() {
   const countIn = (node: LibraryNode) =>
     documents.filter((item) => item.nodeId === node.id || item.songId === node.id).length;
   const everything = documents.length + nodes.length;
+  /** The song or folder a part belongs to: the container that «share my song» means. */
+  const partOf = (item: { songId?: string | null; nodeId?: string | null }): ShareProject | undefined => {
+    const container = nodes.find((node) => node.id === (item.songId ?? item.nodeId) && !node.deletedAt);
+    return container ? { id: container.id, title: container.name, kind: container.kind === 'song' ? 'song' : 'folder' } : undefined;
+  };
 
   /** New material lands where you are: in the open folder, or as a part of the open song. */
   async function createFrom(template: MaterialTemplate) {
@@ -237,6 +243,11 @@ export function LibraryScreen() {
               { label: 'Por nombre', checked: sort === 'name', onSelect: () => setSort('name') },
             ]}
           />
+          {current && current.kind !== 'song' && (
+            <button type="button" className="btn" onClick={() => setSharing({ kind: 'node', id: current.id, title: current.name, nodeKind: 'folder' })}>
+              <Icon name="share" size={14} /> Compartir carpeta
+            </button>
+          )}
           {createMenu}
         </div>
 
@@ -305,8 +316,11 @@ export function LibraryScreen() {
             <Glyph kind="song" />
             <div>
               <strong>{current.name}</strong>
-              <span className="muted small">Canción · {countIn(current)} partes</span>
+              <span className="muted small">Canción · {countIn(current)} {countIn(current) === 1 ? 'parte' : 'partes'}</span>
             </div>
+            <button type="button" className="btn btn-primary" onClick={() => setSharing({ kind: 'node', id: current.id, title: current.name, nodeKind: 'song' })}>
+              <Icon name="share" size={14} /> Compartir proyecto
+            </button>
             <button type="button" className="btn" onClick={() => void createFrom('riff')}>
               <Icon name="plus" size={14} /> Agregar parte
             </button>
@@ -359,7 +373,7 @@ export function LibraryScreen() {
                     { label: 'Renombrar', icon: 'pencil', onSelect: () => setNaming({ mode: 'rename-node', id: node.id, initial: node.name }) },
                     { label: 'Duplicar', icon: 'copy', onSelect: () => void libraryRepository.duplicateNode(node.id) },
                     { label: 'Mover a…', onSelect: () => setMoving({ kind: 'node', id: node.id, title: node.name, from: node.parentId }) },
-                    { label: 'Compartir…', icon: 'share', onSelect: () => setSharing({ kind: 'node', id: node.id, title: node.name }) },
+                    { label: node.kind === 'song' ? 'Compartir proyecto…' : 'Compartir carpeta…', icon: 'share', onSelect: () => setSharing({ kind: 'node', id: node.id, title: node.name, nodeKind: node.kind === 'song' ? 'song' : 'folder' }) },
                     {
                       label: 'Enviar a la papelera',
                       icon: 'trash',
@@ -393,7 +407,7 @@ export function LibraryScreen() {
                       { label: 'Abrir', icon: 'pencil', onSelect: () => open(item) },
                       { label: 'Practicar', icon: 'practice', onSelect: () => navigate(`/practica/${item.id}`) },
                       { label: 'Renombrar', onSelect: () => setNaming({ mode: 'rename-doc', id: item.id, initial: item.title }) },
-                      { label: 'Compartir…', icon: 'share', onSelect: () => setSharing({ kind: 'document', id: item.id, title: item.title }) },
+                      { label: 'Compartir…', icon: 'share', onSelect: () => setSharing({ kind: 'document', id: item.id, title: item.title, project: partOf(item) }) },
                       { label: 'Duplicar', icon: 'copy', onSelect: () => void libraryRepository.duplicateDocument(item.id) },
                       { label: 'Mover a…', onSelect: () => setMoving({ kind: 'doc', id: item.id, title: item.title, from: item.nodeId }) },
                       {
@@ -428,7 +442,7 @@ export function LibraryScreen() {
 
       {sharing && (
         <Suspense fallback={null}>
-          <ShareDialog kind={sharing.kind} id={sharing.id} title={sharing.title} onClose={() => setSharing(null)} />
+          <ShareDialog kind={sharing.kind} id={sharing.id} title={sharing.title} project={sharing.project} nodeKind={sharing.nodeKind} onClose={() => setSharing(null)} />
         </Suspense>
       )}
       {newSong && (

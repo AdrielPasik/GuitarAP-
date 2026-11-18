@@ -95,8 +95,26 @@ export function SharedListScreen() {
       )}
       {data && (
         <ul className="lib-list" aria-label="Proyectos compartidos conmigo">
-          {data.folders.map((folder) => (<li key={folder.id} className="lib-row"><span className="lib-open"><span className="glyph kind-folder"><Icon name="folder" size={16} /></span><span className="lib-title">{folder.name}</span><span className="lib-meta">Carpeta · {ROLE_LABEL[folder.role]}</span></span></li>))}
-          {data.documents.map((doc) => (
+          {data.folders.map((folder) => {
+            const parts = data.documents.filter((doc) => doc.project?.id === folder.id);
+            return (
+              <li key={folder.id} className="lib-row shared-project">
+                <div className="lib-open">
+                  <span className={`glyph kind-${folder.kind === 'song' ? 'song' : 'folder'}`}><Icon name={folder.kind === 'song' ? 'users' : 'folder'} size={16} /></span>
+                  <span className="lib-title">{folder.name}</span>
+                  <span className="lib-meta">{folder.kind === 'song' ? 'Proyecto' : 'Carpeta'} · {ROLE_LABEL[folder.role]} · {parts.length} {parts.length === 1 ? 'parte' : 'partes'}</span>
+                </div>
+                <ul className="shared-parts" aria-label={`Partes de ${folder.name}`}>
+                  {parts.map((doc) => (
+                    <li key={doc.id}>
+                      <Link to={`/compartido/${doc.id}`}><Icon name="chevron-right" size={13} /> {doc.title || 'Sin título'}</Link>
+                    </li>
+                  ))}
+                </ul>
+              </li>
+            );
+          })}
+          {data.documents.filter((doc) => !doc.project || !data.folders.some((folder) => folder.id === doc.project!.id)).map((doc) => (
             <li key={doc.id} className="lib-row">
               <Link className="lib-open" to={`/compartido/${doc.id}`}>
                 <span className="glyph kind-song"><Icon name="users" size={16} /></span>

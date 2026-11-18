@@ -165,12 +165,19 @@ export function GuestScreen() {
               <StudioScene variant="compact" />
               <p className="hero-kicker">Compartido con vos</p>
               <h1 className="hero-title">{view.title}</h1>
-              <p className="hero-sub">{view.kind === 'node' ? `${view.documents.length} materiales` : 'Podés leer, escuchar y mirar. No se puede editar desde acá.'}</p>
+              <p className="hero-sub">{view.kind === 'node' ? `${view.documents.length} ${view.documents.length === 1 ? 'parte' : 'partes'} · podés leer, escuchar y mirar. No se puede editar desde acá.` : 'Podés leer, escuchar y mirar. No se puede editar desde acá.'}</p>
+              {view.kind === 'node' && view.documents.length > 1 && (
+                <nav className="guest-parts" aria-label="Partes del proyecto">
+                  {view.documents.map((doc) => (
+                    <a key={doc.id} className="chip-btn" href={`#parte-${doc.id}`}>{doc.title || 'Sin título'}</a>
+                  ))}
+                </nav>
+              )}
             </section>
             {view.documents.map((doc) => {
               const notebook = toNotebook({ id: doc.id, type: doc.type as 'tablature' | 'fretboard', content: doc.content as NotebookContent });
               return (
-                <section key={doc.id} className="guest-doc" aria-label={doc.title}>
+                <section key={doc.id} id={`parte-${doc.id}`} className="guest-doc" aria-label={doc.title}>
                   {view.kind === 'node' && <h2 className="guest-doc-title">{doc.title}</h2>}
                   <div className="practice-stage">
                     <NotebookBlocks notebook={notebook} readOnly />

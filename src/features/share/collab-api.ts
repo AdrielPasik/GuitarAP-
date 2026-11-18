@@ -117,7 +117,7 @@ export const collabApi = {
     rpc<{ ok: boolean; reason?: string; kind?: ResourceKind; id?: string; role?: Role; title?: string }>(g, 'share_accept_invite', { p_token: token, p_label: label }),
   sharedByMe: (g: Gateway) => rpc<Array<{ kind: ResourceKind; id: string; links: number; members: number; invites: number }>>(g, 'shared_by_me'),
   sharedWithMe: (g: Gateway) =>
-    rpc<{ documents: Array<{ id: string; title: string; role: Role; updatedAt: string }>; folders: Array<{ id: string; name: string; role: Role }> }>(g, 'shared_with_me'),
+    rpc<{ documents: Array<{ id: string; title: string; role: Role; updatedAt: string; project?: { id: string; name: string; kind: 'song' | 'folder' } | null }>; folders: Array<{ id: string; name: string; role: Role; kind?: 'song' | 'folder' }> }>(g, 'shared_with_me'),
   pull: (g: Gateway, documentId: string) => rpc<SharedDocument>(g, 'collab_pull_document', { p_doc: documentId }),
   save: (g: Gateway, documentId: string, baseRev: number, title: string, content: NotebookContent, opId: string) =>
     rpc<{ conflict: false; rev: number; updatedAt: number } | { conflict: true; current: { title: string; content: unknown; rev: number; updatedAt: number } }>(g, 'collab_save_document', {

@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { describeBackup, downloadBackup } from '@/features/backup/backup-download';
 import { AccountContext, emptyBackup, type Account, type BackupFlow, type Dialog } from '@/features/account/account-context';
 import { describeStatus } from '@/features/account/account-status';
+import { explainSyncError, type Explained, type SyncDiagnostic } from '@/features/sync/diagnostic';
+import { SyncTransportError } from '@/features/sync/transport';
 import {
   AuthError,
   configuredSupabase,
@@ -28,6 +30,9 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   const [pending, setPending] = useState(0);
   const [conflicts, setConflicts] = useState(0);
   const [lastSyncAt, setLastSyncAt] = useState<number>();
+  const [diagnostic, setDiagnostic] = useState<SyncDiagnostic>();
+  const [problem, setProblem] = useState<Explained>();
+  const [skipped, setSkipped] = useState(0);
   const [autoSync, setAutoSyncState] = useState(true);
   const [online, setOnline] = useState(() => navigator.onLine);
   const [dialog, setDialog] = useState<Dialog>(null);
@@ -44,6 +49,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     setSession(next);
     setLinked(isLinked);
     setLastSyncAt(await data.readLastSync(next.user.id));
+    setDiagnostic(await data.readDiagnostic(next.user.id));
     return isLinked;
   }, []);
 
@@ -76,9 +82,9 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const syncNow = useCallback(async () => {
+  const syncNow = useCallback(async (): Promise<boolean> => {
     const current = sessionRef.current;
-    if (!config || !current || !linked || running.current) return;
+    if (!config || !current || !linked || running.current) return false;
     running.current = true;
     setPhase('syncing');
     setMessage('');
@@ -88,31 +94,53 @@ export function AccountProvider({ children }: { children: ReactNode }) {
         setSession(null);
         setPhase('idle');
         setMessage('Tu sesión venció. Iniciá sesión de nuevo para seguir sincronizando.');
-        return;
+        return false;
       }
       if (fresh.accessToken !== current.accessToken) setSession(fresh);
       const data = await lazyData();
       const result = await data.runSync(config, fresh);
       setConflicts(result.conflicts);
-      if (result.report.offline) setPhase('offline');
-      else {
-        setPhase('idle');
-        setLastSyncAt(result.lastSyncAt);
+      setSkipped(result.skipped);
+      setDiagnostic(result.diagnostic);
+      setProblem(undefined);
+      const copies = result.report.copies;
+      if (copies.length)
+        setMessage(`Se editó ${copies.length === 1 ? 'un material' : `${copies.length} materiales`} en dos dispositivos. Se conservó la versión del servidor y la tuya quedó guardada como «${copies[0].title}»${copies.length > 1 ? ' (y otras copias)' : ''}. No se perdió nada: compará y quedate con lo que prefieras.`);
+      if (result.report.offline) {
+        setPhase('offline');
+        return false;
       }
+      setPhase('idle');
+      setLastSyncAt(result.lastSyncAt);
+      return result.skipped === 0;
     } catch (error) {
       lastError.current = Date.now();
       setPhase('error');
-      setMessage(
-        error instanceof Error && !(error instanceof AuthError)
-          ? 'No pudimos completar la sincronización. Tus cambios siguen guardados en este dispositivo.'
-          : error instanceof Error
-            ? error.message
-            : 'No pudimos sincronizar.',
-      );
+      if (error instanceof AuthError) {
+        setProblem(undefined);
+        setMessage(error.message);
+      } else {
+        // The real cause, in words: never one generic sentence for every failure.
+        const data = await lazyData();
+        const saved = await data.readDiagnostic(current.user.id).catch(() => undefined);
+        setDiagnostic(saved);
+        const explained = explainSyncError(error instanceof SyncTransportError ? error.detail : undefined, saved?.server);
+        setProblem(explained);
+        setMessage(explained.explanation);
+      }
+      return false;
     } finally {
       running.current = false;
     }
   }, [config, linked]);
+
+  const probeServer = useCallback(async () => {
+    const current = sessionRef.current;
+    if (!config || !current) return;
+    const data = await lazyData();
+    await data.probeServer(config, current);
+    setDiagnostic(await data.readDiagnostic(current.user.id));
+  }, [config]);
 
   // Track unsynced local changes so the status is always truthful.
   useEffect(() => {
@@ -230,6 +258,10 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     offlineReport: phase === 'offline',
     pending,
     conflicts,
+    skipped,
+    confirmed: lastSyncAt !== undefined,
+    errorLabel: problem?.headline,
+    errorDetail: problem?.explanation,
   });
 
   const value: Account = {
@@ -252,6 +284,9 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     signIn,
     signOut,
     syncNow,
+    syncDiagnostic: diagnostic,
+    syncProblem: problem,
+    probeServer,
     backup,
     prepareBackup,
     setBackupConfirmed: (confirmed) => setBackup((current) => ({ ...current, confirmed })),

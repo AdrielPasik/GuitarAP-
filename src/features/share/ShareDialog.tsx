@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Dialog } from '@/components/ui/Dialog';
 import { Icon } from '@/components/ui/Icon';
 import { useToast } from '@/components/ui/toast-context';
+import { projectParts } from '@/data/project-scope';
 import { useAccount } from '@/features/account/account-context';
 import {
   collabApi, CollabError, guestUrl, inviteUrl, knownUrl, rememberUrl,
@@ -51,7 +53,16 @@ async function copyText(text: string) {
  * people who can comment or edit (invited explicitly, by account), and what is currently shared. Everything the
  * owner does here is decided by the server; this dialog never grants anything by itself.
  */
-export function ShareDialog({ kind, id, title, onClose }: { kind: ResourceKind; id: string; title: string; onClose: () => void }) {
+export type ShareProject = { id: string; title: string; kind: 'song' | 'folder' };
+
+export function ShareDialog({ kind: partKind, id: partId, title: partTitle, project, nodeKind, onClose }: { kind: ResourceKind; id: string; title: string; project?: ShareProject; /** When sharing a library node directly: is it a song project or a plain folder? */ nodeKind?: 'song' | 'folder'; onClose: () => void }) {
+  // Opened from one part of a song: the project is the default, because that is what people mean by «share my song».
+  const [target, setTarget] = useState<'project' | 'part'>(project ? 'project' : 'part');
+  const wholeProject = Boolean(project) && target === 'project';
+  const kind: ResourceKind = wholeProject ? 'node' : partKind;
+  const id = wholeProject ? project!.id : partId;
+  const title = wholeProject ? project!.title : partTitle;
+  const isSong = wholeProject ? project?.kind === 'song' : kind === 'node' && nodeKind === 'song';
   const toast = useToast();
   const account = useAccount();
   const gateway = useGateway();
@@ -69,6 +80,9 @@ export function ShareDialog({ kind, id, title, onClose }: { kind: ResourceKind; 
   const [advanced, setAdvanced] = useState(false);
   const [inviteRole, setInviteRole] = useState<Role>('editor');
   const [confirmAll, setConfirmAll] = useState(false);
+  const [notInCloud, setNotInCloud] = useState(false);
+  const [localParts, setLocalParts] = useState<Array<{ id: string; title: string }>>([]);
+  const [syncing, setSyncing] = useState(false);
   const signedIn = Boolean(account.session);
 
   const load = useCallback(async () => {
@@ -77,13 +91,26 @@ export function ShareDialog({ kind, id, title, onClose }: { kind: ResourceKind; 
       const [next, preview] = await Promise.all([collabApi.overview(gateway, kind, id), collabApi.previewScope(gateway, kind, id)]);
       setOverview(next);
       setScope(preview.documents);
+      setNotInCloud(false);
       setError('');
     } catch (failure) {
       if (failure instanceof CollabError && failure.failure === 'forbidden') {
-        setError('Este material todavía no está en tu cuenta en la nube. Sincronizá tu biblioteca primero (Configuración → Sincronización) y volvé a abrir Compartir.');
+        // The server does not know this project yet: it is only on this device. The way out is a real sync, not a hint.
+        setNotInCloud(true);
+        setOverview(null);
+        setScope([]);
+        setError('');
       } else setError(failure instanceof Error ? failure.message : 'No se pudo cargar.');
     }
   }, [gateway, id, kind]);
+  // What this device holds for the same container, to compare with what the server can see.
+  const refreshLocal = useCallback(async () => {
+    setLocalParts(kind === 'node' ? (await projectParts(id)).map((doc) => ({ id: doc.id, title: doc.title })) : []);
+  }, [id, kind]);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void refreshLocal();
+  }, [refreshLocal]);
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (state === 'ready' && signedIn) void load();
@@ -96,6 +123,19 @@ export function ShareDialog({ kind, id, title, onClose }: { kind: ResourceKind; 
     }, 8000);
     return () => window.clearInterval(timer);
   }, [state, signedIn, load]);
+
+  /** Uploads the library for real and waits for the server's confirmation before anything is shared. */
+  async function syncToShare() {
+    setSyncing(true);
+    setError('');
+    try {
+      await account.syncNow();
+      await load();
+      await refreshLocal();
+    } finally {
+      setSyncing(false);
+    }
+  }
 
   async function act<T>(work: () => Promise<T>, done?: string) {
     setBusy(true);
@@ -163,10 +203,13 @@ export function ShareDialog({ kind, id, title, onClose }: { kind: ResourceKind; 
   const links = overview?.links.filter(activeLink) ?? [];
   const members = overview?.members.filter((member) => !member.revokedAt) ?? [];
   const invites = overview?.invites.filter(pendingInvite) ?? [];
+  // Parts that exist here but that the server cannot see yet: sharing now would silently leave them out.
+  const missingParts = kind === 'node' && overview ? localParts.filter((part) => !scope.some((item) => item.id === part.id)) : [];
+  const blocked = notInCloud || missingParts.length > 0;
   const status = members.length ? 'Compartido con colaboradores' : links.length ? 'Compartido mediante enlace' : invites.length ? 'Invitación pendiente' : 'Privado';
 
   return (
-    <Dialog title={`Compartir «${title || 'Sin título'}»`} size="lg" onClose={onClose}>
+    <Dialog title={isSong ? `Compartir el proyecto «${title || 'Sin título'}»` : `Compartir «${title || 'Sin título'}»`} size="lg" onClose={onClose}>
       <div className="share">
         {state === 'unconfigured' && <p className="share-note">Esta versión de GuitarAP no tiene la nube conectada, así que no se puede compartir.</p>}
         {state === 'checking' && <p className="share-note" role="status">Comprobando la nube…</p>}
@@ -195,14 +238,57 @@ export function ShareDialog({ kind, id, title, onClose }: { kind: ResourceKind; 
               <span className="muted small">{status === 'Privado' ? 'Solo vos podés verlo.' : 'Podés dejar de compartir cuando quieras.'}</span>
               <button type="button" className="btn btn-ghost share-refresh" onClick={() => void load()}><Icon name="sync" size={13} /> Actualizar</button>
             </p>
+            {project && partKind === 'document' && (
+              <div className="share-target" role="group" aria-label="Qué compartir">
+                <button type="button" aria-pressed={target === 'project'} className={`share-target-opt${target === 'project' ? ' on' : ''}`} onClick={() => { setTarget('project'); setFresh(null); }}>
+                  <strong>{project.kind === 'song' ? 'Todo el proyecto' : 'Toda la carpeta'}</strong>
+                  <span>«{project.title}» con todas sus partes</span>
+                </button>
+                <button type="button" aria-pressed={target === 'part'} className={`share-target-opt${target === 'part' ? ' on' : ''}`} onClick={() => { setTarget('part'); setFresh(null); }}>
+                  <strong>Solo esta parte</strong>
+                  <span>«{partTitle || 'Sin título'}»</span>
+                </button>
+              </div>
+            )}
             {error && <p className="share-error" role="alert">{error}</p>}
-            {account.linked === false && <p className="share-note small">Tu biblioteca todavía no está vinculada a la nube. Vinculala en Configuración → Sincronización para poder compartir.</p>}
+            {account.linked === false && <p className="share-note small">Tu biblioteca todavía no está vinculada a la nube. Vinculala en <Link to="/configuracion/sincronizacion" onClick={onClose}>Configuración → Sincronización</Link> para poder compartir.</p>}
 
-            {kind === 'node' && (
+            {notInCloud && (
+              <div className="share-note share-sync" role="alert">
+                <strong>{kind === 'node' ? 'Este proyecto' : 'Este material'} todavía no está en tu cuenta en la nube.</strong>
+                <p>
+                  Está guardado en este dispositivo, pero Supabase todavía no lo recibió. Para compartirlo hay que subirlo primero. No se crea ningún enlace hasta que el servidor confirme que recibió {kind === 'node' ? 'el proyecto y todas sus partes' : 'el material'}.
+                </p>
+                {account.syncProblem && (
+                  <p className="share-error" role="status"><strong>{account.syncProblem.headline}.</strong> {account.syncProblem.explanation}</p>
+                )}
+                <button type="button" className="btn btn-primary" disabled={syncing || account.linked === false} onClick={() => void syncToShare()}>
+                  {syncing ? 'Sincronizando…' : 'Sincronizar para compartir'}
+                </button>
+                {account.syncProblem && <p className="muted small">El detalle técnico está en <Link to="/configuracion/sincronizacion" onClick={onClose}>Configuración → Sincronización</Link>.</p>}
+              </div>
+            )}
+
+            {!notInCloud && missingParts.length > 0 && (
+              <div className="share-note share-sync" role="alert">
+                <strong>{missingParts.length === 1 ? '1 parte todavía no está en la nube' : `${missingParts.length} partes todavía no están en la nube`}</strong>
+                <ul>{missingParts.map((part) => (<li key={part.id}>{part.title || 'Sin título'}</li>))}</ul>
+                <p>Si compartís ahora, quienes reciban el enlace no verían {missingParts.length === 1 ? 'esa parte' : 'esas partes'}. Subilas primero.</p>
+                <button type="button" className="btn btn-primary" disabled={syncing} onClick={() => void syncToShare()}>{syncing ? 'Sincronizando…' : 'Sincronizar para compartir'}</button>
+              </div>
+            )}
+
+            {kind === 'node' && !notInCloud && (
               <details className="share-scope" open>
-                <summary>Esto compartirá {scope.length} {scope.length === 1 ? 'material' : 'materiales'} de esta carpeta</summary>
+                <summary>
+                  {isSong
+                    ? `Esto compartirá el proyecto con ${scope.length} ${scope.length === 1 ? 'parte' : 'partes'}`
+                    : `Esto compartirá ${scope.length} ${scope.length === 1 ? 'material' : 'materiales'} de esta carpeta`}
+                </summary>
                 <ul>{scope.map((item) => (<li key={item.id}>{item.title || 'Sin título'}</li>))}</ul>
-                <p className="muted small">Se incluye todo lo que esté dentro (también subcarpetas), ahora y mientras siga dentro. Si movés un material afuera, deja de compartirse. Nada de tu otra biblioteca queda accesible.</p>
+                <p className="muted small">
+                  <strong>Regla:</strong> se comparte todo lo que esté dentro, ahora y mientras siga dentro. Si agregás una parte nueva a {isSong ? 'este proyecto' : 'esta carpeta'}, queda compartida en cuanto se sincronice; si la sacás, deja de compartirse. Nada de tu otra biblioteca (otras canciones o carpetas) queda accesible.
+                </p>
               </details>
             )}
 
@@ -217,6 +303,8 @@ export function ShareDialog({ kind, id, title, onClose }: { kind: ResourceKind; 
               </div>
             )}
 
+            {!notInCloud && (
+              <>
             <section className="share-section" aria-labelledby="share-link-title">
               <h3 id="share-link-title"><Icon name="link2" size={15} /> Enlace de solo lectura</h3>
               <p className="muted small">Quien tenga el enlace puede leer, escuchar y ver este material, sin cuenta y sin poder editar.</p>
@@ -261,7 +349,7 @@ export function ShareDialog({ kind, id, title, onClose }: { kind: ResourceKind; 
                     </label>
                   </div>
                 )}
-                <button type="button" className="btn btn-primary" disabled={busy || (protect && password.length < 8)} onClick={() => void createLink()}>Crear enlace de lectura</button>
+                <button type="button" className="btn btn-primary" disabled={busy || blocked || (protect && password.length < 8)} onClick={() => void createLink()}>Crear enlace de lectura</button>
               </div>
             </section>
 
@@ -301,7 +389,7 @@ export function ShareDialog({ kind, id, title, onClose }: { kind: ResourceKind; 
                   </select>
                 </label>
                 <p className="muted small">{ROLE_HINT[inviteRole]}</p>
-                <button type="button" className="btn" disabled={busy} onClick={() => void createInvite()}>Crear invitación</button>
+                <button type="button" className="btn" disabled={busy || blocked} onClick={() => void createInvite()}>Crear invitación</button>
                 <p className="muted small">La persona abre el enlace, inicia sesión con su cuenta y acepta. No hace falta su correo.</p>
               </div>
             </section>
@@ -319,6 +407,9 @@ export function ShareDialog({ kind, id, title, onClose }: { kind: ResourceKind; 
                 </ul>
               )}
             </details>
+
+              </>
+            )}
 
             {(links.length > 0 || members.length > 0 || invites.length > 0) && (
               <section className="share-danger" aria-label="Dejar de compartir">

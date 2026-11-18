@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
 import { Link, useNavigate } from 'react-router-dom';
 import type { MusicalDocument } from '@/core/model';
 import { documentKind } from '@/core/notebook';
@@ -6,6 +7,8 @@ import { Icon } from '@/components/ui/Icon';
 import { Menu } from '@/components/ui/Popover';
 import { useToast } from '@/components/ui/toast-context';
 import { libraryRepository } from '@/data/library-repository';
+import { containerOf } from '@/data/project-scope';
+import type { ShareProject } from '@/features/share/ShareDialog';
 import { AddBlockMenu } from '@/features/notebook/blocks';
 import { HistoryDialog, ShortcutsDialog } from '@/features/notebook/dialogs';
 import { blockFor } from '@/features/notebook/block-meta';
@@ -71,6 +74,10 @@ export function NotebookEditor({
   const [transfer, setTransfer] = useState<{ blockId: string; mode: TransferMode } | null>(null);
   const [outline, setOutline] = usePref<boolean>('outline-open', false);
   const [sharing, setSharing] = useState(false);
+  const project = useLiveQuery(async () => {
+    const container = await containerOf(record);
+    return container ? ({ id: container.id, title: container.name, kind: container.kind === 'song' ? 'song' : 'folder' } as ShareProject) : null;
+  }, [record.songId, record.nodeId]);
   const [style] = useNoteStyle();
   const chordsBlock = [...doc.notebook.blocks].reverse().find((block) => block.kind === 'chords' && block.id === activeBlock) ?? [...doc.notebook.blocks].reverse().find((block) => block.kind === 'chords');
   const addChords = (symbols: string[]) => {
@@ -234,7 +241,7 @@ export function NotebookEditor({
       </div>
       {sharing && (
         <Suspense fallback={null}>
-          <ShareDialog kind="document" id={record.id} title={doc.title} onClose={() => setSharing(false)} />
+          <ShareDialog kind="document" id={record.id} title={doc.title} project={project ?? undefined} onClose={() => setSharing(false)} />
         </Suspense>
       )}
       {transfer && (

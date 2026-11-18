@@ -10,7 +10,7 @@ Una canción tiene BPM y tonalidad propios que heredan todos sus bloques; podés
 canciones, ver la letra junto a su melodía y, cuando se active el backend (ver `docs/sharing-activation.md`), compartirla
 por enlace (con contraseña opcional) o con colaboradores con roles. No hay pentagramas: es una decisión de producto.
 
-- [Auditoría v0.5.1](docs/audit-v0.5.1.md) · [Auditoría v0.5](docs/audit-v0.5.md) · [Colaboración (ADR 0009)](docs/adr/0009-collaboration.md) · [Activar compartir](docs/sharing-activation.md) · [Sistema v0.5](docs/design/system-v0.5.md)
+- [Auditoría v0.5.2](docs/audit-v0.5.2.md) · [Auditoría v0.5.1](docs/audit-v0.5.1.md) · [Auditoría v0.5](docs/audit-v0.5.md) · [Colaboración (ADR 0009)](docs/adr/0009-collaboration.md) · [Activar compartir](docs/sharing-activation.md) · [Sistema v0.5](docs/design/system-v0.5.md)
 - [Auditoría v0.4](docs/audit-v0.4.md) · [Audio (ADR 0007)](docs/adr/0007-audio-architecture.md) · [Modelo de composición (ADR 0008)](docs/adr/0008-composition-model.md) · [Identidad](docs/design/identity-v0.4.md)
 - [Auditoría v0.3](docs/audit-v0.3.md) · [Sistema armónico](docs/design/harmony.md) · [Auditoría v0.2](docs/audit-v0.2.md) · [Dirección de diseño](docs/design/direction.md) ·
   [Arquitectura de experiencia](docs/ux-architecture.md) · [Evidencia visual](docs/evidence/README.md)

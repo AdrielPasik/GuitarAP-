@@ -3,7 +3,8 @@ import { db } from '@/data/database';
 import { libraryRepository } from '@/data/library-repository';
 import { activateOwner } from '@/data/library-scope';
 import { countConflicts, countPending, SyncEngine } from '@/features/sync/engine';
-import { SupabaseTransport } from '@/features/sync/transport';
+import { probeSyncServer, type SyncDiagnostic } from '@/features/sync/diagnostic';
+import { SupabaseTransport, SyncTransportError } from '@/features/sync/transport';
 import type { SupabaseConfig, SupabaseSession } from '@/features/sync/supabase-auth';
 
 /**
@@ -46,15 +47,53 @@ export async function exportLibraryBackup() {
   return libraryRepository.exportBackup();
 }
 
+const diagnosticKey = (userId: string) => `sync-diagnostic:${userId}`;
+export async function readDiagnostic(userId: string) {
+  return (await db.settings.get(diagnosticKey(userId)))?.value as SyncDiagnostic | undefined;
+}
+async function writeDiagnostic(userId: string, value: SyncDiagnostic) {
+  await db.settings.put({ key: diagnosticKey(userId), value, updatedAt: value.at });
+}
+
+/** Asks the server (read-only) which version of the sync function it runs and remembers the answer. */
+export async function probeServer(config: SupabaseConfig, session: SupabaseSession) {
+  const server = await probeSyncServer(config.url, config.anonKey, session.accessToken);
+  const previous = await readDiagnostic(session.user.id);
+  await writeDiagnostic(session.user.id, { ...(previous ?? { at: Date.now(), ok: false }), server });
+  return server;
+}
+
 export async function runSync(config: SupabaseConfig, session: SupabaseSession) {
   const engine = new SyncEngine(new SupabaseTransport(config.url, config.anonKey, session.accessToken));
-  const report = await engine.sync(session.user.id);
+  const owner = session.user.id;
+  let report;
+  try {
+    report = await engine.sync(owner);
+  } catch (error) {
+    const detail = error instanceof SyncTransportError ? error.detail : undefined;
+    // A refused push on sync_library may be the known server defect: find out, so the message can say it exactly.
+    const server = detail && detail.rpc === 'sync_library' && detail.kind !== 'network' ? await probeSyncServer(config.url, config.anonKey, session.accessToken) : undefined;
+    await writeDiagnostic(owner, { at: Date.now(), ok: false, detail, server }).catch(() => undefined);
+    throw error;
+  }
+  const skipped = { nodes: report.skipped.nodes.length, documents: report.skipped.documents.length, versions: report.skipped.versions.length };
   let lastSyncAt: number | undefined;
   if (!report.offline) {
     lastSyncAt = Date.now();
-    await db.settings.put({ key: lastSyncKey(session.user.id), value: lastSyncAt, updatedAt: lastSyncAt });
+    await db.settings.put({ key: lastSyncKey(owner), value: lastSyncAt, updatedAt: lastSyncAt });
   }
-  return { report, lastSyncAt, conflicts: await countConflicts(session.user.id) };
+  const diagnostic: SyncDiagnostic = {
+    at: Date.now(),
+    ok: !report.offline,
+    pushed: report.pushed,
+    pulled: report.pulled,
+    requests: report.requests,
+    skipped,
+    copies: report.copies.length,
+    server: (await readDiagnostic(owner))?.server,
+  };
+  await writeDiagnostic(owner, diagnostic).catch(() => undefined);
+  return { report, lastSyncAt, diagnostic, skipped: skipped.nodes + skipped.documents + skipped.versions, conflicts: await countConflicts(owner) };
 }
 
 export function watchPending(userId: string, onChange: (value: { pending: number; conflicts: number }) => void) {

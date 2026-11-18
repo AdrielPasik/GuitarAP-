@@ -17,6 +17,12 @@ export type StatusInput = {
   offlineReport: boolean;
   pending: number;
   conflicts: number;
+  /** Local records that cannot be uploaded: the status must not say everything is synced while some are not. */
+  skipped?: number;
+  /** The server has confirmed at least one complete round trip for this account. Without it nothing is "synced". */
+  confirmed?: boolean;
+  errorLabel?: string;
+  errorDetail?: string;
 };
 
 export type StatusView = { kind: StatusKind; label: string; detail: string };
@@ -46,8 +52,8 @@ export function describeStatus(input: StatusInput): StatusView {
   if (input.failed)
     return {
       kind: 'error',
-      label: 'No pudimos sincronizar',
-      detail: 'Tus cambios siguen guardados en este dispositivo. Reintentá en un momento.',
+      label: input.errorLabel ?? 'No pudimos sincronizar',
+      detail: input.errorDetail ?? 'Tus cambios siguen guardados en este dispositivo. Reintentá en un momento.',
     };
   if (input.syncing)
     return { kind: 'syncing', label: 'Sincronizando…', detail: 'Enviando y recibiendo cambios.' };
@@ -57,11 +63,23 @@ export function describeStatus(input: StatusInput): StatusView {
       label: input.pending ? `Sin conexión · ${plural(input.pending, 'pendiente', 'pendientes')}` : 'Sin conexión',
       detail: 'Seguí trabajando: se sincroniza solo cuando vuelva la conexión.',
     };
+  if ((input.skipped ?? 0) > 0)
+    return {
+      kind: 'error',
+      label: `${input.skipped} sin poder subir`,
+      detail: 'Hay materiales que apuntan a una carpeta que ya no existe en esta biblioteca. Siguen acá, intactos; el resto se sincronizó.',
+    };
   if (input.pending > 0)
     return {
       kind: 'pending',
       label: plural(input.pending, 'cambio pendiente', 'cambios pendientes'),
       detail: 'Se enviarán a tu cuenta en unos segundos.',
+    };
+  if (input.confirmed === false)
+    return {
+      kind: 'pending',
+      label: 'Falta la primera sincronización',
+      detail: 'Todavía el servidor no confirmó que recibió tu biblioteca. Se hace sola en unos segundos, o tocá «Sincronizar ahora».',
     };
   return { kind: 'synced', label: 'Todo sincronizado', detail: 'Tus materiales coinciden con tu cuenta.' };
 }

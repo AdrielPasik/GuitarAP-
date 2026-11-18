@@ -25,7 +25,9 @@ describe('sync status in plain words', () => {
   });
 
   it('describes each state a person can be in', () => {
-    expect(describeStatus(base)).toMatchObject({ kind: 'synced', label: 'Todo sincronizado' });
+    expect(describeStatus({ ...base, confirmed: true })).toMatchObject({ kind: 'synced', label: 'Todo sincronizado' });
+    // Linked, nothing pending yet, but the server never confirmed a round trip: that is NOT "synced".
+    expect(describeStatus({ ...base, confirmed: false })).toMatchObject({ kind: 'pending', label: 'Falta la primera sincronización' });
     expect(describeStatus({ ...base, pending: 1 }).label).toBe('1 cambio pendiente');
     expect(describeStatus({ ...base, pending: 3 }).label).toBe('3 cambios pendientes');
     expect(describeStatus({ ...base, syncing: true }).kind).toBe('syncing');
