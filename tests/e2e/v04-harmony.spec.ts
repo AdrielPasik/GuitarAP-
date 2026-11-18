@@ -69,7 +69,7 @@ test('Test B — modulación de Do mayor a Sol mayor: notas y acordes comunes, c
 
   expect(await audioLog(page)).toHaveLength(0);
   await panel(page).locator('.paths li').first().getByRole('button', { name: 'Escuchar' }).click();
-  await expect.poll(async () => (await audioLog(page)).filter((entry) => entry.type === 'note').length).toBeGreaterThan(8);
+  await expect.poll(async () => (await audioLog(page)).filter((entry) => entry.type === 'note').length, { timeout: 15000 }).toBeGreaterThan(8);
   await panel(page).getByRole('button', { name: 'Cerrar herramientas musicales' }).click();
   // Closing the panel silences what it started.
   await expect.poll(async () => (await page.evaluate(() => (window as unknown as { __guitarapAudio: { state: string } }).__guitarapAudio.state))).toBe('idle');

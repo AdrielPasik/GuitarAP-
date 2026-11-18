@@ -69,6 +69,11 @@ export function AccountMenu() {
           </p>
           <p className="muted small">{account.status.detail}</p>
           {account.message && <p className="muted small">{account.message}</p>}
+          {account.linked && account.conflictCount > 0 && (
+            <Link className="btn btn-link" to="/configuracion/conflictos" onClick={close}>
+              Revisar y resolver {account.conflictCount === 1 ? 'el conflicto' : 'los conflictos'}
+            </Link>
+          )}
           {account.linked && <p className="muted small">Última sincronización: {describeLastSync(account.lastSyncAt)}</p>}
           <div className="account-actions">
             {!account.linked && (

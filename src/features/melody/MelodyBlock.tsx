@@ -3,6 +3,7 @@ import { usePref } from '@/core/prefs';
 import { melodyToSequence } from '@/audio/plan';
 import { previewNote } from '@/audio/preview';
 import { useBlockPlayer } from '@/audio/useBlockPlayer';
+import { withInstrument } from '@/audio/instruments';
 import type { MelodyContent, MelodyEvent } from '@/core/model';
 import { formatNote, octaveOf, parseNote, pitchClassName } from '@/core/theory/pitch';
 import { Icon } from '@/components/ui/Icon';
@@ -47,7 +48,7 @@ export function MelodyBlock({
   const [style, setStyle] = useNoteStyle();
   const [defaultOctave] = usePref<number>('default-octave', 4);
   const sequence = useMemo(() => melodyToSequence(content), [content]);
-  const player = useBlockPlayer({ owner: blockId, sequence, blockBpm: content.bpm, instrument: content.instrument });
+  const player = useBlockPlayer({ owner: blockId, sequence, blockBpm: content.bpm, instrument: content.instrument, kind: 'melody' });
   const comments = useComments();
   const [selection, setSelection] = useState<string[]>([]);
   const [anchor, setAnchor] = useState<string | null>(null);
@@ -218,7 +219,7 @@ export function MelodyBlock({
           disabled={noteCount(content) === 0}
           emptyHint="Escribí alguna nota para poder escucharla"
           onBlockBpm={readOnly ? undefined : (bpm) => onChange((current) => withBlockBpm(current, bpm))}
-          onInstrument={readOnly ? undefined : (instrument) => onChange((current) => ({ ...current, instrument }))}
+          onInstrument={readOnly ? undefined : (instrument) => onChange((current) => withInstrument(current, instrument))}
         />
         {!readOnly && (
           <>

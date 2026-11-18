@@ -14,6 +14,8 @@ export default defineConfig({
   },
   test: {
     environment: 'jsdom',
+    // The suite grew (40 files, real PostgreSQL in WASM, lazily imported screens): 5 s is too tight when files run in parallel.
+    testTimeout: 30_000,
     setupFiles: ['./src/test/setup.ts'],
     css: true,
     exclude: ['node_modules/**', 'tests/e2e/**'],

@@ -31,7 +31,8 @@ export function PlayerBar({
   label: string;
   /** Sets (number) or clears (undefined) the block's own tempo. Absent = the block cannot be edited (reading). */
   onBlockBpm?: (bpm: number | undefined) => void;
-  onInstrument?: (instrument: 'piano' | 'guitar') => void;
+  /** Saves the instrument in the block; `undefined` returns the block to the default for its kind. */
+  onInstrument?: (instrument: 'piano' | 'guitar' | undefined) => void;
   disabled?: boolean;
   emptyHint?: string;
 }) {
@@ -149,12 +150,17 @@ export function PlayerBar({
             <Segmented<'piano' | 'guitar'>
               label="Instrumento"
               value={player.instrument}
-              onChange={(value) => (onInstrument ? onInstrument(value) : player.prefs.setInstrument(value))}
+              onChange={(value) => (onInstrument ? onInstrument(value) : player.prefs.setInstrumentFor(player.kind, value))}
               options={[
                 { value: 'piano', label: 'Piano', title: 'Piano sintetizado en tu navegador' },
                 { value: 'guitar', label: 'Guitarra', title: 'Cuerda pulsada sintetizada: una aproximación, no una guitarra real' },
               ]}
             />
+            {onInstrument && player.instrumentSource === 'block' && (
+              <button type="button" className="btn btn-link" onClick={() => onInstrument(undefined)}>
+                Volver al predeterminado ({player.kind === 'melody' ? 'melodías' : player.kind === 'tablature' ? 'tablaturas' : 'acordes'}: {player.prefs.instrumentFor(player.kind) === 'piano' ? 'piano' : 'guitarra'})
+              </button>
+            )}
             <p className="muted small">Son sonidos sintetizados en tu navegador, sin descargas: una aproximación para escuchar tus ideas.</p>
             <label className="check">
               <input type="checkbox" checked={player.prefs.loop} onChange={(event) => player.prefs.setLoop(event.target.checked)} /> Repetir

@@ -273,6 +273,8 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     status,
     lastSyncAt,
     message,
+    pendingCount: pending,
+    conflictCount: conflicts,
     autoSync,
     setAutoSync: (enabled) => {
       setAutoSyncState(enabled);

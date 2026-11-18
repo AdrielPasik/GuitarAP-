@@ -44,7 +44,7 @@ function useListen(bpm: number) {
   return {
     playing: snapshot.owner === OWNER && snapshot.state === 'playing',
     play: (symbols: string[], beats = 2) =>
-      transport.play({ owner: OWNER, sequence: progressionToSequence(symbols, beats), bpm, instrument: prefs.instrument }),
+      transport.play({ owner: OWNER, sequence: progressionToSequence(symbols, beats), bpm, instrument: prefs.instrumentFor('chords') }),
     stop: () => transport.stop(),
   };
 }

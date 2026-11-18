@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { tablatureToSequence } from '@/audio/plan';
 import { useBlockPlayer } from '@/audio/useBlockPlayer';
+import { withInstrument } from '@/audio/instruments';
 import { PlayerBar } from '@/features/notebook/PlayerBar';
 import { withBlockBpm } from '@/audio/tempo';
 import type { TablatureContent, Technique } from '@/core/model';
@@ -65,7 +66,7 @@ export function TabBlock({
 }) {
   const toast = useToast();
   const sequence = useMemo(() => tablatureToSequence(content), [content]);
-  const player = useBlockPlayer({ owner: blockId, sequence, blockBpm: content.bpm, instrument: content.instrument });
+  const player = useBlockPlayer({ owner: blockId, sequence, blockBpm: content.bpm, instrument: content.instrument, kind: 'tablature' });
   const [selected, setSelected] = useState<TabCursor>({ column: 0, string: 0 });
   const programmatic = useRef(false);
   // Selection is anchor → cursor: the anchor stays put while Shift+arrows move the cursor.
@@ -354,7 +355,7 @@ export function TabBlock({
           disabled={!hasSound}
           emptyHint="Escribí alguna nota para poder escucharla"
           onBlockBpm={readOnly ? undefined : (bpm) => onChange((current) => withBlockBpm(current, bpm))}
-          onInstrument={readOnly ? undefined : (instrument) => onChange((current) => ({ ...current, instrument }))}
+          onInstrument={readOnly ? undefined : (instrument) => onChange((current) => withInstrument(current, instrument))}
         />
         {!readOnly && (
           <>

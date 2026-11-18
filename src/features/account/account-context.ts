@@ -23,6 +23,9 @@ export type Account = {
   status: StatusView;
   lastSyncAt: number | undefined;
   message: string;
+  /** Local changes the server has not confirmed yet (documents and folders). */
+  pendingCount: number;
+  conflictCount: number;
   autoSync: boolean;
   setAutoSync: (value: boolean) => void;
   dialog: Dialog;

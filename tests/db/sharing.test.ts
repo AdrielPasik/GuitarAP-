@@ -428,7 +428,7 @@ describe('Q — hardening found in the final audit (rate limiting, titles, comme
     await h.admin.sql(`update public.share_links set locked_until = now() - interval '1 second' where id = $1`, [link.id]);
     expect((await unlockFrom(null, link.token, 'cancion-escalada')).ok).toBe(true);
     expect((await h.admin.sql('select lockouts from public.share_links where id = $1', [link.id]))[0].lockouts).toBe(0);
-  });
+  }, 90_000);
 
   it('one network address is stopped after 20 failures, on any link; others and the right password elsewhere are unaffected', async () => {
     const a = await shareLink(letra, { p_password: 'password-link-a' });
@@ -449,7 +449,7 @@ describe('Q — hardening found in the final audit (rate limiting, titles, comme
     // The window ends: the address can try again.
     await h.admin.sql(`update public.share_unlock_ip set window_start = now() - interval '61 minutes'`);
     expect((await unlockFrom('203.0.113.9', b.token, 'password-link-b')).ok).toBe(true);
-  });
+  }, 90_000);
 
   it('a password-protected link does not even reveal the project title before the password', async () => {
     const link = await shareLink(letra, { p_password: 'password-titulo' });

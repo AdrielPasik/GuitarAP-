@@ -131,6 +131,20 @@ export async function countPending(owner: string) {
   const { snapshot } = await pendingSnapshot(owner, await get(owner));
   return snapshot.documents.length + snapshot.nodes.length;
 }
+/** What the server has confirmed, in plain counts: never guessed (everything not confirmed counts as not confirmed). */
+export async function syncSummary(owner: string) {
+  const state = await get(owner);
+  const { snapshot, skipped } = await pendingSnapshot(owner, state);
+  const [documents, nodes] = await Promise.all([db.documents.where('ownerId').equals(owner).count(), db.nodes.where('ownerId').equals(owner).count()]);
+  const pendingDocuments = snapshot.documents.length;
+  return {
+    documents, nodes,
+    documentsConfirmed: Math.max(0, documents - pendingDocuments - skipped.documents.length - Object.keys(state.conflicts).length),
+    pendingDocuments, pendingNodes: snapshot.nodes.length,
+    conflicts: Object.keys(state.conflicts).length,
+    skipped: skipped.nodes.length + skipped.documents.length + skipped.versions.length,
+  };
+}
 /** Conflicts kept locally for manual review. */
 export async function countConflicts(owner: string) {
   return Object.keys((await get(owner)).conflicts).length;
@@ -273,6 +287,11 @@ export class SyncEngine {
           state.versions[x.id] = true;
         } else {
           const x = change.record as RemoteDocument;
+          if (x.id in state.conflicts) {
+            // A person has yet to decide this one: only keep the newest cloud version for the comparison, touch nothing.
+            state.conflicts[x.id] = x;
+            continue;
+          }
           const knownRemote = state.remote!.documents[x.id];
           if (knownRemote === x.rev && state.documents[x.id] !== undefined) continue; // echo of our own push (or a replay)
           if (x.nodeId && !(await db.nodes.get(x.nodeId))) throw new Error(`El documento remoto ${x.id} apunta a una carpeta inexistente.`);
@@ -332,4 +351,71 @@ export class SyncEngine {
   async conflicts(owner: string) {
     return (await get(owner)).conflicts;
   }
+}
+
+/* ------------------------------------------------------------------------------------------------------------------
+ * Conflicts that need a person. A conflict reaches this list only when a version of a document was kept aside by the
+ * sync (older clients stored it; nothing here is ever resolved automatically). Every way out first leaves a recovery
+ * point in the document's history, and none deletes the other version: it is copied, kept in history, or both.
+ * ------------------------------------------------------------------------------------------------------------------ */
+export type ConflictItem = { id: string; local?: MusicalDocument; remote: RemoteDocument };
+export type ConflictChoice =
+  | { kind: 'keep-both' }
+  | { kind: 'use-cloud'; alsoCopyMine?: boolean }
+  | { kind: 'use-device' }
+  | { kind: 'merged'; title: string; content: MusicalDocument['content'] };
+
+export async function listConflicts(owner: string): Promise<ConflictItem[]> {
+  const state = await get(owner);
+  const items: ConflictItem[] = [];
+  for (const [id, remote] of Object.entries(state.conflicts)) items.push({ id, remote, local: await db.documents.get(id) });
+  return items.sort((a, b) => (b.local?.updatedAt ?? 0) - (a.local?.updatedAt ?? 0));
+}
+
+export async function resolveConflict(owner: string, id: string, choice: ConflictChoice): Promise<{ copyId?: string }> {
+  if ((await activeOwnerId()) !== owner) throw new Error('La biblioteca local no está vinculada a esta cuenta.');
+  const state = await get(owner);
+  const remote = state.conflicts[id];
+  if (!remote) return {};
+  let copyId: string | undefined;
+  let hadLocal = false;
+  await db.transaction('rw', db.documents, db.versions, db.nodes, async () => {
+    const mine = await db.documents.get(id);
+    hadLocal = Boolean(mine);
+    const now = Date.now();
+    const checkpoint = (doc: Pick<MusicalDocument, 'title' | 'content'>, reason: 'conflict-device' | 'conflict-cloud') =>
+      db.versions.add({ id: crypto.randomUUID(), documentId: id, createdAt: now, reason, title: doc.title, content: structuredClone(doc.content), ownerId: owner });
+    const copyOf = async (doc: Pick<MusicalDocument, 'title' | 'content' | 'nodeId' | 'songId' | 'type'>, label: string) => {
+      const nodeOk = async (nodeId?: string | null) => (nodeId && (await db.nodes.get(nodeId)) ? nodeId : null);
+      const copy: MusicalDocument = {
+        id: crypto.randomUUID(), nodeId: await nodeOk(doc.nodeId ?? mine?.nodeId), songId: await nodeOk(doc.songId ?? mine?.songId), type: doc.type,
+        title: `${doc.title || 'Sin título'} (${label})`, content: structuredClone(doc.content), rev: 1, createdAt: now, updatedAt: now, ownerId: owner,
+      };
+      await db.documents.add(copy);
+      copyId = copy.id;
+    };
+    if (!mine) {
+      await db.documents.put({ ...local(remote), ownerId: owner }); // nothing local to protect: simply bring the cloud version
+    } else if (choice.kind === 'keep-both') {
+      await checkpoint(mine, 'conflict-device');
+      await copyOf(remote, 'versión de la nube');
+    } else if (choice.kind === 'use-cloud') {
+      await checkpoint(mine, 'conflict-device');
+      if (choice.alsoCopyMine !== false) await copyOf(mine, 'versión de este dispositivo');
+      await db.documents.put({ ...local(remote), ownerId: owner });
+    } else if (choice.kind === 'use-device') {
+      await checkpoint(remote, 'conflict-cloud'); // the cloud version stays in this document's history
+    } else {
+      await checkpoint(mine, 'conflict-device');
+      await checkpoint(remote, 'conflict-cloud');
+      await db.documents.put({ ...mine, title: choice.title, content: choice.content, rev: mine.rev + 1, updatedAt: now });
+    }
+  });
+  // From here on the cloud's revision is the base. What stays on this device (keep both, use the device version, a
+  // merge) is sent as the next update; if the cloud version won, there is nothing pending for this document.
+  state.remote!.documents[id] = remote.rev;
+  state.documents[id] = hadLocal && choice.kind !== 'use-cloud' ? -1 : remote.rev;
+  delete state.conflicts[id];
+  await save(owner, state);
+  return { copyId };
 }

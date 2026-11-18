@@ -3,6 +3,7 @@ import { chordsToSequence } from '@/audio/plan';
 import { parseProgression } from '@/features/chords/progression';
 import { previewNote } from '@/audio/preview';
 import { useBlockPlayer } from '@/audio/useBlockPlayer';
+import { withInstrument } from '@/audio/instruments';
 import type { ChordItem, ChordsContent } from '@/core/model';
 import { chordSymbol, parseChord, transposeChord } from '@/core/theory/chords';
 import { diatonicChords, isDiatonic, keyLabel, romanOf, transposeKey } from '@/core/theory/keys';
@@ -34,7 +35,7 @@ export function ChordsBlock({
   const { key, openTools } = useNotebookInfo();
   const comments = useComments();
   const sequence = useMemo(() => chordsToSequence(content), [content]);
-  const player = useBlockPlayer({ owner: blockId, sequence, blockBpm: content.bpm, instrument: content.instrument });
+  const player = useBlockPlayer({ owner: blockId, sequence, blockBpm: content.bpm, instrument: content.instrument, kind: 'chords' });
   const [selected, setSelected] = useState<string | null>(null);
   const [text, setText] = useState('');
   const [errors, setErrors] = useState<Array<{ token: string; reason: string }>>([]);
@@ -85,7 +86,7 @@ export function ChordsBlock({
           disabled={items.length === 0}
           emptyHint="Agregá algún acorde para poder escucharlo"
           onBlockBpm={readOnly ? undefined : (bpm) => onChange((state) => withBlockBpm(state, bpm))}
-          onInstrument={readOnly ? undefined : (instrument) => onChange((state) => ({ ...state, instrument }))}
+          onInstrument={readOnly ? undefined : (instrument) => onChange((state) => withInstrument(state, instrument))}
         />
         {!readOnly && (
           <>

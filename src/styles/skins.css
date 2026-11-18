@@ -1,0 +1,276 @@
+/* GuitarAP skins: three original visual universes on ONE architecture.
+   A skin only changes colour, texture, cover pattern and a few micro-interactions (through the same variables the whole
+   app already uses). Layout, controls and the harmonic colours (root / third / fifth / seventh) are identical in every
+   skin and in both light and dark. «Estudio analógico» is the default and needs no overrides.
+   Inspired by eras and atmospheres, not by any existing artwork: no covers, logos, characters or photographs. */
+
+/* ------------------------------------------------------------------ A. Rock británico: cream paper, ink, vintage red and mustard */
+[data-skin='britanico'] {
+  --bg: #f1e7d1;
+  --surface: #f7efdc;
+  --raised: #fcf6e8;
+  --sunken: #e5d9bf;
+  --line: #d6c7a5;
+  --line-2: #c1ae86;
+  --ink: #1d2430;
+  --ink-2: #3c4554;
+  --ink-3: #5d6573;
+  --accent: #b0332a;
+  --accent-ink: #872520;
+  --accent-soft: #f1d6cf;
+  --on-accent: #ffffff;
+  --walnut-950: #0f1521;
+  --walnut-900: #151d2b;
+  --walnut-800: #1d283b;
+  --walnut-700: #2a3a55;
+  --brass: #e2b34c;
+  --brass-soft: #f3dfa6;
+  --ivory: #fbf5e3;
+  --paper-line: #e0d5b6;
+  --paper-margin: #c7584d;
+  --dark-raised: #222c3d;
+  --dark-sunken: #0d121b;
+  --dark-line: #2f3b52;
+  --dark-line-2: #46587a;
+  --dark-ink: #f4ecd8;
+  --dark-ink-2: #d3c9b0;
+  --dark-ink-3: #a69d86;
+  --stage-accent: #f0705f;
+  --stage-accent-ink: #f7a396;
+  --stage-glow: #b0332a;
+  --cover-pattern: repeating-linear-gradient(90deg, color-mix(in srgb, var(--brass) 9%, transparent) 0 2px, transparent 2px 24px);
+  --body-wash: radial-gradient(90% 40% at 50% 0%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 70%);
+}
+[data-theme='dark'][data-skin='britanico'],
+[data-theme='dark'] [data-skin='britanico'] {
+  --bg: #10151d;
+  --surface: #161c27;
+  --raised: #1d2431;
+  --sunken: #0b0f15;
+  --line: #2c3545;
+  --line-2: #44506a;
+  --ink: #f0e8d5;
+  --ink-2: #c9c0aa;
+  --ink-3: #9f9782;
+  --accent: #f0705f;
+  --accent-ink: #f7a396;
+  --accent-soft: #3a2220;
+  --on-accent: #1b0b09;
+  --paper-line: #2c3545;
+  --paper-margin: #8a4038;
+}
+
+/* ------------------------------------------------------------------ B. Psicodelia progresiva: deep indigo, vivid magenta and amber, waves */
+[data-skin='psicodelico'] {
+  --bg: #ece5f8;
+  --surface: #f4eefc;
+  --raised: #faf6ff;
+  --sunken: #ddd2f1;
+  --line: #cdbfe6;
+  --line-2: #b5a3d6;
+  --ink: #21183a;
+  --ink-2: #44396a;
+  --ink-3: #645a88;
+  --accent: #b0188a;
+  --accent-ink: #85106a;
+  --accent-soft: #f4d6ec;
+  --on-accent: #ffffff;
+  --walnut-950: #0e0726;
+  --walnut-900: #170d3a;
+  --walnut-800: #22134f;
+  --walnut-700: #321c73;
+  --brass: #ffb64d;
+  --brass-soft: #ffe0a3;
+  --ivory: #fbf6ff;
+  --paper-line: #dccff1;
+  --paper-margin: #c04ba7;
+  --dark-raised: #281660;
+  --dark-sunken: #0b0620;
+  --dark-line: #3a2a7a;
+  --dark-line-2: #5642a8;
+  --dark-ink: #f7f1ff;
+  --dark-ink-2: #d4c9f0;
+  --dark-ink-3: #a99dd0;
+  --stage-accent: #ff7bc8;
+  --stage-accent-ink: #ffb0dd;
+  --stage-glow: #8f2cc4;
+  --grain: none; /* the paper grain turns into coloured blotches on lavender */
+  --cover-pattern:
+    repeating-radial-gradient(circle at 90% 0%, color-mix(in srgb, var(--brass) 15%, transparent) 0 1.5px, transparent 1.5px 17px),
+    repeating-radial-gradient(circle at 4% 100%, color-mix(in srgb, var(--stage-accent) 11%, transparent) 0 1.5px, transparent 1.5px 21px);
+  --body-wash:
+    radial-gradient(60% 40% at 8% 0%, color-mix(in srgb, var(--stage-glow) 14%, transparent), transparent 70%),
+    radial-gradient(50% 36% at 100% 6%, color-mix(in srgb, var(--brass) 14%, transparent), transparent 70%);
+}
+[data-theme='dark'][data-skin='psicodelico'],
+[data-theme='dark'] [data-skin='psicodelico'] {
+  --bg: #0d0821;
+  --surface: #150d33;
+  --raised: #1d1244;
+  --sunken: #080519;
+  --line: #33256d;
+  --line-2: #4d3a96;
+  --ink: #f3ecff;
+  --ink-2: #cbbfee;
+  --ink-3: #9d90cc;
+  --accent: #ff7bc8;
+  --accent-ink: #ffb0dd;
+  --accent-soft: #3a1448;
+  --on-accent: #2a0720;
+  --paper-line: #33256d;
+  --paper-margin: #8d3a86;
+}
+
+/* ------------------------------------------------------------------ shared plumbing */
+body {
+  background-image: var(--body-wash, radial-gradient(90% 40% at 50% 0%, color-mix(in srgb, var(--brass) 10%, transparent), transparent 70%)), var(--grain);
+}
+[data-skin='psicodelico'] body,
+[data-skin='psicodelico'] {
+  background-attachment: fixed, scroll;
+}
+:root[data-theme='dark'] body,
+[data-theme='dark'] body {
+  background-image: var(--body-wash, radial-gradient(90% 40% at 50% 0%, color-mix(in srgb, var(--brass) 7%, transparent), transparent 70%));
+}
+
+/* A pattern behind covers, never behind music: it lives in the header bands only. */
+.doc-head::before,
+.settings-hero::before,
+.guest-hero::before,
+.lib-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: var(--cover-pattern, none);
+  pointer-events: none;
+}
+
+/* Micro-interactions that give each skin its own feel (transform/opacity/shadow only). */
+[data-skin='britanico'] .btn:active:not(:disabled),
+[data-skin='britanico'] .btn-primary:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow: inset 0 2px 0 rgb(0 0 0 / 0.18);
+}
+[data-skin='britanico'] .section-title {
+  font-style: normal;
+  letter-spacing: 0.01em;
+  text-transform: none;
+}
+[data-skin='psicodelico'] .btn:hover:not(:disabled) {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 38%, transparent);
+}
+[data-skin='psicodelico'] .mel-chip.playing,
+[data-skin='psicodelico'] .pkey.lit {
+  box-shadow: 0 0 26px color-mix(in srgb, var(--stage-accent) 60%, transparent);
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-skin] .btn {
+    transition: none;
+  }
+}
+
+/* ------------------------------------------------------------------ the preview cards in Configuración → Apariencia */
+.skin-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+.skin-card {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 2px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+.skin-card[aria-pressed='true'] {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+.skin-preview {
+  position: relative;
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  overflow: clip;
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--ink);
+  isolation: isolate;
+}
+.skin-preview .cover {
+  position: relative;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: linear-gradient(160deg, var(--walnut-700), var(--walnut-900));
+  color: var(--ivory);
+  font: 600 1.05rem var(--font-display);
+  font-style: italic;
+  overflow: clip;
+}
+.skin-preview .cover::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--cover-pattern, none);
+}
+.skin-preview .cover span {
+  position: relative;
+}
+.skin-preview .page {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 8px;
+  background: var(--raised);
+  border: 1px solid var(--line);
+}
+.skin-preview .dot {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  color: var(--h-ink);
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+.skin-preview .dot.root { background: var(--h-root); }
+.skin-preview .dot.third { background: var(--h-third); }
+.skin-preview .dot.fifth { background: var(--h-fifth); }
+.skin-preview .dot.seventh { background: var(--h-seventh); }
+.skin-preview .btn-mini {
+  margin-left: auto;
+  padding: 2px 10px;
+  border-radius: 6px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+.skin-card strong {
+  font: 650 1.05rem var(--font-display);
+}
+.skin-card small {
+  color: var(--ink-3);
+}
+
+.skin-picker {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.skin-picker legend {
+  padding: 0;
+  margin-bottom: 4px;
+  font: 650 1.15rem var(--font-display);
+}

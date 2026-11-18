@@ -24,6 +24,10 @@ import { libraryRepository } from '@/data/library-repository';
 import { belongsToOwner, libraryScope } from '@/data/library-scope';
 import { describeLastSync } from '@/features/account/account-status';
 import { diagnosticText } from '@/features/sync/diagnostic';
+import { SKINS, useSkin } from '@/features/theme/skin';
+import { ConflictsSection } from '@/features/settings/ConflictsSection';
+import { DataSection } from '@/features/settings/DataSection';
+import { INSTRUMENT_KINDS, SYSTEM_INSTRUMENT } from '@/audio/instruments';
 import { StatusChip } from '@/features/account/AccountMenu';
 import { useAccount } from '@/features/account/account-context';
 import { LinkWizard } from '@/features/account/LinkWizard';
@@ -32,7 +36,9 @@ import { ThemeContext } from '@/features/theme/theme-context';
 
 const sections = [
   { id: 'cuenta', label: 'Cuenta', icon: 'user' as const },
+  { id: 'datos', label: 'Mis datos', icon: 'library' as const },
   { id: 'sincronizacion', label: 'Sincronización', icon: 'sync' as const },
+  { id: 'conflictos', label: 'Conflictos', icon: 'alert' as const },
   { id: 'colaboracion', label: 'Colaboración', icon: 'users' as const },
   { id: 'apariencia', label: 'Apariencia', icon: 'sun' as const },
   { id: 'sonido', label: 'Sonido', icon: 'play' as const },
@@ -480,12 +486,35 @@ function AppearanceSection() {
   const theme = useContext(ThemeContext);
   const fx = useFxPrefs();
   const [, setBanner] = usePref('local-banner-hidden', false);
+  const [skin, setSkin] = useSkin();
   return (
     <>
       <h2>Apariencia</h2>
       <div className="stack">
+        <fieldset className="skin-picker">
+          <legend>Universo visual</legend>
+          <p className="muted small">Cambia los colores, las texturas y el ambiente. Los controles, el orden de la pantalla y los colores de tónica, tercera, quinta y séptima son los mismos en todos. Se guarda en este dispositivo.</p>
+          <div className="skin-grid" role="group" aria-label="Universo visual">
+            {SKINS.map((item) => (
+              <button key={item.id} type="button" className="skin-card" aria-pressed={skin === item.id} onClick={() => setSkin(item.id)}>
+                <span className="skin-preview" data-skin={item.id} data-theme={theme?.theme ?? 'light'} aria-hidden="true">
+                  <span className="cover"><span>Tema 1</span></span>
+                  <span className="page">
+                    <span className="dot root">1</span>
+                    <span className="dot third">3</span>
+                    <span className="dot fifth">5</span>
+                    <span className="dot seventh">7</span>
+                    <span className="btn-mini">Play</span>
+                  </span>
+                </span>
+                <strong>{item.name}</strong>
+                <small>{item.blurb}</small>
+              </button>
+            ))}
+          </div>
+        </fieldset>
         <div className="field">
-          <span>Tema</span>
+          <span>Claro u oscuro</span>
           <Segmented<'light' | 'dark'>
             label="Tema"
             value={theme?.theme ?? 'light'}
@@ -527,18 +556,35 @@ function SoundSection() {
       <h2>Sonido</h2>
       <p className="muted">El sonido se genera en tu navegador: no se descarga ni se envía nada, y funciona sin conexión. Son sintetizadores simples: sirven para escuchar tus ideas, no imitan un piano ni una guitarra reales.</p>
       <div className="stack">
-        <div className="field">
-          <span>Instrumento predeterminado</span>
-          <Segmented<'piano' | 'guitar'>
-            label="Instrumento predeterminado"
-            value={sound.instrument}
-            onChange={sound.setInstrument}
-            options={[
-              { value: 'piano', label: 'Piano sintetizado' },
-              { value: 'guitar', label: 'Guitarra (cuerda pulsada)' },
-            ]}
-          />
-        </div>
+        <fieldset className="instrument-defaults">
+          <legend>Instrumentos predeterminados</legend>
+          <p className="muted small">Cada tipo de material suena con su instrumento sin que tengas que elegirlo. Un bloque con instrumento propio lo conserva siempre.</p>
+          {INSTRUMENT_KINDS.map(({ kind, label, hint }) => {
+            const chosen = sound.preferenceFor(kind);
+            return (
+              <div key={kind} className="instrument-row">
+                <span>
+                  <strong>{label}</strong>
+                  <small className="muted block">{hint}{chosen === null ? ' · automático' : ''}</small>
+                </span>
+                <Segmented<'piano' | 'guitar'>
+                  label={`Instrumento para ${label.toLowerCase()}`}
+                  value={sound.instrumentFor(kind)}
+                  onChange={(value) => sound.setInstrumentFor(kind, value)}
+                  options={[
+                    { value: 'piano', label: 'Piano' },
+                    { value: 'guitar', label: 'Guitarra' },
+                  ]}
+                />
+                {chosen !== null && (
+                  <button type="button" className="btn btn-link" onClick={() => sound.setInstrumentFor(kind, null)}>
+                    Automático ({SYSTEM_INSTRUMENT[kind] === 'piano' ? 'piano' : 'guitarra'})
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </fieldset>
         <label className="field">
           <span>Volumen inicial: {Math.round(sound.volume * 100)}%</span>
           <input
@@ -572,7 +618,7 @@ function SoundSection() {
             className="btn"
             onClick={() => {
               setMasterVolume(sound.volume);
-              void transport.play({ owner: 'settings-test', sequence: progressionToSequence(['C', 'F', 'G', 'C'], 1.5), bpm: 100, instrument: sound.instrument });
+              void transport.play({ owner: 'settings-test', sequence: progressionToSequence(['C', 'F', 'G', 'C'], 1.5), bpm: 100, instrument: sound.instrumentFor('chords') });
             }}
           >
             <Icon name="play" size={14} /> Probar el sonido
@@ -648,6 +694,8 @@ function AboutSection() {
 const views = {
   cuenta: AccountSection,
   sincronizacion: SyncSection,
+  datos: DataSection,
+  conflictos: ConflictsSection,
   copias: BackupSection,
   recuperacion: RecoverySection,
   colaboracion: CollaborationSection,

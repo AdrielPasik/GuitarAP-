@@ -21,6 +21,13 @@ try {
     console.log(`applying ${file}`);
     psqlFile(path.join('supabase/migrations', file));
   }
+  // PostgREST reloads its schema cache asynchronously after the migrations (NOTIFY pgrst): wait until it sees the newest
+  // function instead of racing it (on a slow machine the first requests answered 404).
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    const ready = await fetch('http://127.0.0.1:4322/rpc/sync_capabilities', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }).then((r) => r.ok, () => false);
+    if (ready) break;
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
   const result = spawnSync('npx', ['vitest', 'run', 'tests/real-stack'], { stdio: 'inherit', shell: true, env: { ...process.env, REAL_STACK: '1' } });
   code = result.status ?? 1;
 } finally {

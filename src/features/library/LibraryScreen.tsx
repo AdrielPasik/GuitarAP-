@@ -42,6 +42,9 @@ function Glyph({ kind }: { kind: keyof typeof kindInfo }) {
   );
 }
 
+/** A stable hue (0-359) from a name, so each folder and song keeps its own colour like a record sleeve. */
+const hueOf = (name: string) => [...name].reduce((sum, char) => (sum * 31 + char.charCodeAt(0)) % 360, 7);
+
 const when = (time: number) => {
   const days = Math.floor((Date.now() - time) / 86_400_000);
   if (days <= 0) return 'Hoy';
@@ -353,7 +356,7 @@ export function LibraryScreen() {
         ) : (
           <ul className="lib-list" aria-label={text ? 'Resultados de la búsqueda' : 'Contenido'}>
             {children.map((node) => (
-              <li key={node.id} className="lib-row">
+              <li key={node.id} className={`lib-row node kind-${node.kind}`} style={{ ['--hue' as string]: hueOf(node.name) }}>
                 <button type="button" className="lib-open" onClick={() => goTo(node.id)}>
                   <Glyph kind={node.kind} />
                   <span className="lib-title">{node.name}</span>
@@ -387,7 +390,7 @@ export function LibraryScreen() {
             {items.map((item) => {
               const kind = documentKind(item);
               return (
-                <li key={item.id} className="lib-row">
+                <li key={item.id} className={`lib-row doc kind-${kind}`}>
                   <button type="button" className="lib-open" onClick={() => open(item)}>
                     <Glyph kind={kind} />
                     <span className="lib-title">{item.title || 'Sin título'}</span>

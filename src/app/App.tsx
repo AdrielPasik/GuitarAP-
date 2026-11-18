@@ -61,6 +61,7 @@ export function App() {
                   <Route path="compartidos" element={deferred(<SharedListScreen />)} />
                   <Route path="compartido/:id" element={deferred(<SharedNotebookScreen />)} />
                   <Route path="practica" element={deferred(<PracticeScreen />)} />
+                  <Route path="practica/c/:sharedId" element={deferred(<PracticeScreen />)} />
                   <Route path="practica/:id" element={deferred(<PracticeScreen />)} />
                   <Route path="configuracion" element={deferred(<SettingsScreen />)} />
                   <Route path="configuracion/:section" element={deferred(<SettingsScreen />)} />

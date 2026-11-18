@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo } from 'react';
 import { transport, useTransport } from '@/audio/engine';
 import { baseTempo, effectiveTempo } from '@/audio/tempo';
 import type { InstrumentId, Sequence } from '@/audio/types';
+import { instrumentPrefKey, resolveInstrument, type InstrumentKind } from '@/audio/instruments';
 import { useMetronome } from '@/features/metronome/metronome-context';
 import { useNotebookInfo } from '@/features/notebook/notebook-context';
 import { usePref } from '@/core/prefs';
@@ -13,23 +14,35 @@ export type PlayerOptions = {
   sequence: Sequence;
   blockBpm?: number;
   instrument?: InstrumentId;
+  /** What kind of block this is: it decides the default instrument. */
+  kind: InstrumentKind;
   /** Lets the block remember a tempo or instrument change (a block-level setting of the document). */
 };
 
 export function useSoundPrefs() {
-  const [instrument, setInstrument] = usePref<InstrumentId>('sound.instrument', 'piano');
+  // Before 0.6 there was one global instrument. It counts only if the person actually set it (null = never touched).
+  const [legacy, setInstrument] = usePref<InstrumentId | null>('sound.instrument', null);
+  const [melodyInstrument, setMelodyInstrument] = usePref<InstrumentId | null>(instrumentPrefKey('melody'), null);
+  const [tablatureInstrument, setTablatureInstrument] = usePref<InstrumentId | null>(instrumentPrefKey('tablature'), null);
+  const [chordsInstrument, setChordsInstrument] = usePref<InstrumentId | null>(instrumentPrefKey('chords'), null);
+  const perKind = { melody: melodyInstrument, tablature: tablatureInstrument, chords: chordsInstrument } as const;
+  const setPerKind = { melody: setMelodyInstrument, tablature: setTablatureInstrument, chords: setChordsInstrument } as const;
+  /** The instrument for a kind of block with no explicit choice (preference, then legacy, then system default). */
+  const instrumentFor = (kind: InstrumentKind) => resolveInstrument({ kind, preference: perKind[kind], legacy }).id;
+  const setInstrumentFor = (kind: InstrumentKind, value: InstrumentId | null) => setPerKind[kind](value);
+  const instrument: InstrumentId = legacy ?? 'piano';
   const [click, setClick] = usePref<boolean>('sound.click', false);
   const [loop, setLoop] = usePref<boolean>('sound.loop', false);
   const [preview, setPreview] = usePref<boolean>('sound.preview', true);
   const [volume, setVolume] = usePref<number>('sound.volume', 0.7);
-  return { instrument, setInstrument, click, setClick, loop, setLoop, preview, setPreview, volume, setVolume };
+  return { instrument, legacy, setInstrument, instrumentFor, setInstrumentFor, preferenceFor: (kind: InstrumentKind) => perKind[kind], click, setClick, loop, setLoop, preview, setPreview, volume, setVolume };
 }
 
 /**
  * Connects a block to the one transport. Playing, pausing and stopping always act on the shared transport,
  * so leaving the screen (unmount) stops the sound this block started.
  */
-export function useBlockPlayer({ owner, sequence, blockBpm, instrument }: PlayerOptions) {
+export function useBlockPlayer({ owner, sequence, blockBpm, instrument, kind }: PlayerOptions) {
   const snapshot = useTransport();
   const metro = useMetronome();
   const { docBpm } = useNotebookInfo();
@@ -38,7 +51,8 @@ export function useBlockPlayer({ owner, sequence, blockBpm, instrument }: Player
   const inputs = { practice: metro.practiceBpm, block: blockBpm, song: docBpm, preference };
   const tempo = effectiveTempo(inputs);
   const base = baseTempo(inputs);
-  const chosen = instrument ?? prefs.instrument;
+  const resolved = resolveInstrument({ kind, explicit: instrument, preference: prefs.preferenceFor(kind), legacy: prefs.legacy });
+  const chosen = resolved.id;
   const mine = snapshot.owner === owner;
   const state = mine ? snapshot.state : 'idle';
 
@@ -89,6 +103,8 @@ export function useBlockPlayer({ owner, sequence, blockBpm, instrument }: Player
     setPractice: metro.setBpm,
     resetPractice: metro.resetPractice,
     instrument: chosen,
+    instrumentSource: resolved.source,
+    kind,
     play,
     pause: () => transport.pause(),
     resume: () => transport.resume(),

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { ThemeContext } from '@/features/theme/theme-context';
 import type { Theme } from '@/features/theme/theme-context';
+import { useSkin } from '@/features/theme/skin';
 
 const storageKey = 'guitarap.theme';
 
@@ -13,6 +14,7 @@ function readInitialTheme(): Theme {
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setTheme] = useState<Theme>(readInitialTheme);
+  useSkin(); // keeps <html data-skin> in step with the saved preference
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;

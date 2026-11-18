@@ -30,8 +30,9 @@ describe('App', () => {
 
     await user.click(screen.getByRole('link', { name: /^Práctica/ }));
 
-    expect(await screen.findByRole('region', { name: 'Modo Práctica' }, { timeout: 6000 })).toBeVisible();
-  });
+    // The Practice screen is a lazily loaded chunk: its first import is slow under parallel load, so the test waits longer.
+    expect(await screen.findByRole('region', { name: 'Modo Práctica' }, { timeout: 15000 })).toBeVisible();
+  }, 30_000);
 
   it('changes theme and persists the preference', async () => {
     const user = userEvent.setup();

@@ -30,6 +30,17 @@ export function inspectBackup(raw: string): BackupSummary {
   };
 }
 
+const LAST_BACKUP_KEY = 'guitarap.backup-last';
+/** When a backup file was last downloaded FROM THIS BROWSER; undefined when there is no record (never invented). */
+export function readLastBackup(): number | undefined {
+  try {
+    const value = Number(window.localStorage.getItem(LAST_BACKUP_KEY));
+    return Number.isFinite(value) && value > 0 ? value : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function downloadBackup(raw: string): BackupSummary {
   const summary = inspectBackup(raw);
   const blob = new Blob([raw], { type: 'application/json;charset=utf-8' });
@@ -41,6 +52,11 @@ export function downloadBackup(raw: string): BackupSummary {
   window.document.body.appendChild(link);
   try {
     link.click();
+    try {
+      window.localStorage.setItem(LAST_BACKUP_KEY, String(Date.now()));
+    } catch {
+      /* storage unavailable: no record is kept */
+    }
   } finally {
     link.remove();
     window.setTimeout(() => URL.revokeObjectURL(url), 1_000);

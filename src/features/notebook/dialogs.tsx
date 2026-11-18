@@ -8,6 +8,8 @@ const reasonLabel: Record<string, string> = {
   manual: 'Guardado manual',
   'pre-restore': 'Antes de restaurar',
   import: 'Importación',
+  'conflict-device': 'Punto de recuperación: versión de este dispositivo (conflicto)',
+  'conflict-cloud': 'Punto de recuperación: versión de la nube (conflicto)',
 };
 
 export function HistoryDialog({

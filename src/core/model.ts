@@ -181,7 +181,7 @@ export type DocumentVersion = {
   id: string;
   documentId: string;
   createdAt: number;
-  reason: 'autosave' | 'pre-restore' | 'manual' | 'import';
+  reason: 'autosave' | 'pre-restore' | 'manual' | 'import' | 'conflict-device' | 'conflict-cloud';
   title: string;
   content: MusicalDocument['content'];
   ownerId?: string;

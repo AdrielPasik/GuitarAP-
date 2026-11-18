@@ -117,3 +117,10 @@ luego reparado, `03` encabezado de la canción con «Compartir proyecto», `04`/
 regla de herencia, enlace e invitación), `06` desde una parte, `07` lo que recibe el invitado con un solo enlace, `08`
 «Compartidos conmigo» con el proyecto y sus partes, `09` compartir antes de sincronizar. (La cuenta y la sincronización se
 responden con la pasarela de pruebas respaldada por PostgreSQL: ninguna cuenta ni biblioteca real.)
+
+## v0.6 — el espacio musical (`docs/evidence/v0.6/`)
+
+`CAPTURE_EVIDENCE=1 npx playwright test tests/e2e/visual-evidence-v06.spec.ts`. `01`–`03` Biblioteca en los tres universos
+(comparar con `v0.5.1/01`), `04` proyecto, `05`–`07` explorador jerárquico y partes de la canción en Práctica,
+`08`/`09` Práctica en otros temas, `10` Apariencia con vistas previas, `11` instrumentos, `12` Mis datos, `13` conflictos,
+`14`–`16` móvil.
