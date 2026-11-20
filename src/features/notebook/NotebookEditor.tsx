@@ -13,6 +13,7 @@ import { AddBlockMenu } from '@/features/notebook/blocks';
 import { HistoryDialog, ShortcutsDialog } from '@/features/notebook/dialogs';
 import { blockFor } from '@/features/notebook/block-meta';
 import { NotebookBlocks } from '@/features/notebook/NotebookBlocks';
+import type { EditTicket } from '@/data/library-repository';
 import { useNotebookDocument, type SaveState } from '@/features/notebook/useNotebookDocument';
 import { cloneBlocks, extractBlocks, insertBlock, newBlock, removeBlock, setMeta, updateBlock } from '@/core/notebook';
 import { appendBlocksToDocument, removeBlocksFromDocument } from '@/data/block-transfer';
@@ -40,6 +41,13 @@ export function SaveIndicator({ state, onRetry }: { state: SaveState; onRetry: (
       </button>
     );
   }
+  if (state === 'draft') {
+    return (
+      <span className="save-state error" role="status" title="No se pudo escribir en el documento: tus cambios quedan guardados como borrador de tu cuenta">
+        <Icon name="alert" size={14} /> Guardado como borrador
+      </span>
+    );
+  }
   return (
     <span className={`save-state ${state}`} role="status">
       <Icon name={state === 'saving' ? 'sync' : 'check'} size={14} className={state === 'saving' ? 'spin' : undefined} />
@@ -58,12 +66,15 @@ export function NotebookEditor({
   document: record,
   location,
   onRestored,
+  ticket,
 }: {
   document: MusicalDocument;
   location: string;
   onRestored: () => void;
+  /** Lets the editor finish saving for the owner who opened it even if another person takes the screen meanwhile. */
+  ticket?: EditTicket;
 }) {
-  const doc = useNotebookDocument(record);
+  const doc = useNotebookDocument(record, false, ticket);
   const navigate = useNavigate();
   const toast = useToast();
   const [dialog, setDialog] = useState<null | 'history' | 'shortcuts'>(null);

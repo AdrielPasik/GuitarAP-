@@ -62,6 +62,28 @@ async function backupOf(page: Page) {
   await page.getByRole('button', { name: 'Descargar copia de seguridad' }).click();
   return readFile((await (await download).path())!, 'utf8');
 }
+const draftCount = (page: Page) =>
+  page.evaluate(
+    () =>
+      new Promise<number>((resolve) => {
+        const open = indexedDB.open('guitarap');
+        open.onsuccess = () => {
+          const all = open.result.transaction('settings').objectStore('settings').getAll();
+          all.onsuccess = () => resolve((all.result as Array<{ key: string }>).filter((row) => row.key.startsWith('draft:user-ana:')).length);
+        };
+      }),
+  );
+const draftTitle = (page: Page) =>
+  page.evaluate(
+    () =>
+      new Promise<string | null>((resolve) => {
+        const open = indexedDB.open('guitarap');
+        open.onsuccess = () => {
+          const all = open.result.transaction('settings').objectStore('settings').getAll();
+          all.onsuccess = () => resolve((all.result as Array<{ key: string; value: { title: string } }>).find((row) => row.key.startsWith('draft:user-ana:'))?.value.title ?? null);
+        };
+      }),
+  );
 const owners = async (page: Page) => Object.fromEntries((await storedDocuments(page)).map((doc) => [doc.title, (doc as unknown as { ownerId?: string }).ownerId ?? null]));
 
 test('dos cuentas en el mismo navegador: cada una ve, abre, busca y exporta solo lo suyo, y nada se mezcla ni se sube', async ({ page }) => {
@@ -294,4 +316,85 @@ test('una sesión editada a mano en el almacenamiento local no abre la bibliotec
   await page.goto('/biblioteca');
   await expect(row(page, 'Canción de Beto')).toHaveCount(0);
   await expect(row(page, 'Canción de Ana')).toBeVisible(); // the profile still belongs to the person who signed in
+});
+
+/**
+ * The original defect: tab 2 holds the last moments of typing (its autosave timer is made so long that ONLY the
+ * lifecycle can save it) while tab 1 signs out. The edit used to be refused and lost.
+ */
+test.describe('lo último que escribí no se pierde cuando otra pestaña cierra sesión', () => {
+  async function twoTabs(page: Page, context: import('@playwright/test').BrowserContext) {
+    await mockAccounts(page);
+    await openLibrary(page);
+    await signIn(page, 'ana');
+    await page.goto('/biblioteca');
+    const id = await newSong(page, 'Canción de Ana');
+    await page.goto('/biblioteca');
+    const editor = await context.newPage();
+    // Only THIS tab never saves by timer: whatever it holds can reach the disk only through the lifecycle and the journal.
+    await editor.addInitScript(() => {
+      (window as unknown as { __GUITARAP_AUTOSAVE_DELAY: number }).__GUITARAP_AUTOSAVE_DELAY = 600_000;
+    });
+    await editor.goto(`/material/${id}`);
+    await editor.getByLabel('Título del material').fill('Lo último que escribí');
+    return { id, editor };
+  }
+
+  test('cerrar sesión en la otra pestaña: la edición queda guardada para su dueña y reaparece al volver', async ({ page, context }) => {
+    const { editor } = await twoTabs(page, context);
+    await signOut(page);
+    await expect(editor.getByRole('heading', { name: 'No encontramos este material' })).toBeVisible({ timeout: 15000 }); // hidden at once
+    expect(await owners(page)).toEqual({ 'Lo último que escribí': 'user-ana' }); // finished, for the right owner
+    await signIn(page, 'ana');
+    await page.goto('/biblioteca');
+    await expect(row(page, 'Lo último que escribí')).toBeVisible();
+  });
+
+  test('cambiar de cuenta en la otra pestaña: la edición va a su dueña, B no la ve y no se sube nada de A', async ({ page, context }) => {
+    const { editor } = await twoTabs(page, context);
+    const auth = await mockAccounts(editor); // watches this tab's requests too
+    await signOut(page);
+    await signIn(page, 'beto');
+    await page.goto('/biblioteca');
+    await expect(editor.getByRole('heading', { name: 'No encontramos este material' })).toBeVisible({ timeout: 15000 });
+    await expect(row(page, 'Lo último que escribí')).toHaveCount(0);
+    expect(await owners(page)).toEqual({ 'Lo último que escribí': 'user-ana' });
+    expect(auth.requests).toEqual([]); // nothing of Ana's went anywhere while Beto was signed in
+    await signOut(page);
+    await signIn(page, 'ana');
+    await page.goto('/biblioteca');
+    await expect(row(page, 'Lo último que escribí')).toBeVisible();
+  });
+
+  test('con la sesión vencida la edición pendiente también se guarda', async ({ page, context }) => {
+    const { id, editor } = await twoTabs(page, context);
+    await editor.getByLabel('Título del material').fill('Editado y vencida');
+    await page.evaluate((key) => window.localStorage.removeItem(key), SESSION); // the session is gone, nobody signed out
+    await expect.poll(() => draftTitle(page)).toBe('Editado y vencida'); // the journal has the latest on disk (a person takes longer than that to leave)
+    await editor.goto('/biblioteca'); // the tab is gone before any timer: only the lifecycle and the journal can keep the typing
+    await editor.goto(`/material/${id}`);
+    // Either the save finished while the page was leaving, or the journal kept it and offers it back: it is never lost.
+    const recover = editor.getByRole('button', { name: 'Recuperar los cambios' });
+    await expect(editor.getByLabel('Título del material').or(recover).first()).toBeVisible();
+    if (await recover.isVisible()) await recover.click();
+    await expect(editor.getByLabel('Título del material')).toHaveValue('Editado y vencida');
+  });
+
+  test('si la pestaña se cierra antes de guardar, lo escrito queda como borrador de su cuenta y no lo ve otra', async ({ page, context }) => {
+    const { id, editor } = await twoTabs(page, context);
+    await expect.poll(() => draftCount(page)).toBeGreaterThanOrEqual(1);
+    await editor.close(); // gone without any save or flush
+    await signOut(page);
+    await signIn(page, 'beto');
+    await page.goto(`/material/${id}`);
+    await expect(page.getByRole('button', { name: 'Recuperar los cambios' })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'No encontramos este material' })).toBeVisible();
+    await signOut(page);
+    await signIn(page, 'ana');
+    await page.goto(`/material/${id}`);
+    const recover = page.getByRole('button', { name: 'Recuperar los cambios' });
+    await expect(page.getByLabel('Título del material')).toBeVisible();
+    if (await recover.isVisible()) await recover.click(); // the banner renders together with the editor
+    await expect(page.getByLabel('Título del material')).toHaveValue('Lo último que escribí');
+  });
 });

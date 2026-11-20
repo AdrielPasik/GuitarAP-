@@ -5,9 +5,20 @@ export type MaterialTemplate = 'scale' | 'triad' | 'riff' | 'empty' | 'study' | 
 import { createFretboardContent, createTablatureContent } from '@/core/model';
 import { newBlock } from '@/core/notebook';
 import { db } from '@/data/database';
-import { activeOwnerId, authorize, belongsToOwner, libraryScope, mustExist } from '@/data/library-scope';
+import { deleteDraft, writeDraft } from '@/data/drafts';
+import { AccessError, activeOwnerId, authorize, belongsToOwner, libraryScope, mustExist } from '@/data/library-scope';
 
 const now = () => Date.now();
+
+/**
+ * Proof that an editor was opened, by a person who was allowed to, for ONE document of ONE owner. Issued only by
+ * `openForEdit` and recognised only if this module issued it. It lets the editor finish saving what the person typed
+ * even if the person on screen changes in the meantime (sign-out in another tab, switching account): the edit goes into
+ * the record of the owner who was typing, never anywhere else, and it is not visible to anyone else.
+ */
+export type EditTicket = { readonly documentId: string; readonly ownerId: string | null };
+const issued = new WeakSet<object>();
+export type SaveOutcome = 'saved' | 'draft';
 /** Autosaves keep one recovery checkpoint per document at most this often. */
 const AUTOSAVE_VERSION_INTERVAL = 2 * 60 * 1000;
 
@@ -137,6 +148,42 @@ export class LibraryRepository {
       if (!recent) await db.versions.add({ id: crypto.randomUUID(), documentId: current.id, createdAt: now(), reason, title: current.title, content: structuredClone(current.content), ownerId: current.ownerId });
       await db.documents.put({ ...current, title: document.title, content: document.content, rev: current.rev + 1, updatedAt: now() });
     });
+  }
+
+  /** The only way to get a ticket: the document must be the current owner's right now. */
+  async openForEdit(document: Pick<MusicalDocument, 'id'>): Promise<EditTicket> {
+    const current = mustExist(await db.documents.get(document.id), await libraryScope(), 'El documento no existe.');
+    const ticket: EditTicket = Object.freeze({ documentId: current.id, ownerId: current.ownerId ?? null });
+    issued.add(ticket);
+    return ticket;
+  }
+
+  /**
+   * Saves what an editor holds, on behalf of the owner named by its ticket. The record is written only if it still
+   * exists and still belongs to that owner; otherwise (or if the database refuses) the edit is kept as a draft of that
+   * owner and the caller is told, so nothing the interface accepted is ever dropped.
+   */
+  async saveEdit(ticket: EditTicket, document: Pick<MusicalDocument, 'id' | 'title' | 'content'>, reason: 'autosave' | 'manual' = 'autosave'): Promise<SaveOutcome> {
+    if (!issued.has(ticket) || ticket.documentId !== document.id) throw new AccessError();
+    const keep = async (why: 'missing' | 'other-owner' | 'write-failed', baseRev: number | null) => {
+      await writeDraft({ documentId: document.id, ownerId: ticket.ownerId, title: document.title, content: structuredClone(document.content), baseRev, savedAt: now(), reason: why });
+      return 'draft' as const;
+    };
+    try {
+      return await db.transaction('rw', db.documents, db.versions, db.settings, async () => {
+        const current = await db.documents.get(document.id);
+        if (!current) return keep('missing', null);
+        if ((current.ownerId ?? null) !== ticket.ownerId) return keep('other-owner', current.rev);
+        const latest = (await db.versions.where('documentId').equals(document.id).sortBy('createdAt')).at(-1);
+        const recent = reason === 'autosave' && latest && now() - latest.createdAt < AUTOSAVE_VERSION_INTERVAL;
+        if (!recent) await db.versions.add({ id: crypto.randomUUID(), documentId: current.id, createdAt: now(), reason, title: current.title, content: structuredClone(current.content), ownerId: current.ownerId });
+        await db.documents.put({ ...current, title: document.title, content: document.content, rev: current.rev + 1, updatedAt: now() });
+        await deleteDraft(ticket.ownerId, document.id); // what is saved now supersedes any older draft
+        return 'saved' as const;
+      });
+    } catch {
+      return keep('write-failed', null);
+    }
   }
 
   async duplicateDocument(id: string) {
