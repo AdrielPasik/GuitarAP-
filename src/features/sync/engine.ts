@@ -1,6 +1,6 @@
 import type { DocumentVersion, LibraryNode, MusicalDocument } from '@/core/model';
 import { db } from '@/data/database';
-import { activeOwnerId } from '@/data/library-scope';
+import { activeOwnerId, libraryScope } from '@/data/library-scope';
 import { decideEvent, eventKey, type EventExtension } from '@/features/sync/event-policy';
 import {
   SyncTransportError,
@@ -216,6 +216,8 @@ export class SyncEngine {
     const attempted = new Set<string>();
 
     for (;;) {
+      // Another person took the screen while this sync was running: stop, nothing more leaves for this account.
+      if ((await activeOwnerId()) !== owner) throw new Error('La biblioteca local no está vinculada a esta cuenta.');
       if (!state.pending) {
         const { snapshot, skipped } = await pendingSnapshot(owner, state, attempted);
         report.skipped = skipped;
@@ -317,6 +319,8 @@ export class SyncEngine {
     draft.deferred ??= {};
     const outcome: { halted?: Halt } = {};
     await db.transaction('rw', db.nodes, db.documents, db.versions, db.settings, async () => {
+      // The page lands only if the person on screen is still the one this sync belongs to.
+      if ((await libraryScope()).ownerId !== owner) throw new Error('La sesión cambió durante la sincronización: no se aplicó nada.');
       const ctx: Context = { owner, draft, report, quarantine: await readQuarantine(owner), cursor: state.cursor };
       ctx.seen = new Set(ctx.quarantine.map((entry) => entry.key));
       for (const change of page.changes) {

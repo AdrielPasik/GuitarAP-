@@ -1,6 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { Dialog } from '@/components/ui/Dialog';
 import { db } from '@/data/database';
+import { belongsToOwner, libraryScope } from '@/data/library-scope';
 import { libraryRepository } from '@/data/library-repository';
 
 const reasonLabel: Record<string, string> = {
@@ -22,7 +23,10 @@ export function HistoryDialog({
   onRestored: () => void;
 }) {
   const versions = useLiveQuery(
-    async () => (await db.versions.where('documentId').equals(documentId).sortBy('createdAt')).reverse(),
+    async () => {
+      const scope = await libraryScope();
+      return (await db.versions.where('documentId').equals(documentId).sortBy('createdAt')).filter((version) => belongsToOwner(version, scope)).reverse();
+    },
     [documentId],
   );
   return (

@@ -3,6 +3,7 @@ import type { MusicalDocument, NotebookContent } from '@/core/model';
 import { fromNotebook, toNotebook } from '@/core/notebook';
 import { useUndoRedo } from '@/core/use-undo-redo';
 import { libraryRepository } from '@/data/library-repository';
+import { registerFlush } from '@/data/pending-saves';
 
 export type SaveState = 'saved' | 'saving' | 'error';
 
@@ -46,6 +47,8 @@ export function useNotebookDocument(document: MusicalDocument, readOnly = false)
     const timeout = window.setTimeout(() => void flush(), 700);
     return () => window.clearTimeout(timeout);
   }, [flush, history.value, readOnly, serialize, title]);
+
+  useEffect(() => (readOnly ? undefined : registerFlush(flush)), [flush, readOnly]);
 
   useEffect(() => {
     if (readOnly) return;

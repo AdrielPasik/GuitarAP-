@@ -4,30 +4,36 @@ import type { MusicalDocument } from '@/core/model';
 import { db } from '@/data/database';
 import { belongsToOwner, libraryScope } from '@/data/library-scope';
 import { pathOf } from '@/data/paths';
+import { useVisible } from '@/data/use-visible';
 import { NotebookEditor } from '@/features/notebook/NotebookEditor';
 
 /** Opens one material for editing. Old /tablaturas and /diapason links land here too. */
 export function NotebookScreen() {
   const { id } = useParams();
-  const [state, setState] = useState<{ document: MusicalDocument | null; location: string } | undefined>();
+  const visible = useVisible();
+  const [state, setState] = useState<{ epoch: number; document: MusicalDocument | null; location: string } | undefined>();
   const [reload, setReload] = useState(0);
 
+  const epoch = visible?.epoch;
   useEffect(() => {
+    if (epoch === undefined) return;
     let alive = true;
     void (async () => {
       const scope = await libraryScope();
       const found = id ? await db.documents.get(id) : undefined;
       const nodes = await db.nodes.toArray();
-      if (!alive) return;
-      const visible = found && belongsToOwner(found, scope) ? found : null;
-      setState({ document: visible, location: visible ? pathOf(nodes, visible.songId ?? visible.nodeId) : '' });
+      // A read that started for one person must never be shown after another one took over.
+      const after = await libraryScope();
+      if (!alive || after.epoch !== scope.epoch || after.ownerId !== scope.ownerId) return;
+      const mine = found && belongsToOwner(found, scope) ? found : null;
+      setState({ epoch: scope.epoch, document: mine, location: mine ? pathOf(nodes.filter((node) => belongsToOwner(node, scope)), mine.songId ?? mine.nodeId) : '' });
     })();
     return () => {
       alive = false;
     };
-  }, [id, reload]);
+  }, [id, reload, epoch]);
 
-  if (!state) return <p className="route-fallback" role="status">Abriendo material…</p>;
+  if (!state || state.epoch !== epoch) return <p className="route-fallback" role="status">Abriendo material…</p>;
   if (!state.document)
     return (
       <section className="not-found">
