@@ -179,39 +179,6 @@ describe('operations by id are refused for another account, whatever the interfa
   });
 });
 
-describe('importing a backup can never reach another account', () => {
-  const backupOf = (documents: MusicalDocument[]) => JSON.stringify({ schema: 1, nodes: [], documents, versions: [] });
-  beforeEach(async () => {
-    await db.documents.add(doc('db', B));
-    await activateOwner(A);
-  });
-  it("refuses a backup that belongs to another account, and imports nothing", async () => {
-    await expect(repo.importBackup(backupOf([doc('x', B)]), 'merge')).rejects.toThrow('otra cuenta');
-    expect(await ids()).toEqual(['db']);
-  });
-  it('refuses an id that already belongs to another account (it would overwrite their record)', async () => {
-    await expect(repo.importBackup(backupOf([doc('db', A)]), 'merge')).rejects.toThrow('otra cuenta');
-    expect((await db.documents.get('db'))?.ownerId).toBe(B);
-  });
-  it('"replace" only ever replaces what the person can see: other accounts survive', async () => {
-    await db.documents.add(doc('da', A));
-    await repo.importBackup(backupOf([doc('fresh', A)]), 'replace');
-    expect(await ids()).toEqual(['db', 'fresh']);
-  });
-  it('taken as copies (an explicit choice), the records get new ids and the current owner, and nothing of the backup collides', async () => {
-    await repo.importBackup(backupOf([doc('x', B)]), 'merge', { asCopies: true });
-    const imported = (await db.documents.toArray()).filter((item) => item.id !== 'db');
-    expect(imported).toHaveLength(1);
-    expect(imported[0].id).not.toBe('x');
-    expect(imported[0].ownerId).toBe(A);
-    expect((await db.documents.get('db'))?.ownerId).toBe(B);
-  });
-  it('records without an owner are adopted by the account that imports them', async () => {
-    await repo.importBackup(backupOf([doc('anon', undefined)]), 'merge');
-    expect((await db.documents.get('anon'))?.ownerId).toBe(A);
-  });
-});
-
 describe('what a sync may do while the person on screen changes', () => {
   it('refuses to start for an account that is not the one on screen', async () => {
     await activateOwner(A);

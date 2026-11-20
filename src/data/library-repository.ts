@@ -287,47 +287,7 @@ export class LibraryRepository {
     }, null, 2);
   }
 
-  /**
-   * Brings the records of a backup into the library on screen. It can never touch another account's records: an id that
-   * already exists for someone else is refused, and records that name a different owner are refused unless the caller
-   * says they are to be taken as copies of the current owner (a person's explicit decision).
-   * `replace` replaces ONLY what the current owner can see.
-   */
-  async importBackup(raw: string, mode: 'merge' | 'replace', options: { asCopies?: boolean } = {}) {
-    const candidate: unknown = JSON.parse(raw);
-    if (!candidate || typeof candidate !== 'object' || !('schema' in candidate) || (candidate as { schema: unknown }).schema !== 1) throw new Error('El backup no tiene un esquema compatible.');
-    const backup = candidate as { nodes?: unknown; documents?: unknown; versions?: unknown };
-    if (!Array.isArray(backup.nodes) || !Array.isArray(backup.documents) || !Array.isArray(backup.versions)) throw new Error('El backup está incompleto.');
-    const scope = await libraryScope();
-    const mine = (item: { ownerId?: string }) => !item.ownerId || belongsToOwner(item, scope);
-    const nodes = backup.nodes as LibraryNode[];
-    const documents = backup.documents as MusicalDocument[];
-    const versions = backup.versions as import('@/core/model').DocumentVersion[];
-    const foreign = [...nodes, ...documents, ...versions].filter((item) => !mine(item)).length;
-    if (foreign && !options.asCopies) throw new Error(`Este backup pertenece a otra cuenta (${foreign} elementos). No se importó nada.`);
-    // With copies, ids are renewed so that nothing of the backup can collide with (or replace) a record of anyone.
-    const ids = new Map<string, string>();
-    const renew = (id: string) => ids.get(id) ?? ids.set(id, crypto.randomUUID()).get(id)!;
-    const stamp = <T extends { ownerId?: string }>(item: T): T => ({ ...item, ownerId: scope.ownerId ?? undefined });
-    const take = <T extends { id: string; ownerId?: string }>(items: T[]) => items.map((item) => (mine(item) ? stamp(item) : stamp({ ...item, id: renew(item.id) })));
-    const incoming = {
-      nodes: take(nodes).map((item) => ({ ...item, parentId: item.parentId && ids.has(item.parentId) ? ids.get(item.parentId)! : item.parentId })),
-      documents: take(documents).map((item) => ({ ...item, nodeId: item.nodeId && ids.has(item.nodeId) ? ids.get(item.nodeId)! : item.nodeId, songId: item.songId && ids.has(item.songId) ? ids.get(item.songId)! : item.songId })),
-      versions: take(versions).map((item) => ({ ...item, documentId: ids.has(item.documentId) ? ids.get(item.documentId)! : item.documentId })),
-    };
-    await db.transaction('rw', db.nodes, db.documents, db.versions, async () => {
-      const clash = async (table: 'nodes' | 'documents' | 'versions', rows: Array<{ id: string }>) => {
-        const existing = (await db[table].bulkGet(rows.map((row) => row.id))) as Array<{ ownerId?: string } | undefined>;
-        if (existing.some((row) => row && !belongsToOwner(row, scope))) throw new Error('El backup contiene identificadores que pertenecen a otra cuenta. No se importó nada.');
-      };
-      await clash('nodes', incoming.nodes); await clash('documents', incoming.documents); await clash('versions', incoming.versions);
-      if (mode === 'replace') {
-        const owned = <T extends { id: string; ownerId?: string }>(rows: T[]) => rows.filter((row) => belongsToOwner(row, scope)).map((row) => row.id);
-        await db.nodes.bulkDelete(owned(await db.nodes.toArray())); await db.documents.bulkDelete(owned(await db.documents.toArray())); await db.versions.bulkDelete(owned(await db.versions.toArray()));
-      }
-      await db.nodes.bulkPut(incoming.nodes); await db.documents.bulkPut(incoming.documents); await db.versions.bulkPut(incoming.versions);
-    });
-  }
+  // Importing a backup is NOT a repository operation: it lives in data/backup-import.ts, which can only add records.
 }
 
 export const libraryRepository = new LibraryRepository();

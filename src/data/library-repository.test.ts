@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { previewImport } from '@/data/backup-import';
 import { db } from '@/data/database';
 import { libraryRepository } from '@/data/library-repository';
 
@@ -36,9 +37,10 @@ describe('LibraryRepository', () => {
     expect((await db.documents.get(document.id))?.deletedAt).toBeUndefined();
   });
 
-  it('validates a backup before replacing local data', async () => {
-    await expect(libraryRepository.importBackup('{"schema":2}', 'replace')).rejects.toThrow('esquema compatible');
+  it('a backup that cannot be read adds nothing (importing is separate from the repository and only ever adds)', async () => {
+    await expect(previewImport('{"schema":2}', 'roto.json')).rejects.toThrow('incompleta');
     expect(await db.documents.count()).toBe(0);
+    expect('importBackup' in libraryRepository).toBe(false);
   });
 
   it('exports the visible library with folders, documents and recovery versions', async () => {

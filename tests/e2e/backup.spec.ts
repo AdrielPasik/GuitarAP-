@@ -37,8 +37,8 @@ test('Test 9 — a backup holds the notebook structure and restores into an isol
   await other.goto('/configuracion/copias');
   await other.getByLabel('Archivo de copia de seguridad').setInputFiles(file!);
   await expect(other.getByRole('dialog', { name: 'Importar copia de seguridad' })).toContainText('1 documento');
-  await other.getByRole('button', { name: 'Combinar', exact: true }).click();
-  await expect(other.getByText('La copia se combinó con tu biblioteca.')).toBeVisible();
+  await other.getByRole('button', { name: 'Importar', exact: true }).click();
+  await expect(other.getByText('La copia se importó.')).toBeVisible();
   await other.goto('/biblioteca');
   await other.locator('.lib-open', { hasText: 'Para respaldar' }).click();
   await expect(neck(other).marker(5, 3)).toBeVisible();
@@ -48,7 +48,7 @@ test('Test 9 — a backup holds the notebook structure and restores into an isol
   await isolated.close();
 });
 
-test('replacing a library needs an explicit confirmation and a broken file never touches the data', async ({ page }) => {
+test('importing never replaces anything: a broken file is refused, an empty one offers nothing, and no way to replace exists', async ({ page }) => {
   await openLibrary(page);
   await createMaterial(page, 'Tablatura', 'No me borres');
   await settleSave(page);
@@ -64,8 +64,9 @@ test('replacing a library needs an explicit confirmation and a broken file never
   const valid = JSON.stringify({ schema: 1, nodes: [], documents: [], versions: [] });
   await page.getByLabel('Archivo de copia de seguridad').setInputFiles({ name: 'vacio.json', mimeType: 'application/json', buffer: Buffer.from(valid) });
   const dialog = page.getByRole('dialog', { name: 'Importar copia de seguridad' });
-  await dialog.getByLabel(/Reemplazar toda la biblioteca/).check();
-  await expect(dialog.getByRole('button', { name: 'Reemplazar', exact: true })).toBeDisabled();
+  await expect(dialog.getByText(/No hay nada para importar/)).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Importar', exact: true })).toBeDisabled();
+  await expect(page.getByText(/Reemplazar/)).toHaveCount(0); // there is no replace option anywhere
   await dialog.getByRole('button', { name: 'Cancelar' }).click();
 
   await page.goto('/biblioteca');

@@ -1,4 +1,4 @@
-import { useContext, useRef, useState } from 'react';
+import { useContext, useState } from 'react';
 import { NavLink, useParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { APP_VERSION } from '@/core/app-info';
@@ -15,13 +15,13 @@ import { Link } from 'react-router-dom';
 import { useLibrary } from '@/data/use-library';
 import { collabApi } from '@/features/share/collab-api';
 import { useCollabState, useGateway } from '@/features/share/use-collab';
-import { Dialog } from '@/components/ui/Dialog';
 import { useToast } from '@/components/ui/toast-context';
 import { Icon } from '@/components/ui/Icon';
 import { Segmented } from '@/components/ui/Segmented';
 import { db } from '@/data/database';
 import { libraryRepository } from '@/data/library-repository';
 import { belongsToOwner, libraryScope } from '@/data/library-scope';
+import { ImportBackup } from '@/features/backup/ImportBackup';
 import { describeLastSync } from '@/features/account/account-status';
 import { diagnosticText } from '@/features/sync/diagnostic';
 import { previewSkin, SKINS, useSkin, type Skin } from '@/features/theme/skin';
@@ -32,7 +32,7 @@ import { INSTRUMENT_KINDS, SYSTEM_INSTRUMENT } from '@/audio/instruments';
 import { StatusChip } from '@/features/account/AccountMenu';
 import { useAccount } from '@/features/account/account-context';
 import { LinkWizard } from '@/features/account/LinkWizard';
-import { describeBackup, downloadBackup, inspectBackup, type BackupSummary } from '@/features/backup/backup-download';
+import { describeBackup, downloadBackup } from '@/features/backup/backup-download';
 import { ThemeContext } from '@/features/theme/theme-context';
 
 const sections = [
@@ -212,10 +212,6 @@ function BackupSection() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const [pick, setPick] = useState<{ raw: string; summary: BackupSummary; name: string } | null>(null);
-  const [mode, setMode] = useState<'merge' | 'replace'>('merge');
-  const [understood, setUnderstood] = useState(false);
-  const file = useRef<HTMLInputElement>(null);
 
   async function exportCopy() {
     setBusy(true);
@@ -230,30 +226,6 @@ function BackupSection() {
       setBusy(false);
     }
   }
-  async function readFile(selected: File) {
-    setError('');
-    setMessage('');
-    try {
-      const raw = await selected.text();
-      setPick({ raw, summary: inspectBackup(raw), name: selected.name });
-      setMode('merge');
-      setUnderstood(false);
-    } catch (problem) {
-      setError(problem instanceof Error ? problem.message : 'No pudimos leer ese archivo como una copia de GuitarAP.');
-    }
-  }
-  async function runImport() {
-    if (!pick) return;
-    try {
-      await libraryRepository.importBackup(pick.raw, mode);
-      setMessage(mode === 'merge' ? 'La copia se combinó con tu biblioteca.' : 'Tu biblioteca se reemplazó por la copia.');
-      setPick(null);
-    } catch (problem) {
-      setError(problem instanceof Error ? problem.message : 'No se pudo importar la copia. Tu biblioteca quedó como estaba.');
-      setPick(null);
-    }
-  }
-
   return (
     <>
       <h2>Copias de seguridad</h2>
@@ -264,21 +236,7 @@ function BackupSection() {
         <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void exportCopy()}>
           {busy ? 'Preparando…' : 'Descargar copia de seguridad'}
         </button>
-        <button type="button" className="btn" onClick={() => file.current?.click()}>
-          Importar una copia…
-        </button>
-        <input
-          ref={file}
-          type="file"
-          accept="application/json,.json"
-          className="sr-only"
-          aria-label="Archivo de copia de seguridad"
-          onChange={(event) => {
-            const selected = event.target.files?.[0];
-            if (selected) void readFile(selected);
-            event.currentTarget.value = '';
-          }}
-        />
+        <ImportBackup />
       </div>
       {error && (
         <p role="alert" className="notice danger">
@@ -291,46 +249,6 @@ function BackupSection() {
           <Icon name="check" size={16} />
           <span>{message}</span>
         </p>
-      )}
-      {pick && (
-        <Dialog title="Importar copia de seguridad" onClose={() => setPick(null)}>
-          <div className="stack">
-            <p>
-              <strong>{pick.name}</strong> contiene {describeBackup(pick.summary)}.
-            </p>
-            <fieldset className="choices">
-              <legend className="sr-only">Cómo importar</legend>
-              <label className="choice">
-                <input type="radio" name="import-mode" checked={mode === 'merge'} onChange={() => setMode('merge')} />
-                <span>
-                  <strong>Combinar con mi biblioteca</strong>
-                  <small>Agrega lo que falta y actualiza lo que coincide. No borra nada. Recomendado.</small>
-                </span>
-              </label>
-              <label className="choice">
-                <input type="radio" name="import-mode" checked={mode === 'replace'} onChange={() => setMode('replace')} />
-                <span>
-                  <strong>Reemplazar toda la biblioteca</strong>
-                  <small>Borra lo que hay en este dispositivo y deja solo lo de la copia.</small>
-                </span>
-              </label>
-            </fieldset>
-            {mode === 'replace' && (
-              <label className="check">
-                <input type="checkbox" checked={understood} onChange={(event) => setUnderstood(event.target.checked)} />
-                <span>Entiendo que se reemplaza lo que hay ahora y ya descargué una copia por las dudas.</span>
-              </label>
-            )}
-            <div className="dialog-actions">
-              <button type="button" className="btn" onClick={() => setPick(null)}>
-                Cancelar
-              </button>
-              <button type="button" className={`btn ${mode === 'replace' ? 'btn-danger' : 'btn-primary'}`} disabled={mode === 'replace' && !understood} onClick={() => void runImport()}>
-                {mode === 'merge' ? 'Combinar' : 'Reemplazar'}
-              </button>
-            </div>
-          </div>
-        </Dialog>
       )}
     </>
   );

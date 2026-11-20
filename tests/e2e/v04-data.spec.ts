@@ -129,8 +129,8 @@ test('Escenario L — la copia de seguridad lleva letra, melodía, acordes, come
   const other = await isolated.newPage();
   await other.goto('/configuracion/copias');
   await other.getByLabel('Archivo de copia de seguridad').setInputFiles(file!);
-  await other.getByRole('button', { name: 'Combinar', exact: true }).click();
-  await expect(other.getByText('La copia se combinó con tu biblioteca.')).toBeVisible();
+  await other.getByRole('button', { name: 'Importar', exact: true }).click();
+  await expect(other.getByText('La copia se importó.')).toBeVisible();
   await other.goto('/biblioteca');
   await other.locator('.lib-open', { hasText: 'Para respaldar' }).click();
   await expect(notes(other)).toHaveCount(3);
