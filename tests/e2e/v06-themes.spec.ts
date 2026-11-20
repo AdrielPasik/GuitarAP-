@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { openLibrary } from './helpers';
+import { openLibrary, savedPref, setAccountPref } from './helpers';
 
 const SKINS = ['estudio', 'britanico', 'newwave', 'psicodelico', 'vinilo', 'cuaderno'] as const;
 
@@ -39,7 +39,7 @@ test('Escenario E — los temas musicales: se eligen con vista previa, persisten
   // v0.7: a click previews the universe on the whole app without saving; «Cancelar» returns, «Aplicar» keeps it.
   await group.getByRole('button', { name: /Rock británico/ }).click();
   await expect(page.locator('html')).toHaveAttribute('data-skin', 'britanico');
-  expect(await page.evaluate(() => window.localStorage.getItem('guitarap.pref.appearance.skin'))).toBeNull();
+  expect(await savedPref(page, 'appearance.skin')).toBeNull();
   await page.getByRole('button', { name: 'Cancelar', exact: true }).click();
   await expect(page.locator('html')).toHaveAttribute('data-skin', 'estudio');
   await group.getByRole('button', { name: /Psicodelia/ }).click();
@@ -51,7 +51,7 @@ test('Escenario E — los temas musicales: se eligen con vista previa, persisten
   await expect(page.locator('html')).toHaveAttribute('data-skin', 'psicodelico');
   await page.goto('/biblioteca');
   await expect(page.locator('html')).toHaveAttribute('data-skin', 'psicodelico');
-  expect(await page.evaluate(() => window.localStorage.getItem('guitarap.pref.appearance.skin'))).toBe('"psicodelico"');
+  expect(await savedPref(page, 'appearance.skin')).toBe('"psicodelico"');
 
   // Harmonic colours are identical in every skin; text and controls stay readable in light and dark.
   const reference = await tokens(page, 'estudio', 'light');
@@ -79,7 +79,7 @@ test('los temas no rompen ninguna pantalla en escritorio, tableta y móvil, y re
   for (const [width, height] of [[1440, 900], [820, 1180], [390, 844]] as const) {
     await page.setViewportSize({ width, height });
     for (const skin of SKINS) {
-      await page.evaluate((value) => window.localStorage.setItem('guitarap.pref.appearance.skin', JSON.stringify(value)), skin);
+      await setAccountPref(page, 'appearance.skin', JSON.stringify(skin));
       for (const route of ['/biblioteca', '/practica', '/configuracion/apariencia']) {
         await page.goto(route);
         await expect(page.locator('html')).toHaveAttribute('data-skin', skin);

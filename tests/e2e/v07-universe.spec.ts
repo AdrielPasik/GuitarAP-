@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { audioLog, audioProbe, createFolder, createFromMenu, openLibrary, settleSave, storedDocuments } from './helpers';
+import { audioLog, audioProbe, createFolder, createFromMenu, openLibrary, settleSave, savedPref, setAccountPref, storedDocuments } from './helpers';
 
 /**
  * v0.7 — The Musical Universe. Every scenario runs in an isolated, empty browser profile: no real library is involved.
@@ -8,7 +8,7 @@ test.setTimeout(150_000);
 
 const row = (page: Page, text: string) => page.locator('.lib-row', { hasText: text });
 const customize = (page: Page) => page.getByRole('dialog', { name: /Personalizar/ });
-const stored = (page: Page) => page.evaluate(() => JSON.parse(window.localStorage.getItem('guitarap.pref.folder-presentations') ?? '{}'));
+const stored = async (page: Page) => JSON.parse((await savedPref(page, 'folder-presentations')) ?? '{}');
 const modulesShown = (page: Page) => page.locator('.folder-view > .module').evaluateAll((items) => items.map((item) => item.className.replace('module module-', '')));
 
 /** From the editor back to the folder the material lives in. */
@@ -99,7 +99,7 @@ test('A — personalizar una carpeta: portadas, campos, recientes y densidad per
 
   // Changing the global universe leaves the folder's organisation exactly as it was.
   const before = await stored(page);
-  await page.evaluate(() => window.localStorage.setItem('guitarap.pref.appearance.skin', '"vinilo"'));
+  await setAccountPref(page, 'appearance.skin', '"vinilo"');
   await page.reload();
   await expect(page.locator('html')).toHaveAttribute('data-skin', 'vinilo');
   expect(await stored(page)).toEqual(before);

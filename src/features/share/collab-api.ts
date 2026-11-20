@@ -1,5 +1,6 @@
 import type { NotebookContent, NoteComment } from '@/core/model';
 import { configuredSupabase, type SupabaseSession } from '@/features/sync/supabase-auth';
+import { readOwned, writeOwned } from '@/core/owner-storage';
 
 /**
  * The browser side of sharing. It only ever talks to the project's database functions (migration 0007) with the
@@ -137,16 +138,16 @@ export const collabApi = {
 const KNOWN = 'guitarap.share-urls';
 export function rememberUrl(id: string, url: string) {
   try {
-    const all = JSON.parse(window.localStorage.getItem(KNOWN) ?? '{}') as Record<string, string>;
+    const all = JSON.parse(readOwned(KNOWN) ?? '{}') as Record<string, string>;
     all[id] = url;
-    window.localStorage.setItem(KNOWN, JSON.stringify(all));
+    writeOwned(KNOWN, JSON.stringify(all));
   } catch {
     /* storage unavailable */
   }
 }
 export function knownUrl(id: string): string | null {
   try {
-    return (JSON.parse(window.localStorage.getItem(KNOWN) ?? '{}') as Record<string, string>)[id] ?? null;
+    return (JSON.parse(readOwned(KNOWN) ?? '{}') as Record<string, string>)[id] ?? null;
   } catch {
     return null;
   }

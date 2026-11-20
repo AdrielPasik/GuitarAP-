@@ -123,3 +123,12 @@ export async function createFromMenu(page: Page, entry: string, title: string) {
   await page.waitForURL(/\/material\//);
   await page.getByLabel('Título del material').fill(title);
 }
+
+/**
+ * Personal preferences (the look, folder presentations...) are stored per account since v0.8: these read and write the
+ * copy of whoever is on screen, exactly where the app keeps it.
+ */
+export const savedPref = (page: Page, key: string) =>
+  page.evaluate((name) => window.localStorage.getItem(`guitarap.pref.${name}@${window.localStorage.getItem('guitarap.owner-hint') || 'anon'}`), key);
+export const setAccountPref = (page: Page, key: string, raw: string) =>
+  page.evaluate(({ name, value }) => window.localStorage.setItem(`guitarap.pref.${name}@${window.localStorage.getItem('guitarap.owner-hint') || 'anon'}`, value), { name: key, value: raw });

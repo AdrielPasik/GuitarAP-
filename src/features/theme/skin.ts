@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { usePref } from '@/core/prefs';
+import { readPref, usePref } from '@/core/prefs';
 
 /**
  * The artistic universe (level A of personalisation), independent of light/dark and of how each folder is organised.
@@ -41,14 +41,13 @@ export const SKINS: SkinInfo[] = [
     swatches: ['#fbf8ef', '#1f3a8a', '#c2463c', '#2a2620'], type: 'Itálica de pluma, renglones',
   },
 ];
-const KEY = 'guitarap.pref.appearance.skin';
 const IDS = new Set<string>(SKINS.map((skin) => skin.id));
 export const isSkin = (value: unknown): value is Skin => typeof value === 'string' && IDS.has(value);
 
 /** Applied before React renders so the first paint already has the chosen look (no flash of the default). */
 export function applySkinEarly() {
   try {
-    const stored = JSON.parse(window.localStorage.getItem(KEY) ?? 'null');
+    const stored = readPref<unknown>('appearance.skin', null);
     document.documentElement.dataset.skin = isSkin(stored) ? stored : 'estudio';
   } catch {
     document.documentElement.dataset.skin = 'estudio';
