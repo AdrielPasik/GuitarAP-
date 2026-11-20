@@ -1,8 +1,10 @@
 import type { DocumentVersion, LibraryNode, MusicalDocument } from '@/core/model';
 import { db } from '@/data/database';
 import { activeOwnerId } from '@/data/library-scope';
+import { decideEvent, eventKey, type EventExtension } from '@/features/sync/event-policy';
 import {
   SyncTransportError,
+  type ChangeEvent,
   type PullPage,
   type RemoteDocument,
   type SyncSnapshot,
@@ -18,6 +20,10 @@ import {
  * whatever differs from it), and `remote.documents[id]` is the SERVER revision. A push sends `remote + 1`, however many
  * times the person saved in between, so several edits between two syncs are one clean update, never a false conflict.
  */
+/** An event that cannot be applied YET because what it points to has not arrived (a folder, a song, a document). It is kept, never dropped. */
+type Deferred = { kind: 'node' | 'document' | 'version'; record: unknown; since: string };
+/** The download stopped here because the log holds an event this client cannot read; the cursor did not move past it. */
+export type Halt = { kind: string; v?: number; cursor: string; at: number };
 type State = {
   cursor: string;
   documents: Record<string, number>;
@@ -26,15 +32,37 @@ type State = {
   conflicts: Record<string, RemoteDocument>;
   remote?: { documents: Record<string, number>; nodes: Record<string, number> };
   pending?: { id: string; snapshot: SyncSnapshot };
+  deferred?: Record<string, Deferred>;
+  halted?: Halt;
 };
 const key = (owner: string) => `sync-state:${owner}`;
 const blank = (): State => ({ cursor: '0', documents: {}, nodes: {}, versions: {}, conflicts: {} });
 const get = async (owner: string) => {
   const state = ((await db.settings.get(key(owner)))?.value as State | undefined) ?? blank();
   state.remote ??= { documents: {}, nodes: {} };
+  state.deferred ??= {};
   return state;
 };
 const save = async (owner: string, value: State) => db.settings.put({ key: key(owner), value, updatedAt: Date.now() });
+
+/** Events this client could not understand, kept exactly as received so a later version can replay them. */
+export type QuarantineEntry = { key: string; kind: string; v?: number; reason: 'unsupported' | 'invalid'; record: unknown; afterCursor: string; at: number };
+export const QUARANTINE_LIMIT = 5000;
+const quarantineKey = (owner: string) => `sync-quarantine:${owner}`;
+export async function readQuarantine(owner: string): Promise<QuarantineEntry[]> {
+  return ((await db.settings.get(quarantineKey(owner)))?.value as QuarantineEntry[] | undefined) ?? [];
+}
+const writeQuarantine = (owner: string, entries: QuarantineEntry[]) => db.settings.put({ key: quarantineKey(owner), value: entries, updatedAt: Date.now() });
+/** Plain counts for the interface and the diagnostics: never content. */
+export async function countDeferred(owner: string) {
+  return Object.keys((await get(owner)).deferred ?? {}).length;
+}
+export async function countQuarantined(owner: string) {
+  return (await readQuarantine(owner)).length;
+}
+export async function readHalt(owner: string) {
+  return (await get(owner)).halted;
+}
 const local = (item: RemoteDocument): MusicalDocument => {
   const { ownerId, lastOpId, ...document } = item;
   void ownerId;
@@ -160,7 +188,16 @@ export type SyncReport = {
   requests: number;
   /** Documents edited on two devices: the server's version was kept and this device's version was saved as a copy. */
   copies: Array<{ id: string; title: string }>;
+  /** The download stopped at an event this version cannot read (an update is needed). Nothing was skipped or lost. */
+  halted?: { kind: string; v?: number };
+  /** Changes received but waiting for the folder, song or document they belong to. */
+  deferred: number;
+  /** Events set aside, untouched, for a version that understands them. */
+  quarantined: number;
 };
+
+type Context = { owner: string; draft: State; report: SyncReport; quarantine: QuarantineEntry[]; cursor: string; seen?: Set<string> };
+const entityKey = (kind: string, record: unknown) => `${kind}:${(record as { id?: string }).id ?? '?'}`;
 
 export class SyncEngine {
   constructor(
@@ -168,12 +205,14 @@ export class SyncEngine {
     private readonly maxRetries = 2,
     private readonly pageSize = 100,
     private readonly limits = LIMITS,
+    /** Support for event kinds this client does not know natively (registered by later versions of the app). */
+    private readonly extensions: readonly EventExtension[] = [],
   ) {}
 
   async sync(owner: string): Promise<SyncReport> {
     if ((await activeOwnerId()) !== owner) throw new Error('La biblioteca local no está vinculada a esta cuenta.');
     const state = await get(owner);
-    const report: SyncReport = { pushed: 0, pulled: 0, conflicts: 0, retries: 0, offline: false, skipped: { nodes: [], documents: [], versions: [] }, requests: 0, copies: [] };
+    const report: SyncReport = { pushed: 0, pulled: 0, conflicts: 0, retries: 0, offline: false, skipped: { nodes: [], documents: [], versions: [] }, requests: 0, copies: [], deferred: 0, quarantined: 0 };
     const attempted = new Set<string>();
 
     for (;;) {
@@ -237,10 +276,12 @@ export class SyncEngine {
 
     try {
       let page: PullPage;
+      let halted: Halt | undefined;
       do {
         page = await this.transport.pull(owner, state.cursor, this.pageSize);
-        await this.apply(owner, state, page, report);
-      } while (page.hasMore);
+        halted = (await this.apply(owner, state, page, report)).halted;
+      } while (page.hasMore && !halted);
+      if (halted) report.halted = { kind: halted.kind, v: halted.v };
     } catch (error) {
       if (error instanceof SyncTransportError && error.retryable) report.offline = true;
       else {
@@ -249,6 +290,8 @@ export class SyncEngine {
       }
     }
     await save(owner, state);
+    report.deferred = Object.keys(state.deferred ?? {}).length;
+    report.quarantined = (await readQuarantine(owner)).length;
     return report;
   }
 
@@ -263,59 +306,197 @@ export class SyncEngine {
     };
   }
 
-  private async apply(owner: string, state: State, page: PullPage, report: SyncReport) {
-    await db.transaction('rw', db.nodes, db.documents, db.versions, async () => {
+  /**
+   * Applies one page of the log. The page is all-or-nothing: the library changes, the quarantine and the replication
+   * state (cursor included) are written in ONE local transaction, and the in-memory state is replaced only after that
+   * transaction committed. So an interruption or an error in the middle of a page can neither leave a half-applied page
+   * nor make a later attempt believe that an event already arrived when it did not.
+   */
+  private async apply(owner: string, state: State, page: PullPage, report: SyncReport): Promise<{ halted?: Halt }> {
+    const draft: State = structuredClone(state);
+    draft.deferred ??= {};
+    const outcome: { halted?: Halt } = {};
+    await db.transaction('rw', db.nodes, db.documents, db.versions, db.settings, async () => {
+      const ctx: Context = { owner, draft, report, quarantine: await readQuarantine(owner), cursor: state.cursor };
+      ctx.seen = new Set(ctx.quarantine.map((entry) => entry.key));
       for (const change of page.changes) {
-        if (change.kind === 'node') {
-          const x = change.record as LibraryNode;
-          const known = state.remote!.nodes[x.id];
-          if (known === (x.rev ?? 1) && state.nodes[x.id] !== undefined) continue; // echo of what this device already pushed
-          if (x.parentId && !(await db.nodes.get(x.parentId))) throw new Error(`El cambio remoto ${x.id} apunta a una carpeta inexistente.`);
-          const current = await db.nodes.get(x.id);
-          if (current && current.ownerId === owner && state.nodes[x.id] !== undefined && current.rev !== state.nodes[x.id] && (current.name !== x.name || current.parentId !== x.parentId)) {
-            // A folder renamed or moved on two devices: the server's arrangement wins (only a name/position is at stake).
-            report.conflicts += 1;
-          }
-          await db.nodes.put({ ...x, ownerId: owner });
-          state.nodes[x.id] = x.rev ?? 1;
-          state.remote!.nodes[x.id] = x.rev ?? 1;
-        } else if (change.kind === 'version') {
-          const x = change.record as DocumentVersion;
-          if (!(await db.documents.get(x.documentId))) throw new Error(`La versión remota ${x.id} apunta a un documento inexistente.`);
-          if (state.versions[x.id]) continue;
-          await db.versions.put({ ...x, ownerId: owner });
-          state.versions[x.id] = true;
-        } else {
-          const x = change.record as RemoteDocument;
-          if (x.id in state.conflicts) {
-            // A person has yet to decide this one: only keep the newest cloud version for the comparison, touch nothing.
-            state.conflicts[x.id] = x;
-            continue;
-          }
-          const knownRemote = state.remote!.documents[x.id];
-          if (knownRemote === x.rev && state.documents[x.id] !== undefined) continue; // echo of our own push (or a replay)
-          if (x.nodeId && !(await db.nodes.get(x.nodeId))) throw new Error(`El documento remoto ${x.id} apunta a una carpeta inexistente.`);
-          if (x.songId) {
-            const song = await db.nodes.get(x.songId);
-            if (!song || song.kind !== 'song') throw new Error(`El documento remoto ${x.id} apunta a una canción inexistente.`);
-          }
-          const current = await db.documents.get(x.id);
-          const known = state.documents[x.id] ?? 0;
-          // Equal revision NUMBERS prove nothing (two devices that each edited once both end at the same number):
-          // what decides is whether this device changed it since the last sync and whether the content differs.
-          if (current && current.ownerId === owner && current.rev !== known && !sameDocument(current, x)) {
-            await this.settleConflict(owner, state, x, report);
-            continue;
-          }
-          await db.documents.put({ ...local(x), ownerId: owner });
-          state.documents[x.id] = x.rev;
-          state.remote!.documents[x.id] = x.rev;
+        const decision = decideEvent(change, this.extensions);
+        if (decision.action === 'halt') {
+          outcome.halted = { kind: change.kind, v: change.v, cursor: state.cursor, at: Date.now() };
+          break;
         }
-        report.pulled += 1;
+        if (decision.action === 'quarantine') {
+          if (!this.setAside(ctx, change, decision.reason)) {
+            outcome.halted = { kind: change.kind, v: change.v, cursor: state.cursor, at: Date.now() };
+            break;
+          }
+          continue;
+        }
+        if (decision.action === 'extension') {
+          await decision.extension.apply(change.record, owner);
+          report.pulled += 1;
+          continue;
+        }
+        const key = entityKey(decision.kind, change.record);
+        delete draft.deferred![key]; // a newer event about the same record replaces a waiting older one
+        if (this.alreadyHave(ctx, decision.kind, change.record)) continue;
+        const result = await this.applyCore(ctx, decision.kind, change.record);
+        if (result === 'deferred') draft.deferred![key] = { kind: decision.kind, record: change.record, since: state.cursor };
+        else if (result === 'invalid' && !this.setAside(ctx, change, 'invalid')) {
+          outcome.halted = { kind: change.kind, v: change.v, cursor: state.cursor, at: Date.now() };
+          break;
+        }
       }
-      state.cursor = page.cursor;
+      if (outcome.halted) draft.halted = outcome.halted;
+      else {
+        if (Object.keys(draft.deferred!).length) await this.retryDeferred(ctx);
+        draft.cursor = page.cursor;
+        delete draft.halted;
+      }
+      await writeQuarantine(owner, ctx.quarantine);
+      await save(owner, draft);
     });
+    state.cursor = draft.cursor;
+    state.documents = draft.documents;
+    state.nodes = draft.nodes;
+    state.versions = draft.versions;
+    state.conflicts = draft.conflicts;
+    state.remote = draft.remote;
+    state.deferred = draft.deferred;
+    state.halted = draft.halted;
+    return outcome;
   }
+
+  /** Keeps an event untouched in the local quarantine. Returns false when the quarantine is full (the download then stops instead of discarding). */
+  private setAside(ctx: Context, change: ChangeEvent, reason: QuarantineEntry['reason']) {
+    const key = eventKey(change);
+    if (ctx.seen!.has(key)) return true;
+    if (ctx.quarantine.length >= QUARANTINE_LIMIT) return false;
+    ctx.seen!.add(key);
+    ctx.quarantine.push({ key, kind: change.kind, v: change.v, reason, record: structuredClone(change.record), afterCursor: ctx.cursor, at: Date.now() });
+    return true;
+  }
+
+  /** Waiting changes whose folder, song or document has arrived since: apply them, in as many passes as it takes. */
+  private async retryDeferred(ctx: Context) {
+    for (let progress = true; progress; ) {
+      progress = false;
+      for (const [key, entry] of Object.entries(ctx.draft.deferred!)) {
+        const result = await this.applyCore(ctx, entry.kind, entry.record);
+        if (result === 'deferred') continue;
+        delete ctx.draft.deferred![key];
+        progress = true;
+        if (result === 'invalid') this.setAside(ctx, { kind: entry.kind, record: entry.record }, 'invalid');
+      }
+    }
+  }
+
+  /**
+   * Synchronous: is this event something the library already has (our own echo, a replay, or a record waiting for a
+   * person's decision)? It must not yield: a local transaction that awaits something other than a database request can
+   * be closed by the browser, which would drop the whole page.
+   */
+  private alreadyHave(ctx: Context, kind: 'node' | 'document' | 'version', record: unknown): boolean {
+    const { draft } = ctx;
+    if (kind === 'node') {
+      const x = record as LibraryNode;
+      return draft.remote!.nodes[x.id] === (x.rev ?? 1) && draft.nodes[x.id] !== undefined;
+    }
+    if (kind === 'version') return Boolean(draft.versions[(record as DocumentVersion).id]);
+    const x = record as RemoteDocument;
+    if (x.id in draft.conflicts) {
+      draft.conflicts[x.id] = x;
+      return true;
+    }
+    return draft.remote!.documents[x.id] === x.rev && draft.documents[x.id] !== undefined;
+  }
+
+  /** One known event. `deferred`: what it points to is not here yet. `invalid`: it contradicts what it points to. */
+  private async applyCore(ctx: Context, kind: 'node' | 'document' | 'version', record: unknown): Promise<'applied' | 'skipped' | 'deferred' | 'invalid'> {
+    const { owner, draft, report } = ctx;
+    if (kind === 'node') {
+      const x = record as LibraryNode;
+      const known = draft.remote!.nodes[x.id];
+      if (known === (x.rev ?? 1) && draft.nodes[x.id] !== undefined) return 'skipped'; // echo of what this device already pushed
+      if (x.parentId && !(await db.nodes.get(x.parentId))) return 'deferred';
+      const current = await db.nodes.get(x.id);
+      if (current && current.ownerId === owner && draft.nodes[x.id] !== undefined && current.rev !== draft.nodes[x.id] && (current.name !== x.name || current.parentId !== x.parentId)) {
+        // A folder renamed or moved on two devices: the server's arrangement wins (only a name/position is at stake).
+        report.conflicts += 1;
+      }
+      await db.nodes.put({ ...x, ownerId: owner });
+      draft.nodes[x.id] = x.rev ?? 1;
+      draft.remote!.nodes[x.id] = x.rev ?? 1;
+    } else if (kind === 'version') {
+      const x = record as DocumentVersion;
+      if (draft.versions[x.id]) return 'skipped';
+      if (!(await db.documents.get(x.documentId))) return 'deferred';
+      await db.versions.put({ ...x, ownerId: owner });
+      draft.versions[x.id] = true;
+    } else {
+      const x = record as RemoteDocument;
+      if (x.id in draft.conflicts) {
+        // A person has yet to decide this one: only keep the newest cloud version for the comparison, touch nothing.
+        draft.conflicts[x.id] = x;
+        return 'skipped';
+      }
+      const knownRemote = draft.remote!.documents[x.id];
+      if (knownRemote === x.rev && draft.documents[x.id] !== undefined) return 'skipped'; // echo of our own push (or a replay)
+      if (x.nodeId && !(await db.nodes.get(x.nodeId))) return 'deferred';
+      if (x.songId) {
+        const song = await db.nodes.get(x.songId);
+        if (!song) return 'deferred';
+        if (song.kind !== 'song') return 'invalid';
+      }
+      const current = await db.documents.get(x.id);
+      const known = draft.documents[x.id] ?? 0;
+      // Equal revision NUMBERS prove nothing (two devices that each edited once both end at the same number):
+      // what decides is whether this device changed it since the last sync and whether the content differs.
+      if (current && current.ownerId === owner && current.rev !== known && !sameDocument(current, x)) {
+        await this.settleConflict(owner, draft, x, report);
+        return 'skipped';
+      }
+      await db.documents.put({ ...local(x), ownerId: owner });
+      draft.documents[x.id] = x.rev;
+      draft.remote!.documents[x.id] = x.rev;
+    }
+    report.pulled += 1;
+    return 'applied';
+  }
+
+  /** Replays what a past version could not read, now that this one (or an extension) can. Never discards what is still unreadable. */
+  async replayQuarantine(owner: string): Promise<{ replayed: number; remaining: number }> {
+    const state = await get(owner);
+    const draft: State = structuredClone(state);
+    draft.deferred ??= {};
+    const report: SyncReport = { pushed: 0, pulled: 0, conflicts: 0, retries: 0, offline: false, skipped: { nodes: [], documents: [], versions: [] }, requests: 0, copies: [], deferred: 0, quarantined: 0 };
+    let replayed = 0;
+    let remaining = 0;
+    await db.transaction('rw', db.nodes, db.documents, db.versions, db.settings, async () => {
+      const entries = await readQuarantine(owner);
+      const ctx: Context = { owner, draft, report, quarantine: [], cursor: state.cursor };
+      ctx.seen = new Set();
+      for (const entry of entries) {
+        const event: ChangeEvent = { kind: entry.kind, record: entry.record, v: entry.v, required: false };
+        const decision = decideEvent(event, this.extensions);
+        if (decision.action === 'extension') {
+          await decision.extension.apply(entry.record, owner);
+          replayed += 1;
+        } else if (decision.action === 'apply') {
+          const result = await this.applyCore(ctx, decision.kind, entry.record);
+          if (result === 'deferred') draft.deferred![entityKey(decision.kind, entry.record)] = { kind: decision.kind, record: entry.record, since: entry.afterCursor };
+          if (result === 'invalid') ctx.quarantine.push(entry);
+          else replayed += 1;
+        } else ctx.quarantine.push(entry);
+      }
+      await this.retryDeferred(ctx);
+      remaining = ctx.quarantine.length;
+      await writeQuarantine(owner, ctx.quarantine);
+      await save(owner, draft);
+    });
+    return { replayed, remaining };
+  }
+
   /**
    * The same document changed on two devices. Nothing is lost and nothing stays stuck: the server's version becomes
    * the document (it is the one already shared), and this device's version is saved next to it as a visible copy that

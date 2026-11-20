@@ -90,6 +90,9 @@ export async function runSync(config: SupabaseConfig, session: SupabaseSession) 
     requests: report.requests,
     skipped,
     copies: report.copies.length,
+    halted: report.halted,
+    deferred: report.deferred,
+    quarantined: report.quarantined,
     server: (await readDiagnostic(owner))?.server,
   };
   await writeDiagnostic(owner, diagnostic).catch(() => undefined);

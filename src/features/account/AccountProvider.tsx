@@ -3,6 +3,7 @@ import { describeBackup, downloadBackup } from '@/features/backup/backup-downloa
 import { AccountContext, emptyBackup, type Account, type BackupFlow, type Dialog } from '@/features/account/account-context';
 import { describeStatus } from '@/features/account/account-status';
 import { explainSyncError, type Explained, type SyncDiagnostic } from '@/features/sync/diagnostic';
+import { explainHalt } from '@/features/sync/event-policy';
 import { SyncTransportError } from '@/features/sync/transport';
 import {
   AuthError,
@@ -102,12 +103,19 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       setConflicts(result.conflicts);
       setSkipped(result.skipped);
       setDiagnostic(result.diagnostic);
-      setProblem(undefined);
+      const halted = result.report.halted;
+      setProblem(halted ? explainHalt(halted) : undefined);
+      if (halted) setMessage(explainHalt(halted).explanation);
       const copies = result.report.copies;
       if (copies.length)
         setMessage(`Se editó ${copies.length === 1 ? 'un material' : `${copies.length} materiales`} en dos dispositivos. Se conservó la versión del servidor y la tuya quedó guardada como «${copies[0].title}»${copies.length > 1 ? ' (y otras copias)' : ''}. No se perdió nada: compará y quedate con lo que prefieras.`);
       if (result.report.offline) {
         setPhase('offline');
+        return false;
+      }
+      if (halted) {
+        // Never say "everything is synced" while the download is stopped at an event this version cannot read.
+        setPhase('error');
         return false;
       }
       setPhase('idle');

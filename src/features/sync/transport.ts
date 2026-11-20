@@ -13,12 +13,20 @@ export type PushResult = {
   versions: RemoteVersion[];
   conflicts: Array<RemoteDocument | RemoteNode>;
 };
+/**
+ * One entry of the change log. Today the server only publishes `node`, `document` and `version`; `kind` is a plain
+ * string on purpose so that a client can receive (and set aside) an event it does not know without misreading it.
+ * `v` and `required` are the optional envelope of FUTURE events (see event-policy.ts); the current server sends neither.
+ */
+export type ChangeEvent = {
+  kind: string;
+  record: RemoteDocument | RemoteNode | RemoteVersion | unknown;
+  v?: number;
+  required?: boolean;
+};
 export type PullPage = {
   cursor: string;
-  changes: Array<{
-    kind: 'document' | 'node' | 'version';
-    record: RemoteDocument | RemoteNode | RemoteVersion;
-  }>;
+  changes: ChangeEvent[];
   hasMore: boolean;
 };
 export interface SyncTransport {
@@ -96,6 +104,14 @@ export class FakeTransport implements SyncTransport {
     record: PullPage['changes'][number]['record'],
   ) {
     this.logs.set(owner, [...(this.logs.get(owner) ?? []), { kind, record: copy(record) }]);
+  }
+  /** Test helper: puts any event (also one this client does not know) into an account's log, as a newer server could. */
+  inject(owner: string, event: ChangeEvent) {
+    this.logs.set(owner, [...(this.logs.get(owner) ?? []), copy(event)]);
+  }
+  /** Test helper: how many events the account's log holds. */
+  size(owner: string) {
+    return (this.logs.get(owner) ?? []).length;
   }
   async push(ownerId: string, opId: string, snapshot: SyncSnapshot) {
     const prior = this.operations.get(`${ownerId}:${opId}`);

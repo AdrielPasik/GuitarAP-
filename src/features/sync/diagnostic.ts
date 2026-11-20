@@ -15,6 +15,11 @@ export type SyncDiagnostic = {
   skipped?: { nodes: number; documents: number; versions: number };
   /** Documents edited on two devices: how many copies were kept so that nothing was lost. */
   copies?: number;
+  /** The download stopped at an event this version cannot read (counts and kind only, never content). */
+  halted?: { kind: string; v?: number };
+  /** Changes waiting for the folder or document they belong to, and events set aside for a newer version. */
+  deferred?: number;
+  quarantined?: number;
   /** `repaired`: the server has migration 0008. `needs-0008`: it answers, but sync_library is the defective one. */
   server?: 'repaired' | 'needs-0008' | 'unknown';
 };
