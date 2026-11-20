@@ -46,7 +46,19 @@ export function DataSection() {
   }, [persistAnswer]);
 
   const [rebuilt, setRebuilt] = useState<string>('');
-  const [rebuilding, setRebuilding] = useState(false);
+  const [rebuilding, setRebuilding] = useState<'' | 'download' | 'sync'>('');
+  const [confirmSync, setConfirmSync] = useState(false);
+  function run(mode: 'download' | 'sync') {
+    setRebuilding(mode);
+    setRebuilt('');
+    return account.rebuildFromCloud(mode).then((result) => {
+      setRebuilding('');
+      if (!result) return setRebuilt('No se pudo completar ahora; no se tocó nada. Probá de nuevo en un momento.');
+      const held = result.held ? ` ${result.held === 1 ? '1 material con cambios tuyos sin subir se dejó tal cual' : `${result.held} materiales con cambios tuyos sin subir se dejaron tal cual`}.` : '';
+      const sent = mode === 'sync' ? ` Se subieron ${result.pushed} elementos a tu cuenta.` : ' No se subió nada.';
+      setRebuilt(`${result.refetched === 0 ? 'Listo: tu biblioteca ya estaba completa.' : `Listo: se recuperaron ${result.refetched} elementos que faltaban.`}${sent}${held}`);
+    });
+  }
   const lastBackup = readLastBackup();
   const cloud = !account.session
     ? { label: 'Sin sesión', detail: 'Tus materiales están solo en este dispositivo.', tone: 'local' }
@@ -67,23 +79,45 @@ export function DataSection() {
         <section className="data-rebuild" aria-label="Reconstruir desde la nube">
           <h3>Reconstruir desde la nube</h3>
           <p className="muted small">
-            Vuelve a descargar todo lo que tu cuenta tiene confirmado. No borra nada de este dispositivo y no pisa lo que todavía no se subió: tus cambios pendientes se envían primero. Podés repetirlo sin riesgo.
+            Vuelve a traer lo que tu cuenta tiene confirmado. En ningún caso borra algo de este dispositivo ni pisa un cambio que todavía no se subió. Elegí qué querés que haga:
           </p>
-          <button
-            type="button"
-            className="btn"
-            disabled={rebuilding || account.recovery.phase === 'recovering'}
-            onClick={() => {
-              setRebuilding(true);
-              setRebuilt('');
-              void account.rebuildFromCloud().then((count) => {
-                setRebuilding(false);
-                setRebuilt(count === undefined ? 'No se pudo completar ahora; no se tocó nada. Probá de nuevo en un momento.' : count === 0 ? 'Listo: tu biblioteca ya estaba completa.' : `Listo: se recuperaron ${count} elementos que faltaban.`);
-              });
-            }}
-          >
-            {rebuilding ? 'Reconstruyendo…' : 'Reconstruir desde la nube'}
-          </button>
+          <div className="rebuild-choice">
+            <strong>Solo descargar</strong>
+            <p className="muted small">
+              No escribe nada en la nube: no sube ningún cambio. Si algún material tiene cambios tuyos sin subir, ese material se deja tal cual está (no se compara, no se reemplaza, no se copia).
+            </p>
+            <button type="button" className="btn btn-primary" disabled={rebuilding !== '' || account.recovery.phase === 'recovering'} onClick={() => void run('download')}>
+              {rebuilding === 'download' ? 'Descargando…' : 'Solo descargar de la nube'}
+            </button>
+          </div>
+          <div className="rebuild-choice">
+            <strong>Subir mis cambios y descargar</strong>
+            <p className="muted small">
+              Hay {account.pendingCount === 1 ? '1 cambio pendiente' : `${account.pendingCount} cambios pendientes`} de subir. Esta opción SÍ escribe en tu cuenta: primero sube lo tuyo, para que la nube y este dispositivo coincidan antes de comparar y así nada de lo que escribiste se reemplace; después descarga lo que falta.
+            </p>
+            {!confirmSync ? (
+              <button type="button" className="btn" disabled={rebuilding !== '' || account.recovery.phase === 'recovering'} onClick={() => setConfirmSync(true)}>
+                Subir y descargar…
+              </button>
+            ) : (
+              <span className="row">
+                <span>¿Subir tus cambios pendientes a la nube y descargar?</span>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => {
+                    setConfirmSync(false);
+                    void run('sync');
+                  }}
+                >
+                  Sí, subir y descargar
+                </button>
+                <button type="button" className="btn" onClick={() => setConfirmSync(false)}>
+                  Cancelar
+                </button>
+              </span>
+            )}
+          </div>
           {rebuilt && <p role="status">{rebuilt}</p>}
         </section>
       )}

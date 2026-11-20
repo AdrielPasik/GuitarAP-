@@ -5,7 +5,7 @@ export type MaterialTemplate = 'scale' | 'triad' | 'riff' | 'empty' | 'study' | 
 import { createFretboardContent, createTablatureContent } from '@/core/model';
 import { newBlock } from '@/core/notebook';
 import { db } from '@/data/database';
-import { deleteDraft, writeDraft } from '@/data/drafts';
+import { deleteDraft, deleteDraftsOf, draftsOf, writeDraft } from '@/data/drafts';
 import { AccessError, activeOwnerId, authorize, belongsToOwner, libraryScope, mustExist } from '@/data/library-scope';
 
 const now = () => Date.now();
@@ -163,7 +163,12 @@ export class LibraryRepository {
    * exists and still belongs to that owner; otherwise (or if the database refuses) the edit is kept as a draft of that
    * owner and the caller is told, so nothing the interface accepted is ever dropped.
    */
-  async saveEdit(ticket: EditTicket, document: Pick<MusicalDocument, 'id' | 'title' | 'content'>, reason: 'autosave' | 'manual' = 'autosave'): Promise<SaveOutcome> {
+  async saveEdit(
+    ticket: EditTicket,
+    document: Pick<MusicalDocument, 'id' | 'title' | 'content'>,
+    reason: 'autosave' | 'manual' = 'autosave',
+    options: { expectedRev?: number; onRev?: (rev: number) => void } = {},
+  ): Promise<SaveOutcome> {
     if (!issued.has(ticket) || ticket.documentId !== document.id) throw new AccessError();
     const keep = async (why: 'missing' | 'other-owner' | 'write-failed', baseRev: number | null) => {
       await writeDraft({ documentId: document.id, ownerId: ticket.ownerId, title: document.title, content: structuredClone(document.content), baseRev, savedAt: now(), reason: why });
@@ -175,15 +180,43 @@ export class LibraryRepository {
         if (!current) return keep('missing', null);
         if ((current.ownerId ?? null) !== ticket.ownerId) return keep('other-owner', current.rev);
         const latest = (await db.versions.where('documentId').equals(document.id).sortBy('createdAt')).at(-1);
-        const recent = reason === 'autosave' && latest && now() - latest.createdAt < AUTOSAVE_VERSION_INTERVAL;
+        // Somebody else (another tab, another device's sync) changed the document since this editor last saved it: what is
+        // there now is kept in the history whatever the throttle says, so a save can never silently replace it.
+        const changedUnderneath = options.expectedRev !== undefined && current.rev !== options.expectedRev;
+        const recent = !changedUnderneath && reason === 'autosave' && latest && now() - latest.createdAt < AUTOSAVE_VERSION_INTERVAL;
         if (!recent) await db.versions.add({ id: crypto.randomUUID(), documentId: current.id, createdAt: now(), reason, title: current.title, content: structuredClone(current.content), ownerId: current.ownerId });
         await db.documents.put({ ...current, title: document.title, content: document.content, rev: current.rev + 1, updatedAt: now() });
-        await deleteDraft(ticket.ownerId, document.id); // what is saved now supersedes any older draft
+        await deleteDraft(ticket.ownerId, document.id); // what this tab saved now supersedes ITS older draft
+        options.onRev?.(current.rev + 1);
         return 'saved' as const;
       });
     } catch {
       return keep('write-failed', null);
     }
+  }
+
+  /**
+   * The owner's decision about the drafts of a document (there may be one per tab). NOTHING is thrown away either way:
+   * every draft goes into the document's history first; «apply» then also makes the newest one the document, after a
+   * recovery point of what is there now.
+   */
+  async resolveDrafts(documentId: string, choice: 'apply' | 'keep-in-history') {
+    const scope = await libraryScope();
+    await db.transaction('rw', db.documents, db.versions, db.settings, async () => {
+      const current = mustExist(await db.documents.get(documentId), scope, 'El documento no existe.');
+      const drafts = await draftsOf(documentId, scope);
+      if (!drafts.length) return;
+      const newest = drafts.at(-1)!;
+      for (const draft of drafts) {
+        const label = draft === newest && choice === 'apply' ? 'borrador recuperado' : 'borrador guardado';
+        await db.versions.add({ id: crypto.randomUUID(), documentId, createdAt: draft.savedAt, reason: 'manual', title: `${draft.title} (${label})`, content: structuredClone(draft.content as MusicalDocument['content']), ownerId: current.ownerId });
+      }
+      if (choice === 'apply') {
+        await db.versions.add({ id: crypto.randomUUID(), documentId, createdAt: now(), reason: 'manual', title: current.title, content: structuredClone(current.content), ownerId: current.ownerId });
+        await db.documents.put({ ...current, title: newest.title, content: structuredClone(newest.content as MusicalDocument['content']), rev: current.rev + 1, updatedAt: now() });
+      }
+      await deleteDraftsOf(current.ownerId ?? null, documentId);
+    });
   }
 
   async duplicateDocument(id: string) {

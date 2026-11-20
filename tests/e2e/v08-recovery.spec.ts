@@ -140,12 +140,12 @@ test('la computadora crea la biblioteca y el celular la recupera sin asistente n
     });
   });
   await phone.page.goto('/configuracion/datos');
-  await phone.page.getByRole('button', { name: 'Reconstruir desde la nube' }).click();
-  await expect(phone.page.getByText(/se recuperaron 1 elementos que faltaban/)).toBeVisible({ timeout: 30_000 });
+  await phone.page.getByRole('button', { name: 'Solo descargar de la nube' }).click();
+  await expect(phone.page.getByText(/se recuperaron 1 elementos que faltaban. No se subió nada/)).toBeVisible({ timeout: 30_000 });
   await phone.page.goto('/biblioteca');
   await expect(row(phone.page, 'Canción A (desde el celular)')).toBeVisible();
   await phone.page.goto('/configuracion/datos');
-  await phone.page.getByRole('button', { name: 'Reconstruir desde la nube' }).click();
+  await phone.page.getByRole('button', { name: 'Solo descargar de la nube' }).click();
   await expect(phone.page.getByText('Listo: tu biblioteca ya estaba completa.')).toBeVisible({ timeout: 30_000 });
   expect(await titlesOwnedBy(phone.page, ana)).toEqual(await titlesOwnedBy(computer.page, ana));
   await computer.context.close();
@@ -376,4 +376,46 @@ test('material creado sin cuenta: se muestra, no se adopta solo, pide confirmaci
   await signOut(device2.page);
   await expect(row(device2.page, 'Solo en este dispositivo')).toBeVisible();
   await device2.context.close();
+});
+
+test('«Reconstruir desde la nube»: solo descargar no escribe en la nube; subir y descargar lo dice y pide confirmación', async ({ browser }) => {
+  const ana = await newAccount('ana');
+  const ids = { ana };
+  const computer = await computerWithLibrary(browser, ids, 'ana');
+  // Automatic sync off, so the only thing that can write to the cloud is what the person asks for.
+  await computer.page.goto('/configuracion/sincronizacion');
+  await computer.page.getByLabel('Sincronizar automáticamente').uncheck();
+  // The choice is written to the local database a moment later: wait for it before leaving the page.
+  await expect.poll(() => computer.page.evaluate(() => new Promise<unknown>((resolve) => {
+    const open = indexedDB.open('guitarap');
+    open.onsuccess = () => {
+      const get = open.result.transaction('settings').objectStore('settings').get('account-auto-sync');
+      get.onsuccess = () => resolve((get.result as { value?: boolean } | undefined)?.value);
+    };
+  }))).toBe(false);
+  // A change that has not been uploaded yet (made offline).
+  await computer.page.goto('/biblioteca');
+  await row(computer.page, 'Canción A').click();
+  await expect(computer.page.getByLabel('Título del material')).toBeVisible();
+  await computer.page.getByRole('link', { name: /Volver a la biblioteca/ }).click();
+  await computer.context.setOffline(true);
+  await row(computer.page, 'Canción A').click();
+  await computer.page.getByLabel('Título del material').fill('Cambio sin subir');
+  await settleSave(computer.page);
+  await computer.context.setOffline(false);
+  await computer.page.goto('/configuracion/datos');
+
+  await computer.page.getByRole('button', { name: 'Solo descargar de la nube' }).click();
+  await expect(computer.page.getByText(/No se subió nada/)).toBeVisible({ timeout: 30_000 });
+  expect(await serverTitles(ana)).toEqual(['Canción A']); // the cloud was not written to
+  expect(await titlesOwnedBy(computer.page, ana)).toContain('Cambio sin subir'); // and the local edit is exactly as it was
+
+  // The other action says that it uploads, and asks first.
+  await expect(computer.page.getByText(/SÍ escribe en tu cuenta/)).toBeVisible();
+  await computer.page.getByRole('button', { name: 'Subir y descargar…' }).click();
+  expect(await serverTitles(ana)).toEqual(['Canción A']); // asking is not doing
+  await computer.page.getByRole('button', { name: 'Sí, subir y descargar' }).click();
+  await expect(computer.page.getByText(/Se subieron \d+ elementos a tu cuenta/)).toBeVisible({ timeout: 30_000 });
+  await expect.poll(() => serverTitles(ana)).toEqual(['Cambio sin subir']);
+  await computer.context.close();
 });

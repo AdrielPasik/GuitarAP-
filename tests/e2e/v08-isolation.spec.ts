@@ -398,3 +398,81 @@ test.describe('lo último que escribí no se pierde cuando otra pestaña cierra 
     await expect(page.getByLabel('Título del material')).toHaveValue('Lo último que escribí');
   });
 });
+
+test.describe('integridad de los borradores: la ventana entre escribir y el disco', () => {
+  test('con un disco lento el editor no dice «Guardado» y el navegador avisa antes de dejar la página; al confirmarse deja de avisar', async ({ page, context }) => {
+    await mockAccounts(page);
+    await openLibrary(page);
+    await signIn(page, 'ana');
+    await page.goto('/biblioteca');
+    const id = await newSong(page, 'Canción de Ana');
+    const editor = await context.newPage();
+    await editor.addInitScript(() => {
+      const w = window as unknown as { __GUITARAP_AUTOSAVE_DELAY: number; __GUITARAP_JOURNAL_DELAY: number };
+      w.__GUITARAP_AUTOSAVE_DELAY = 600_000;
+      w.__GUITARAP_JOURNAL_DELAY = 1500; // a slow disk
+    });
+    await editor.goto(`/material/${id}`);
+    await editor.getByLabel('Título del material').fill('Escrito justo antes de irme');
+    await expect(editor.getByRole('status').filter({ hasText: 'Guardando' })).toBeVisible(); // typed, not on disk: not "Guardado"
+    await expect(editor.getByRole('status').filter({ hasText: /^Guardado$/ })).toHaveCount(0);
+    let asked = '';
+    editor.once('dialog', (dialog) => {
+      asked = dialog.type();
+      void dialog.dismiss(); // the person decides to stay
+    });
+    await editor.close({ runBeforeUnload: true });
+    await expect.poll(() => asked).toBe('beforeunload'); // the browser was asked to warn
+    await expect.poll(() => draftTitle(page)).toBe('Escrito justo antes de irme'); // and the write completes
+    // Once it is on disk the warning is no longer needed.
+    let askedAgain = false;
+    editor.once('dialog', (dialog) => {
+      askedAgain = true;
+      void dialog.dismiss();
+    });
+    await editor.close({ runBeforeUnload: true }).catch(() => undefined);
+    expect(askedAgain).toBe(false);
+  });
+
+  test('dos pestañas con ediciones distintas del mismo material: cada una deja su borrador, y al recuperar nada se pierde', async ({ page, context }) => {
+    await mockAccounts(page);
+    await openLibrary(page);
+    await signIn(page, 'ana');
+    await page.goto('/biblioteca');
+    const id = await newSong(page, 'Canción de Ana');
+    const slow = async () => {
+      const tab = await context.newPage();
+      await tab.addInitScript(() => {
+        (window as unknown as { __GUITARAP_AUTOSAVE_DELAY: number }).__GUITARAP_AUTOSAVE_DELAY = 600_000;
+      });
+      await tab.goto(`/material/${id}`);
+      return tab;
+    };
+    const one = await slow();
+    const two = await slow();
+    await one.getByLabel('Título del material').fill('Pestaña uno');
+    await two.getByLabel('Título del material').fill('Pestaña dos');
+    await expect.poll(() => draftCount(page)).toBe(2);
+    await one.close();
+    await two.close();
+    await page.goto(`/material/${id}`);
+    await expect(page.getByRole('button', { name: 'Recuperar los cambios' })).toBeVisible();
+    await page.getByRole('button', { name: 'Recuperar los cambios' }).click();
+    await expect(page.getByLabel('Título del material')).toHaveValue(/Pestaña (uno|dos)/);
+    const versions = await page.evaluate(
+      () =>
+        new Promise<string[]>((resolve) => {
+          const open = indexedDB.open('guitarap');
+          open.onsuccess = () => {
+            const all = open.result.transaction('versions').objectStore('versions').getAll();
+            all.onsuccess = () => resolve((all.result as Array<{ title: string }>).map((version) => version.title));
+          };
+        }),
+    );
+    // Whatever the order in which the two tabs finished, both texts are still somewhere: in the document or in its history.
+    const everywhere = [...versions, await page.getByLabel('Título del material').inputValue()];
+    expect(everywhere.some((title) => title.startsWith('Pestaña uno'))).toBe(true);
+    expect(everywhere.some((title) => title.startsWith('Pestaña dos'))).toBe(true);
+    expect(await draftCount(page)).toBe(0);
+  });
+});

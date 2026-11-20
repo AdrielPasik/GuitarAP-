@@ -49,6 +49,9 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   const [problem, setProblem] = useState<Explained>();
   const [skipped, setSkipped] = useState(0);
   const [autoSync, setAutoSyncState] = useState(true);
+  // The person's choice about automatic sync is read BEFORE anything runs by itself (otherwise a person who turned it off
+  // would still get one sync at every start, while the choice is being read).
+  const [autoSyncReady, setAutoSyncReady] = useState(false);
   const [online, setOnline] = useState(() => navigator.onLine);
   const [visible, setVisible] = useState<Visible>();
   const [signedOutFlag, setSignedOutFlag] = useState(false);
@@ -138,7 +141,10 @@ export function AccountProvider({ children }: { children: ReactNode }) {
         const data = await lazyData();
         if (!cancelled) setAutoSyncState(await data.readAutoSync());
       } finally {
-        if (!cancelled) setRestoring(false);
+        if (!cancelled) {
+          setAutoSyncReady(true);
+          setRestoring(false);
+        }
       }
     })();
     return () => {
@@ -272,7 +278,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   // Automatic sync: on start, when the connection returns, periodically, and shortly after edits.
   const signedIn = Boolean(session);
   useEffect(() => {
-    if (!signedIn || !linked || !autoSync || !online) return;
+    if (!signedIn || !linked || !autoSync || !autoSyncReady || !online) return;
     void syncNow();
     const poll = window.setInterval(() => {
       if (document.visibilityState === 'visible') void syncNow();
@@ -285,14 +291,14 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       window.clearInterval(poll);
       document.removeEventListener('visibilitychange', visible);
     };
-  }, [autoSync, linked, online, signedIn, syncNow]);
+  }, [autoSync, autoSyncReady, linked, online, signedIn, syncNow]);
 
   useEffect(() => {
-    if (!signedIn || !linked || !autoSync || !online || pending === 0 || phase === 'syncing') return;
+    if (!signedIn || !linked || !autoSync || !autoSyncReady || !online || pending === 0 || phase === 'syncing') return;
     const wait = Math.max(AUTO_SYNC_DELAY, ERROR_COOLDOWN - (Date.now() - lastError.current));
     const timer = window.setTimeout(() => void syncNow(), phase === 'error' ? wait : AUTO_SYNC_DELAY);
     return () => window.clearTimeout(timer);
-  }, [autoSync, linked, online, pending, phase, signedIn, syncNow]);
+  }, [autoSync, autoSyncReady, linked, online, pending, phase, signedIn, syncNow]);
 
   const signIn = useCallback(
     async (email: string, password: string) => {
@@ -400,22 +406,29 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       const owner = sessionRef.current?.user.id;
       if (owner) void lazyData().then((data) => data.dismissRecovery(owner));
     },
-    rebuildFromCloud: async () => {
+    rebuildFromCloud: async (mode) => {
       const current = sessionRef.current;
-      if (!config || !current || !autoRecoveryEnabled() || running.current) return undefined;
+      if (!config || !current || !autoRecoveryEnabled()) return undefined;
+      // A sync that is already running finishes first (two runs at once could not tell what each one did).
+      for (let waited = 0; running.current && waited < 150; waited += 1) await new Promise((resolve) => window.setTimeout(resolve, 200));
+      if (running.current) return undefined;
       running.current = true;
       setPhase('syncing');
-      setRecovery({ phase: 'recovering', pulled: 0, pages: 0 });
+      const downloadOnly = mode === 'download';
+      setRecovery({ phase: 'recovering', pulled: 0, pages: 0, step: downloadOnly ? 'pull' : 'push', downloadOnly });
       try {
         const fresh = (await restoreSession(config)) ?? current;
         const data = await lazyData();
-        const result = await data.rebuildFromCloud(config, fresh, { onProgress: (progress) => setRecovery({ phase: 'recovering', pulled: progress.pulled, pages: progress.pages }) });
+        const result = await data.rebuildFromCloud(config, fresh, {
+          downloadOnly,
+          onProgress: (progress) => setRecovery({ phase: 'recovering', pulled: progress.pulled, pages: progress.pages, step: progress.phase, downloadOnly }),
+        });
         if (result.recovery) {
           recoveryDone.current = true;
           setRecovery(viewOf(result.recovery));
           setLastSyncAt(Date.now());
           setPhase('idle');
-          return result.report.refetched;
+          return { refetched: result.report.refetched, held: result.report.held, pushed: result.report.pushed };
         }
         setPhase(result.report.offline ? 'offline' : 'error');
         setRecovery({ phase: 'waiting', reason: result.report.offline ? 'offline' : 'halted' });

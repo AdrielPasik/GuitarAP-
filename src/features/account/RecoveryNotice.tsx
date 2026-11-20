@@ -18,7 +18,8 @@ export function RecoveryNotice() {
       {recovery.phase === 'recovering' && (
         <section className="local-note recovery-note" role="status" aria-label="Recuperación de la biblioteca">
           <span>
-            <strong>Recuperando tu biblioteca…</strong>{' '}
+            <strong>{recovery.downloadOnly ? 'Descargando tu biblioteca…' : recovery.step === 'push' ? 'Subiendo tus cambios pendientes…' : 'Recuperando tu biblioteca…'}</strong>{' '}
+            {recovery.downloadOnly ? 'Solo se descarga: no se sube nada. ' : ''}
             {recovery.pulled ? `Llegaron ${plural(recovery.pulled, 'elemento', 'elementos')} de tu cuenta.` : 'Descargando lo que hay en tu cuenta.'} Podés seguir usando GuitarAP mientras tanto.
           </span>
           <progress aria-label="Progreso de la recuperación" />

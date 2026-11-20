@@ -163,6 +163,7 @@ export async function runSync(config: SupabaseConfig, session: SupabaseSession, 
 
 /** "Rebuild from the cloud": non-destructive and idempotent (see SyncEngine.rebuildFromCloud). */
 export async function rebuildFromCloud(config: SupabaseConfig, session: SupabaseSession, options: SyncOptions = {}) {
+  // `options.downloadOnly` decides whether anything may be written to the server: the caller states it explicitly.
   const owner = session.user.id;
   const report = await makeEngine(config, session).rebuildFromCloud(owner, options);
   if (!report.offline && report.complete) {

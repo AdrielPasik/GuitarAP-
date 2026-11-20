@@ -179,10 +179,19 @@ export async function countConflicts(owner: string) {
 }
 /** What a long sync tells the screen while it runs (counts only). */
 export type SyncProgress = { phase: 'push' | 'pull'; pushed: number; pulled: number; pages: number };
-export type SyncOptions = { onProgress?: (progress: SyncProgress) => void };
+export type SyncOptions = {
+  onProgress?: (progress: SyncProgress) => void;
+  /**
+   * Read-only toward the server: nothing is uploaded, and a record that has changes of its own that were never uploaded
+   * is left exactly as it is (counted in `held`) instead of being compared, replaced or turned into a copy.
+   */
+  downloadOnly?: boolean;
+};
 export type SyncReport = {
   /** The download reached the end of the account's log: everything the server had at that moment was received. */
   complete: boolean;
+  /** Records with changes of their own that were not uploaded, left untouched by a download-only run. */
+  held: number;
   pushed: number;
   pulled: number;
   conflicts: number;
@@ -201,7 +210,7 @@ export type SyncReport = {
   quarantined: number;
 };
 
-type Context = { owner: string; draft: State; report: SyncReport; quarantine: QuarantineEntry[]; cursor: string; seen?: Set<string> };
+type Context = { owner: string; draft: State; report: SyncReport; quarantine: QuarantineEntry[]; cursor: string; seen?: Set<string>; hold?: boolean };
 const entityKey = (kind: string, record: unknown) => `${kind}:${(record as { id?: string }).id ?? '?'}`;
 
 export class SyncEngine {
@@ -217,11 +226,11 @@ export class SyncEngine {
   async sync(owner: string, options: SyncOptions = {}): Promise<SyncReport> {
     if ((await activeOwnerId()) !== owner) throw new Error('La biblioteca local no está vinculada a esta cuenta.');
     const state = await get(owner);
-    const report: SyncReport = { complete: false, pushed: 0, pulled: 0, conflicts: 0, retries: 0, offline: false, skipped: { nodes: [], documents: [], versions: [] }, requests: 0, copies: [], deferred: 0, quarantined: 0 };
+    const report: SyncReport = { complete: false, held: 0, pushed: 0, pulled: 0, conflicts: 0, retries: 0, offline: false, skipped: { nodes: [], documents: [], versions: [] }, requests: 0, copies: [], deferred: 0, quarantined: 0 };
     let pages = 0;
     const attempted = new Set<string>();
 
-    for (;;) {
+    for (; !options.downloadOnly; ) {
       // Another person took the screen while this sync was running: stop, nothing more leaves for this account.
       if ((await activeOwnerId()) !== owner) throw new Error('La biblioteca local no está vinculada a esta cuenta.');
       if (!state.pending) {
@@ -288,7 +297,7 @@ export class SyncEngine {
       let halted: Halt | undefined;
       do {
         page = await this.transport.pull(owner, state.cursor, this.pageSize);
-        halted = (await this.apply(owner, state, page, report)).halted;
+        halted = (await this.apply(owner, state, page, report, Boolean(options.downloadOnly))).halted;
         pages += 1;
         options.onProgress?.({ phase: 'pull', pushed: report.pushed, pulled: report.pulled, pages });
       } while (page.hasMore && !halted);
@@ -324,14 +333,14 @@ export class SyncEngine {
    * transaction committed. So an interruption or an error in the middle of a page can neither leave a half-applied page
    * nor make a later attempt believe that an event already arrived when it did not.
    */
-  private async apply(owner: string, state: State, page: PullPage, report: SyncReport): Promise<{ halted?: Halt }> {
+  private async apply(owner: string, state: State, page: PullPage, report: SyncReport, hold = false): Promise<{ halted?: Halt }> {
     const draft: State = structuredClone(state);
     draft.deferred ??= {};
     const outcome: { halted?: Halt } = {};
     await db.transaction('rw', db.nodes, db.documents, db.versions, db.settings, async () => {
       // The page lands only if the person on screen is still the one this sync belongs to.
       if ((await libraryScope()).ownerId !== owner) throw new Error('La sesión cambió durante la sincronización: no se aplicó nada.');
-      const ctx: Context = { owner, draft, report, quarantine: await readQuarantine(owner), cursor: state.cursor };
+      const ctx: Context = { owner, draft, report, quarantine: await readQuarantine(owner), cursor: state.cursor, hold };
       ctx.seen = new Set(ctx.quarantine.map((entry) => entry.key));
       for (const change of page.changes) {
         const decision = decideEvent(change, this.extensions);
@@ -434,6 +443,10 @@ export class SyncEngine {
       if (known === (x.rev ?? 1) && draft.nodes[x.id] !== undefined) return 'skipped'; // echo of what this device already pushed
       if (x.parentId && !(await db.nodes.get(x.parentId))) return 'deferred';
       const current = await db.nodes.get(x.id);
+      if (ctx.hold && current && current.ownerId === owner && current.rev !== (draft.nodes[x.id] ?? -1) && (current.name !== x.name || current.parentId !== x.parentId)) {
+        report.held += 1; // a folder with an arrangement of its own that was never uploaded: left as it is
+        return 'skipped';
+      }
       if (current && current.ownerId === owner && draft.nodes[x.id] !== undefined && current.rev !== draft.nodes[x.id] && (current.name !== x.name || current.parentId !== x.parentId)) {
         // A folder renamed or moved on two devices: the server's arrangement wins (only a name/position is at stake).
         report.conflicts += 1;
@@ -464,6 +477,10 @@ export class SyncEngine {
       }
       const current = await db.documents.get(x.id);
       const known = draft.documents[x.id] ?? 0;
+      if (ctx.hold && current && current.ownerId === owner && current.rev !== known && !sameDocument(current, x)) {
+        ctx.report.held += 1; // changes of its own that were never uploaded: not compared, not replaced, not copied
+        return 'skipped';
+      }
       // Equal revision NUMBERS prove nothing (two devices that each edited once both end at the same number):
       // what decides is whether this device changed it since the last sync and whether the content differs.
       if (current && current.ownerId === owner && current.rev !== known && !sameDocument(current, x)) {
@@ -483,7 +500,7 @@ export class SyncEngine {
     const state = await get(owner);
     const draft: State = structuredClone(state);
     draft.deferred ??= {};
-    const report: SyncReport = { complete: false, pushed: 0, pulled: 0, conflicts: 0, retries: 0, offline: false, skipped: { nodes: [], documents: [], versions: [] }, requests: 0, copies: [], deferred: 0, quarantined: 0 };
+    const report: SyncReport = { complete: false, held: 0, pushed: 0, pulled: 0, conflicts: 0, retries: 0, offline: false, skipped: { nodes: [], documents: [], versions: [] }, requests: 0, copies: [], deferred: 0, quarantined: 0 };
     let replayed = 0;
     let remaining = 0;
     await db.transaction('rw', db.nodes, db.documents, db.versions, db.settings, async () => {
@@ -549,11 +566,16 @@ export class SyncEngine {
 
   /**
    * "Rebuild from the cloud": downloads the account's whole log again from the start. It deletes nothing and overwrites
-   * nothing that has not been uploaded: pending local changes are sent FIRST (a sync pushes before it pulls), records
-   * the replication state claims to have but the library lacks are forgotten so they are fetched again, and everything
-   * else is recognised as already received. Running it twice changes nothing more than running it once.
+   * nothing that has not been uploaded. Two modes, and the caller must say which one the person chose:
+   *   - `downloadOnly: true` — never writes to the server; records with changes of their own that were not uploaded are
+   *     held exactly as they are;
+   *   - otherwise — a full sync: pending local changes are sent FIRST so the server and this device agree before
+   *     anything is compared (that is why it writes remotely, and why the person must confirm it).
+   * Records the replication state claims to have but the library lacks are forgotten so they are fetched again, and
+   * everything else is recognised as already received. Running it twice changes nothing more than running it once.
    */
   async rebuildFromCloud(owner: string, options: SyncOptions = {}): Promise<SyncReport & { refetched: number }> {
+    // `options.downloadOnly` makes this a pure download: it cannot write to the server at all.
     if ((await activeOwnerId()) !== owner) throw new Error('La biblioteca local no está vinculada a esta cuenta.');
     const check = await verifyLibrary(owner);
     const state = await get(owner);

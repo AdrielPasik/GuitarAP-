@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import type { MusicalDocument } from '@/core/model';
 import { db } from '@/data/database';
-import { deleteDraft, readDraft, type Draft } from '@/data/drafts';
+import { deleteDraftsOf, readDraft, type Draft } from '@/data/drafts';
 import { libraryRepository, type EditTicket } from '@/data/library-repository';
 import { belongsToOwner, libraryScope } from '@/data/library-scope';
 import { pathOf } from '@/data/paths';
@@ -32,7 +32,7 @@ export function NotebookScreen() {
       let draft = mine ? await readDraft(mine.id, scope) : undefined;
       // A journal entry that equals what is stored is just a leftover of a save that succeeded: not something to offer.
       if (mine && draft && draft.title === mine.title && JSON.stringify(draft.content) === JSON.stringify(mine.content)) {
-        await deleteDraft(draft.ownerId, mine.id);
+        await deleteDraftsOf(draft.ownerId, mine.id);
         draft = undefined;
       }
       const still = await libraryScope();
@@ -68,9 +68,8 @@ export function NotebookScreen() {
             className="btn btn-primary"
             onClick={() =>
               void (async () => {
-                // A recovery point of the current version is left first (saveDocument does it); nothing is overwritten silently.
-                await libraryRepository.saveDocument({ ...document, title: draft.title, content: draft.content as MusicalDocument['content'] }, 'manual');
-                await deleteDraft(draft.ownerId, document.id);
+                // Every draft goes to the history and a recovery point of what is there now is left: nothing is overwritten silently.
+                await libraryRepository.resolveDrafts(document.id, 'apply');
                 setReload((value) => value + 1);
               })()
             }
@@ -82,12 +81,12 @@ export function NotebookScreen() {
             className="btn"
             onClick={() =>
               void (async () => {
-                await deleteDraft(draft.ownerId, document.id);
+                await libraryRepository.resolveDrafts(document.id, 'keep-in-history');
                 setReload((value) => value + 1);
               })()
             }
           >
-            Descartar el borrador
+            Descartar (queda en el historial)
           </button>
         </p>
       )}

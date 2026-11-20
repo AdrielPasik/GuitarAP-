@@ -9,7 +9,7 @@ export type RecoveryCounts = { folders: number; songs: number; documents: number
 /** The first download of an account on this device, as the person sees it. Only facts the library itself confirmed. */
 export type RecoveryView =
   | { phase: 'idle' }
-  | { phase: 'recovering'; pulled: number; pages: number }
+  | { phase: 'recovering'; pulled: number; pages: number; /** what it is doing right now */ step?: 'push' | 'pull'; /** true: nothing is being uploaded */ downloadOnly?: boolean }
   | { phase: 'waiting'; reason: 'offline' | 'error' | 'halted' }
   | { phase: 'done'; counts: RecoveryCounts; empty: boolean; issues: number; seen: boolean };
 /** Material this device holds that belongs to no account: listed, never adopted without a decision. */
@@ -57,8 +57,11 @@ export type Account = {
   autoRecovery: boolean;
   recovery: RecoveryView;
   dismissRecovery: () => void;
-  /** Downloads the account's log again, deleting nothing and keeping local changes. Resolves with how many records had to be fetched again. */
-  rebuildFromCloud: () => Promise<number | undefined>;
+  /**
+   * Downloads the account's log again, deleting nothing. 'download': never writes to the server and leaves records with
+   * un-uploaded changes as they are. 'sync': uploads pending changes first, then downloads (the person confirmed it).
+   */
+  rebuildFromCloud: (mode: 'download' | 'sync') => Promise<{ refetched: number; held: number; pushed: number } | undefined>;
   localData: LocalDataView | null;
   adoptLocalData: () => Promise<void>;
   keepLocalData: () => Promise<void>;
