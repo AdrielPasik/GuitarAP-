@@ -1,6 +1,7 @@
 export type StatusKind =
   | 'local'
   | 'unlinked'
+  | 'expired'
   | 'syncing'
   | 'synced'
   | 'pending'
@@ -10,6 +11,8 @@ export type StatusKind =
 
 export type StatusInput = {
   signedIn: boolean;
+  /** The session ended by itself but this profile's library is still the person's: work continues offline. */
+  expired?: boolean;
   linked: boolean;
   online: boolean;
   syncing: boolean;
@@ -31,6 +34,12 @@ const plural = (count: number, one: string, many: string) => `${count} ${count =
 
 /** One honest sentence about where the person's work lives right now. */
 export function describeStatus(input: StatusInput): StatusView {
+  if (!input.signedIn && input.expired)
+    return {
+      kind: 'expired',
+      label: 'Sesión vencida',
+      detail: 'Tus materiales siguen disponibles en este dispositivo y podés seguir trabajando. Para sincronizar, iniciá sesión de nuevo.',
+    };
   if (!input.signedIn)
     return {
       kind: 'local',

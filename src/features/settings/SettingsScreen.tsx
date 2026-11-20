@@ -59,7 +59,7 @@ function AccountSection() {
           <p>
             Sesión iniciada como <strong>{account.email}</strong>.
           </p>
-          <p className="muted">Cerrar sesión detiene la sincronización. Tus materiales siguen en este dispositivo.</p>
+          <p className="muted">Cerrar sesión oculta tu biblioteca en este navegador y detiene la sincronización. No se borra nada: al volver a iniciar sesión, todo está como lo dejaste.</p>
           <div>
             <button type="button" className="btn" onClick={account.signOut}>
               Cerrar sesión

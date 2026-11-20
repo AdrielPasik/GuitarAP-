@@ -404,7 +404,20 @@ export function LibraryScreen() {
           </section>
         )}
 
-        {account.status.kind === 'local' && !bannerHidden && (
+        {account.identityMode === 'signed-out' && (
+          <p className="local-note signed-out-note" role="note">
+            <Icon name="cloud-off" size={15} />
+            <span>
+              Cerraste sesión: ninguna biblioteca de cuenta está visible en este navegador. Tu música sigue guardada y vuelve a aparecer cuando{' '}
+              <button type="button" className="btn btn-link" onClick={() => account.openDialog('sign-in')}>
+                iniciás sesión
+              </button>
+              .
+            </span>
+          </p>
+        )}
+
+        {account.status.kind === 'local' && account.identityMode !== 'signed-out' && !bannerHidden && (
           <p className="local-note" role="note">
             <Icon name="cloud-off" size={15} />
             <span>

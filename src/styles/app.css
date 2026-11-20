@@ -194,6 +194,7 @@
 }
 .status-chip.kind-pending,
 .status-chip.kind-offline,
+.status-chip.kind-expired,
 .status-chip.kind-unlinked,
 .status-chip.kind-conflict {
   color: var(--warn);
@@ -225,6 +226,7 @@
 }
 .status-line.kind-pending,
 .status-line.kind-offline,
+.status-line.kind-expired,
 .status-line.kind-unlinked,
 .status-line.kind-conflict {
   color: var(--warn);

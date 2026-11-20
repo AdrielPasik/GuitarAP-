@@ -27,6 +27,14 @@ export function configuredSupabase(): SupabaseConfig | null {
   return url && anonKey ? { url: url.replace(/\/$/, ''), anonKey } : null;
 }
 
+/**
+ * Sessions the account service itself has just handed back (a sign-in or a renewed session) in this page load. A
+ * session read from local storage is NOT in this set: anyone can edit local storage, so by itself it never decides
+ * whose library is on screen (see trustsSession in data/identity.ts).
+ */
+const validated = new WeakSet<object>();
+export const isValidated = (session: SupabaseSession) => validated.has(session);
+
 function persist(session: SupabaseSession | null) {
   if (session) window.localStorage.setItem(sessionKey, JSON.stringify(session));
   else window.localStorage.removeItem(sessionKey);
@@ -77,6 +85,7 @@ async function authRequest(config: SupabaseConfig, path: string, body: unknown) 
 
 export async function signIn(config: SupabaseConfig, email: string, password: string) {
   const session = await authRequest(config, 'token?grant_type=password', { email, password });
+  validated.add(session);
   persist(session);
   return session;
 }
@@ -96,6 +105,7 @@ export async function restoreSession(config: SupabaseConfig) {
     const refreshed = await authRequest(config, 'token?grant_type=refresh_token', {
       refresh_token: session.refreshToken,
     });
+    validated.add(refreshed);
     persist(refreshed);
     return refreshed;
   } catch (error) {

@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { authenticated, identityMode as modeOf, readIdentity, resolveVisible, signedOutExplicitly, trustsSession, watchVisible, type Visible } from '@/data/identity';
+import { flushAllPendingSaves } from '@/data/pending-saves';
 import { describeBackup, downloadBackup } from '@/features/backup/backup-download';
 import { AccountContext, emptyBackup, type Account, type BackupFlow, type Dialog } from '@/features/account/account-context';
 import { describeStatus } from '@/features/account/account-status';
@@ -8,6 +10,7 @@ import { SyncTransportError } from '@/features/sync/transport';
 import {
   AuthError,
   configuredSupabase,
+  isValidated,
   restoreSession,
   signIn as signInRequest,
   signOut as signOutRequest,
@@ -36,6 +39,9 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   const [skipped, setSkipped] = useState(0);
   const [autoSync, setAutoSyncState] = useState(true);
   const [online, setOnline] = useState(() => navigator.onLine);
+  const [visible, setVisible] = useState<Visible>();
+  const [signedOutFlag, setSignedOutFlag] = useState(false);
+  const adopting = useRef(false);
   const [dialog, setDialog] = useState<Dialog>(null);
   const [backup, setBackup] = useState<BackupFlow>(emptyBackup);
   const running = useRef(false);
@@ -44,14 +50,43 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   sessionRef.current = session;
 
   const adopt = useCallback(async (next: SupabaseSession) => {
-    const data = await lazyData();
-    const isLinked = await data.isLinked(next.user.id);
-    if (isLinked) await data.reactivate(next.user.id);
-    setSession(next);
-    setLinked(isLinked);
-    setLastSyncAt(await data.readLastSync(next.user.id));
-    setDiagnostic(await data.readDiagnostic(next.user.id));
-    return isLinked;
+    adopting.current = true;
+    try {
+      // The account service has just accepted this person: from now on THEIR library is the one on screen.
+      await authenticated(next.user.id);
+      const data = await lazyData();
+      const isLinked = await data.isLinked(next.user.id);
+      if (isLinked) await data.reactivate(next.user.id);
+      setSession(next);
+      setLinked(isLinked);
+      setLastSyncAt(await data.readLastSync(next.user.id));
+      setDiagnostic(await data.readDiagnostic(next.user.id));
+      return isLinked;
+    } finally {
+      adopting.current = false;
+    }
+  }, []);
+
+  // The visible owner is read from one place and followed live, also when another tab signs in or out.
+  useEffect(() => {
+    let cancelled = false;
+    void readIdentity().then((identity) => !cancelled && setSignedOutFlag(Boolean(identity?.signedOut)));
+    const stop = watchVisible((next) => {
+      if (cancelled) return;
+      setVisible(next);
+      void readIdentity().then((identity) => !cancelled && setSignedOutFlag(Boolean(identity?.signedOut)));
+      const current = sessionRef.current;
+      // Another tab signed out, or signed in as someone else: this tab must not keep working as the previous person.
+      if (current && !adopting.current && next.ownerId !== current.user.id) {
+        setSession(null);
+        setLinked(false);
+        setPhase('idle');
+      }
+    });
+    return () => {
+      cancelled = true;
+      stop();
+    };
   }, []);
 
   useEffect(() => {
@@ -59,8 +94,17 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     void (async () => {
       try {
-        const current = await restoreSession(config);
+        const stored = await restoreSession(config);
+        // A session just renewed by the account service may put its account on screen; one merely read from local
+        // storage only if that account is already the profile's own (it cannot be edited into someone else's library).
+        const current = stored && (isValidated(stored) || (await trustsSession(stored.user.id))) ? stored : null;
         if (current && !cancelled) await adopt(current);
+        else if (!current && !cancelled) {
+          // No session. A profile that predates v0.8 has no record of whether the person signed out or simply
+          // expired: its library is hidden until they sign in (nothing is deleted). Otherwise the record decides.
+          const now = await resolveVisible();
+          if (now.legacy && now.ownerId) await signedOutExplicitly();
+        }
         const data = await lazyData();
         if (!cancelled) setAutoSyncState(await data.readAutoSync());
       } finally {
@@ -200,6 +244,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   const signIn = useCallback(
     async (email: string, password: string) => {
       if (!config) throw new AuthError('Esta versión de GuitarAP todavía no tiene la nube configurada.', 'service');
+      await flushAllPendingSaves(); // the previous person's last edits are saved while they are still the owner
       const next = await signInRequest(config, email.trim(), password);
       const isLinked = await adopt(next);
       setPhase('idle');
@@ -209,7 +254,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     [adopt, config],
   );
 
-  const signOut = useCallback(() => {
+  const signOutNow = useCallback(() => {
     // Signing out only stops syncing: nothing of yours is hidden or deleted from this device. Copies of OTHER
     // people's songs that you were only reading are dropped (they are not yours to keep on a shared computer);
     // anything you wrote there and had not uploaded stays, and only your own account can ever reopen it.
@@ -221,6 +266,15 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     setMessage('');
     setBackup(emptyBackup);
   }, []);
+
+  const signOut = useCallback(() => {
+    void (async () => {
+      // 1. save what is being typed while the person is still authorised, 2. hide their library everywhere, 3. end the session.
+      await flushAllPendingSaves();
+      await signedOutExplicitly();
+    })().finally(() => signOutNow());
+  }, [signOutNow]);
+
 
   const prepareBackup = useCallback(async () => {
     setBackup({ ...emptyBackup, busy: true });
@@ -257,8 +311,10 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     }
   }, [backup.confirmed, backup.summary, session]);
 
+  const mode = modeOf(visible ?? { ownerId: null, epoch: 0, legacy: false }, signedIn, signedOutFlag);
   const status = describeStatus({
     signedIn,
+    expired: mode === 'expired',
     linked,
     online,
     syncing: phase === 'syncing',
@@ -277,6 +333,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     restoring,
     session,
     email: session?.user.email,
+    identityMode: mode,
     linked,
     status,
     lastSyncAt,

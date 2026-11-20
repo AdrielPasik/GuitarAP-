@@ -7,6 +7,7 @@ import { useAccount } from '@/features/account/account-context';
 const statusIcon: Record<StatusKind, IconName> = {
   local: 'cloud-off',
   unlinked: 'alert',
+  expired: 'cloud-off',
   syncing: 'sync',
   synced: 'check',
   pending: 'cloud',

@@ -131,6 +131,13 @@ test('the session is restored, signing out keeps every material, and offline wor
   await topbar(page).getByRole('button', { name: 'Cuenta y sincronización' }).click();
   await page.getByRole('button', { name: 'Cerrar sesión' }).click();
   await expect(topbar(page).getByRole('button', { name: 'Iniciar sesión' })).toBeVisible();
+  // v0.8: signing out hides the account's library (nothing is deleted); it comes back, intact, when the account signs in again.
   await page.goto('/biblioteca');
+  await expect(page.locator('.lib-open', { hasText: 'Sigue acá' })).toHaveCount(0);
+  await expect(page.getByText(/Cerraste sesión/)).toBeVisible();
+  await topbar(page).getByRole('button', { name: 'Iniciar sesión' }).click();
+  await page.getByRole('dialog').getByLabel('Correo').fill('prueba@guitarap.test');
+  await page.getByRole('dialog').getByLabel('Contraseña', { exact: true }).fill('secreto');
+  await page.getByRole('dialog').getByRole('button', { name: 'Iniciar sesión' }).click();
   await expect(page.locator('.lib-open', { hasText: 'Sigue acá' })).toBeVisible();
 });

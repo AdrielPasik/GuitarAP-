@@ -19,6 +19,8 @@ export type Account = {
   restoring: boolean;
   session: SupabaseSession | null;
   email: string | undefined;
+  /** Who the library on screen belongs to: a live session, an expired one (offline access), nobody (signed out) or no account at all. */
+  identityMode: 'authenticated' | 'expired' | 'signed-out' | 'anonymous';
   linked: boolean;
   status: StatusView;
   lastSyncAt: number | undefined;
