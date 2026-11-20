@@ -45,6 +45,8 @@ export function DataSection() {
     };
   }, [persistAnswer]);
 
+  const [rebuilt, setRebuilt] = useState<string>('');
+  const [rebuilding, setRebuilding] = useState(false);
   const lastBackup = readLastBackup();
   const cloud = !account.session
     ? { label: 'Sin sesión', detail: 'Tus materiales están solo en este dispositivo.', tone: 'local' }
@@ -61,6 +63,38 @@ export function DataSection() {
         Tus materiales se guardan primero en este dispositivo. Al sincronizar, también quedan en tu cuenta en la nube. Podés descargar una copia JSON cuando quieras.
       </p>
 
+      {account.autoRecovery && account.session && account.linked && (
+        <section className="data-rebuild" aria-label="Reconstruir desde la nube">
+          <h3>Reconstruir desde la nube</h3>
+          <p className="muted small">
+            Vuelve a descargar todo lo que tu cuenta tiene confirmado. No borra nada de este dispositivo y no pisa lo que todavía no se subió: tus cambios pendientes se envían primero. Podés repetirlo sin riesgo.
+          </p>
+          <button
+            type="button"
+            className="btn"
+            disabled={rebuilding || account.recovery.phase === 'recovering'}
+            onClick={() => {
+              setRebuilding(true);
+              setRebuilt('');
+              void account.rebuildFromCloud().then((count) => {
+                setRebuilding(false);
+                setRebuilt(count === undefined ? 'No se pudo completar ahora; no se tocó nada. Probá de nuevo en un momento.' : count === 0 ? 'Listo: tu biblioteca ya estaba completa.' : `Listo: se recuperaron ${count} elementos que faltaban.`);
+              });
+            }}
+          >
+            {rebuilding ? 'Reconstruyendo…' : 'Reconstruir desde la nube'}
+          </button>
+          {rebuilt && <p role="status">{rebuilt}</p>}
+        </section>
+      )}
+      {account.autoRecovery && account.localData?.decided && (
+        <section className="data-rebuild" aria-label="Material de este dispositivo sin cuenta">
+          <p className="muted small">Hay {account.localData.documents.length} materiales en este dispositivo que no son de ninguna cuenta (se ven al cerrar sesión).</p>
+          <button type="button" className="btn" onClick={() => void account.adoptLocalData()}>
+            Incorporarlos a mi cuenta
+          </button>
+        </section>
+      )}
       <dl className="data-grid" aria-label="Estado de tus datos">
         <div className="data-row">
           <dt>En este dispositivo</dt>

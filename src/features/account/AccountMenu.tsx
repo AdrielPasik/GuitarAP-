@@ -8,6 +8,7 @@ const statusIcon: Record<StatusKind, IconName> = {
   local: 'cloud-off',
   unlinked: 'alert',
   expired: 'cloud-off',
+  recovering: 'sync',
   syncing: 'sync',
   synced: 'check',
   pending: 'cloud',
@@ -20,7 +21,7 @@ export function StatusChip({ compact = false }: { compact?: boolean }) {
   const { status } = useAccount();
   return (
     <span className={`status-chip kind-${status.kind}${compact ? ' compact' : ''}`}>
-      <Icon name={statusIcon[status.kind]} size={14} className={status.kind === 'syncing' ? 'spin' : undefined} />
+      <Icon name={statusIcon[status.kind]} size={14} className={status.kind === 'syncing' || status.kind === 'recovering' ? 'spin' : undefined} />
       <span className="status-label">{status.label}</span>
     </span>
   );

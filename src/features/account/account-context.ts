@@ -5,6 +5,15 @@ import type { SyncDiagnostic, Explained } from '@/features/sync/diagnostic';
 import type { SupabaseSession } from '@/features/sync/supabase-auth';
 
 export type Dialog = null | 'sign-in' | 'protect';
+export type RecoveryCounts = { folders: number; songs: number; documents: number; trashed: number; versions: number };
+/** The first download of an account on this device, as the person sees it. Only facts the library itself confirmed. */
+export type RecoveryView =
+  | { phase: 'idle' }
+  | { phase: 'recovering'; pulled: number; pages: number }
+  | { phase: 'waiting'; reason: 'offline' | 'error' | 'halted' }
+  | { phase: 'done'; counts: RecoveryCounts; empty: boolean; issues: number; seen: boolean };
+/** Material this device holds that belongs to no account: listed, never adopted without a decision. */
+export type LocalDataView = { nodes: number; documents: Array<{ id: string; title: string }>; decided: boolean };
 export type BackupFlow = {
   summary: BackupSummary | null;
   summaryText: string;
@@ -44,6 +53,16 @@ export type Account = {
   prepareBackup: () => Promise<void>;
   setBackupConfirmed: (value: boolean) => void;
   linkLibrary: () => Promise<void>;
+  /** v0.8 phase 1.3 behind its flag: false means everything below stays inert and the previous behaviour applies. */
+  autoRecovery: boolean;
+  recovery: RecoveryView;
+  dismissRecovery: () => void;
+  /** Downloads the account's log again, deleting nothing and keeping local changes. Resolves with how many records had to be fetched again. */
+  rebuildFromCloud: () => Promise<number | undefined>;
+  localData: LocalDataView | null;
+  adoptLocalData: () => Promise<void>;
+  keepLocalData: () => Promise<void>;
+  backupLocalData: () => Promise<void>;
 };
 
 export const AccountContext = createContext<Account | null>(null);

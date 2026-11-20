@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { autoRecoveryEnabled } from '@/core/flags';
 import { authenticated, identityMode as modeOf, readIdentity, resolveVisible, signedOutExplicitly, trustsSession, watchVisible, type Visible } from '@/data/identity';
 import { flushAllPendingSaves } from '@/data/pending-saves';
 import { describeBackup, downloadBackup } from '@/features/backup/backup-download';
-import { AccountContext, emptyBackup, type Account, type BackupFlow, type Dialog } from '@/features/account/account-context';
+import { AccountContext, emptyBackup, type Account, type BackupFlow, type Dialog, type LocalDataView, type RecoveryView } from '@/features/account/account-context';
+import type { RecoveryRecord } from '@/features/account/account-data';
 import { describeStatus } from '@/features/account/account-status';
 import { explainSyncError, type Explained, type SyncDiagnostic } from '@/features/sync/diagnostic';
 import { explainHalt } from '@/features/sync/event-policy';
@@ -23,6 +25,15 @@ const lazyData = () => import('@/features/account/account-data');
 const AUTO_SYNC_DELAY = 8_000;
 const POLL_INTERVAL = 90_000;
 const ERROR_COOLDOWN = 60_000;
+/** The first download retries on its own with a growing wait (5 s, 10 s, 20 s... up to 5 min). */
+const recoveryDelay = (attempts: number) => Math.min(5_000 * 2 ** Math.max(0, attempts - 1), 300_000);
+const viewOf = (record: RecoveryRecord): RecoveryView => ({
+  phase: 'done',
+  counts: record.check.counts,
+  empty: record.remoteEmpty,
+  issues: record.check.missing.nodes.length + record.check.missing.documents.length + record.check.missing.versions.length + record.check.deferred + record.check.quarantined,
+  seen: record.seen,
+});
 
 export function AccountProvider({ children }: { children: ReactNode }) {
   const config = useMemo(() => configuredSupabase(), []);
@@ -42,6 +53,11 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   const [visible, setVisible] = useState<Visible>();
   const [signedOutFlag, setSignedOutFlag] = useState(false);
   const adopting = useRef(false);
+  const [recovery, setRecovery] = useState<RecoveryView>({ phase: 'idle' });
+  const [localData, setLocalData] = useState<LocalDataView | null>(null);
+  const [retryTick, setRetryTick] = useState(0);
+  const recoveryDone = useRef(true); // false only while the first download of this account on this device is outstanding
+  const recoveryAttempts = useRef(0);
   const [dialog, setDialog] = useState<Dialog>(null);
   const [backup, setBackup] = useState<BackupFlow>(emptyBackup);
   const running = useRef(false);
@@ -55,8 +71,20 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       // The account service has just accepted this person: from now on THEIR library is the one on screen.
       await authenticated(next.user.id);
       const data = await lazyData();
-      const isLinked = await data.isLinked(next.user.id);
+      const flag = autoRecoveryEnabled();
+      let isLinked = await data.isLinked(next.user.id);
+      // v0.8 (flag): a device with nothing of this account links itself, silently and without claiming anything.
+      if (flag && !isLinked) {
+        await data.linkAutomatically(next.user.id);
+        isLinked = true;
+      }
       if (isLinked) await data.reactivate(next.user.id);
+      if (flag) {
+        const record = await data.readRecovery(next.user.id);
+        recoveryDone.current = Boolean(record) || (await data.readLastSync(next.user.id)) !== undefined;
+        setRecovery(record && !record.seen ? viewOf(record) : { phase: 'idle' });
+        setLocalData(await data.readLocalData(next.user.id));
+      }
       setSession(next);
       setLinked(isLinked);
       setLastSyncAt(await data.readLastSync(next.user.id));
@@ -78,6 +106,8 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       const current = sessionRef.current;
       // Another tab signed out, or signed in as someone else: this tab must not keep working as the previous person.
       if (current && !adopting.current && next.ownerId !== current.user.id) {
+        setRecovery({ phase: 'idle' });
+        setLocalData(null);
         setSession(null);
         setLinked(false);
         setPhase('idle');
@@ -133,6 +163,14 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     running.current = true;
     setPhase('syncing');
     setMessage('');
+    const recovering = autoRecoveryEnabled() && !recoveryDone.current;
+    if (recovering) setRecovery((now) => (now.phase === 'recovering' ? now : { phase: 'recovering', pulled: 0, pages: 0 }));
+    const waiting = (reason: 'offline' | 'error' | 'halted') => {
+      if (!recovering) return;
+      recoveryAttempts.current += 1;
+      setRecovery({ phase: 'waiting', reason });
+      setRetryTick((tick) => tick + 1);
+    };
     try {
       const fresh = await restoreSession(config);
       if (!fresh) {
@@ -143,7 +181,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       }
       if (fresh.accessToken !== current.accessToken) setSession(fresh);
       const data = await lazyData();
-      const result = await data.runSync(config, fresh);
+      const result = await data.runSync(config, fresh, recovering ? { onProgress: (progress) => setRecovery({ phase: 'recovering', pulled: progress.pulled, pages: progress.pages }) } : {});
       setConflicts(result.conflicts);
       setSkipped(result.skipped);
       setDiagnostic(result.diagnostic);
@@ -155,12 +193,19 @@ export function AccountProvider({ children }: { children: ReactNode }) {
         setMessage(`Se editó ${copies.length === 1 ? 'un material' : `${copies.length} materiales`} en dos dispositivos. Se conservó la versión del servidor y la tuya quedó guardada como «${copies[0].title}»${copies.length > 1 ? ' (y otras copias)' : ''}. No se perdió nada: compará y quedate con lo que prefieras.`);
       if (result.report.offline) {
         setPhase('offline');
+        waiting('offline');
         return false;
       }
       if (halted) {
         // Never say "everything is synced" while the download is stopped at an event this version cannot read.
         setPhase('error');
+        waiting('halted');
         return false;
+      }
+      if (recovering && result.recovery) {
+        recoveryDone.current = true;
+        recoveryAttempts.current = 0;
+        setRecovery(result.recovery.seen ? { phase: 'idle' } : viewOf(result.recovery));
       }
       setPhase('idle');
       setLastSyncAt(result.lastSyncAt);
@@ -168,6 +213,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       lastError.current = Date.now();
       setPhase('error');
+      waiting('error');
       if (error instanceof AuthError) {
         setProblem(undefined);
         setMessage(error.message);
@@ -185,6 +231,13 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       running.current = false;
     }
   }, [config, linked]);
+
+  // The first download keeps trying by itself, with a growing wait, until the library is confirmed complete.
+  useEffect(() => {
+    if (recovery.phase !== 'waiting' || !session || !linked || !online || !autoSync) return;
+    const timer = window.setTimeout(() => void syncNow(), recoveryDelay(recoveryAttempts.current));
+    return () => window.clearTimeout(timer);
+  }, [autoSync, linked, online, recovery.phase, retryTick, session, syncNow]);
 
   const probeServer = useCallback(async () => {
     const current = sessionRef.current;
@@ -265,6 +318,8 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     setPhase('idle');
     setMessage('');
     setBackup(emptyBackup);
+    setRecovery({ phase: 'idle' });
+    setLocalData(null);
   }, []);
 
   const signOut = useCallback(() => {
@@ -317,7 +372,9 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     expired: mode === 'expired',
     linked,
     online,
-    syncing: phase === 'syncing',
+    syncing: phase === 'syncing' && recovery.phase !== 'recovering',
+    recovering: recovery.phase === 'recovering' ? { pulled: recovery.pulled } : undefined,
+    recoveryPending: recovery.phase === 'waiting',
     failed: phase === 'error',
     offlineReport: phase === 'offline',
     pending,
@@ -336,6 +393,61 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     identityMode: mode,
     linked,
     status,
+    autoRecovery: autoRecoveryEnabled(),
+    recovery,
+    dismissRecovery: () => {
+      setRecovery({ phase: 'idle' });
+      const owner = sessionRef.current?.user.id;
+      if (owner) void lazyData().then((data) => data.dismissRecovery(owner));
+    },
+    rebuildFromCloud: async () => {
+      const current = sessionRef.current;
+      if (!config || !current || !autoRecoveryEnabled() || running.current) return undefined;
+      running.current = true;
+      setPhase('syncing');
+      setRecovery({ phase: 'recovering', pulled: 0, pages: 0 });
+      try {
+        const fresh = (await restoreSession(config)) ?? current;
+        const data = await lazyData();
+        const result = await data.rebuildFromCloud(config, fresh, { onProgress: (progress) => setRecovery({ phase: 'recovering', pulled: progress.pulled, pages: progress.pages }) });
+        if (result.recovery) {
+          recoveryDone.current = true;
+          setRecovery(viewOf(result.recovery));
+          setLastSyncAt(Date.now());
+          setPhase('idle');
+          return result.report.refetched;
+        }
+        setPhase(result.report.offline ? 'offline' : 'error');
+        setRecovery({ phase: 'waiting', reason: result.report.offline ? 'offline' : 'halted' });
+        return undefined;
+      } catch (error) {
+        setPhase('error');
+        setRecovery({ phase: 'waiting', reason: 'error' });
+        setMessage(error instanceof Error ? error.message : 'No se pudo reconstruir desde la nube.');
+        return undefined;
+      } finally {
+        running.current = false;
+      }
+    },
+    localData,
+    adoptLocalData: async () => {
+      const owner = sessionRef.current?.user.id;
+      if (!owner) return;
+      const data = await lazyData();
+      await data.adoptLocalData(owner);
+      setLocalData(null);
+      void syncNow();
+    },
+    keepLocalData: async () => {
+      const owner = sessionRef.current?.user.id;
+      if (!owner) return;
+      await (await lazyData()).keepLocalData(owner);
+      setLocalData((now) => (now ? { ...now, decided: true } : now));
+    },
+    backupLocalData: async () => {
+      const data = await lazyData();
+      downloadBackup(await data.exportLocalDataBackup());
+    },
     lastSyncAt,
     message,
     pendingCount: pending,

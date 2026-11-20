@@ -2,6 +2,7 @@ export type StatusKind =
   | 'local'
   | 'unlinked'
   | 'expired'
+  | 'recovering'
   | 'syncing'
   | 'synced'
   | 'pending'
@@ -24,6 +25,10 @@ export type StatusInput = {
   skipped?: number;
   /** The server has confirmed at least one complete round trip for this account. Without it nothing is "synced". */
   confirmed?: boolean;
+  /** The first download of this account on this device is running (counts of what arrived so far). */
+  recovering?: { pulled: number };
+  /** That first download has not finished yet (no connection, an error): the library is not complete here. */
+  recoveryPending?: boolean;
   errorLabel?: string;
   errorDetail?: string;
 };
@@ -51,6 +56,18 @@ export function describeStatus(input: StatusInput): StatusView {
       kind: 'unlinked',
       label: 'Falta activar la sincronización',
       detail: 'Descargá una copia de seguridad y confirmala para vincular esta biblioteca a tu cuenta.',
+    };
+  if (input.recovering)
+    return {
+      kind: 'recovering',
+      label: 'Recuperando tu biblioteca…',
+      detail: input.recovering.pulled ? `Llegaron ${input.recovering.pulled} elementos de tu cuenta. Podés seguir usando GuitarAP.` : 'Descargando lo que hay en tu cuenta. Podés seguir usando GuitarAP.',
+    };
+  if (input.recoveryPending && (!input.online || input.offlineReport))
+    return {
+      kind: 'offline',
+      label: 'Sin conexión · recuperación pendiente',
+      detail: 'Todavía no se descargó toda tu biblioteca. Se reanuda sola cuando vuelva la conexión.',
     };
   if (input.conflicts > 0)
     return {
@@ -90,6 +107,8 @@ export function describeStatus(input: StatusInput): StatusView {
       label: 'Falta la primera sincronización',
       detail: 'Todavía el servidor no confirmó que recibió tu biblioteca. Se hace sola en unos segundos, o tocá «Sincronizar ahora».',
     };
+  if (input.recoveryPending)
+    return { kind: 'pending', label: 'Recuperación pendiente', detail: 'Todavía no se confirmó que toda tu biblioteca llegó a este dispositivo. Se reintenta sola.' };
   return { kind: 'synced', label: 'Todo sincronizado', detail: 'Tus materiales coinciden con tu cuenta.' };
 }
 

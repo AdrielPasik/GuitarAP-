@@ -3,6 +3,7 @@ import { LogoMark } from '@/components/brand/Logo';
 import { Icon } from '@/components/ui/Icon';
 import { AccountMenu } from '@/features/account/AccountMenu';
 import { AuthDialog } from '@/features/account/AuthDialog';
+import { RecoveryNotice } from '@/features/account/RecoveryNotice';
 import { MetronomeBar } from '@/features/metronome/MetronomeBar';
 import { useHarmony } from '@/features/harmony-tools/harmony-context';
 import { ThemeToggle } from '@/features/theme/ThemeToggle';
@@ -47,6 +48,7 @@ export function AppShell() {
         </div>
       </header>
       <main className="main" id="contenido" tabIndex={-1}>
+        <RecoveryNotice />
         <Outlet />
       </main>
       <AuthDialog />
