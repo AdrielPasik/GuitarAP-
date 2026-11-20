@@ -177,7 +177,12 @@ export async function syncSummary(owner: string) {
 export async function countConflicts(owner: string) {
   return Object.keys((await get(owner)).conflicts).length;
 }
+/** What a long sync tells the screen while it runs (counts only). */
+export type SyncProgress = { phase: 'push' | 'pull'; pushed: number; pulled: number; pages: number };
+export type SyncOptions = { onProgress?: (progress: SyncProgress) => void };
 export type SyncReport = {
+  /** The download reached the end of the account's log: everything the server had at that moment was received. */
+  complete: boolean;
   pushed: number;
   pulled: number;
   conflicts: number;
@@ -209,10 +214,11 @@ export class SyncEngine {
     private readonly extensions: readonly EventExtension[] = [],
   ) {}
 
-  async sync(owner: string): Promise<SyncReport> {
+  async sync(owner: string, options: SyncOptions = {}): Promise<SyncReport> {
     if ((await activeOwnerId()) !== owner) throw new Error('La biblioteca local no está vinculada a esta cuenta.');
     const state = await get(owner);
-    const report: SyncReport = { pushed: 0, pulled: 0, conflicts: 0, retries: 0, offline: false, skipped: { nodes: [], documents: [], versions: [] }, requests: 0, copies: [], deferred: 0, quarantined: 0 };
+    const report: SyncReport = { complete: false, pushed: 0, pulled: 0, conflicts: 0, retries: 0, offline: false, skipped: { nodes: [], documents: [], versions: [] }, requests: 0, copies: [], deferred: 0, quarantined: 0 };
+    let pages = 0;
     const attempted = new Set<string>();
 
     for (;;) {
@@ -274,6 +280,7 @@ export class SyncEngine {
       for (const item of [...batch.snapshot.nodes, ...batch.snapshot.documents, ...batch.snapshot.versions]) attempted.add(item.id);
       state.pending = undefined;
       await save(owner, state);
+      options.onProgress?.({ phase: 'push', pushed: report.pushed, pulled: report.pulled, pages });
     }
 
     try {
@@ -282,8 +289,11 @@ export class SyncEngine {
       do {
         page = await this.transport.pull(owner, state.cursor, this.pageSize);
         halted = (await this.apply(owner, state, page, report)).halted;
+        pages += 1;
+        options.onProgress?.({ phase: 'pull', pushed: report.pushed, pulled: report.pulled, pages });
       } while (page.hasMore && !halted);
       if (halted) report.halted = { kind: halted.kind, v: halted.v };
+      else report.complete = true;
     } catch (error) {
       if (error instanceof SyncTransportError && error.retryable) report.offline = true;
       else {
@@ -473,7 +483,7 @@ export class SyncEngine {
     const state = await get(owner);
     const draft: State = structuredClone(state);
     draft.deferred ??= {};
-    const report: SyncReport = { pushed: 0, pulled: 0, conflicts: 0, retries: 0, offline: false, skipped: { nodes: [], documents: [], versions: [] }, requests: 0, copies: [], deferred: 0, quarantined: 0 };
+    const report: SyncReport = { complete: false, pushed: 0, pulled: 0, conflicts: 0, retries: 0, offline: false, skipped: { nodes: [], documents: [], versions: [] }, requests: 0, copies: [], deferred: 0, quarantined: 0 };
     let replayed = 0;
     let remaining = 0;
     await db.transaction('rw', db.nodes, db.documents, db.versions, db.settings, async () => {
@@ -536,6 +546,75 @@ export class SyncEngine {
   async conflicts(owner: string) {
     return (await get(owner)).conflicts;
   }
+
+  /**
+   * "Rebuild from the cloud": downloads the account's whole log again from the start. It deletes nothing and overwrites
+   * nothing that has not been uploaded: pending local changes are sent FIRST (a sync pushes before it pulls), records
+   * the replication state claims to have but the library lacks are forgotten so they are fetched again, and everything
+   * else is recognised as already received. Running it twice changes nothing more than running it once.
+   */
+  async rebuildFromCloud(owner: string, options: SyncOptions = {}): Promise<SyncReport & { refetched: number }> {
+    if ((await activeOwnerId()) !== owner) throw new Error('La biblioteca local no está vinculada a esta cuenta.');
+    const check = await verifyLibrary(owner);
+    const state = await get(owner);
+    for (const id of check.missing.nodes) {
+      delete state.nodes[id];
+      delete state.remote!.nodes[id];
+    }
+    for (const id of check.missing.documents) {
+      delete state.documents[id];
+      delete state.remote!.documents[id];
+    }
+    for (const id of check.missing.versions) delete state.versions[id];
+    state.cursor = '0';
+    state.deferred = {};
+    delete state.halted;
+    await save(owner, state);
+    const report = await this.sync(owner, options);
+    return { ...report, refetched: check.missing.nodes.length + check.missing.documents.length + check.missing.versions.length };
+  }
+}
+
+export type LibraryCheck = {
+  /** Every record the server confirmed is present locally, nothing waits, nothing is set aside. */
+  ok: boolean;
+  counts: { folders: number; songs: number; documents: number; trashed: number; versions: number };
+  missing: { nodes: string[]; documents: string[]; versions: string[] };
+  deferred: number;
+  quarantined: number;
+};
+/**
+ * Compares what the replication state says it received with what the library really holds. Counts are of the
+ * account's own records only. Used to confirm a recovery for real instead of assuming it.
+ */
+export async function verifyLibrary(owner: string): Promise<LibraryCheck> {
+  const state = await get(owner);
+  const [nodes, documents, versions] = await Promise.all([
+    db.nodes.where('ownerId').equals(owner).toArray(),
+    db.documents.where('ownerId').equals(owner).toArray(),
+    db.versions.where('ownerId').equals(owner).toArray(),
+  ]);
+  const have = { nodes: new Set(nodes.map((x) => x.id)), documents: new Set(documents.map((x) => x.id)), versions: new Set(versions.map((x) => x.id)) };
+  const missing = {
+    nodes: Object.keys(state.nodes).filter((id) => !have.nodes.has(id)),
+    documents: Object.keys(state.documents).filter((id) => !have.documents.has(id)),
+    versions: Object.keys(state.versions).filter((id) => !have.versions.has(id)),
+  };
+  const deferred = Object.keys(state.deferred ?? {}).length;
+  const quarantined = (await readQuarantine(owner)).length;
+  return {
+    ok: !missing.nodes.length && !missing.documents.length && !missing.versions.length && !deferred && !quarantined && !state.halted,
+    counts: {
+      folders: nodes.filter((x) => x.kind === 'folder' && !x.deletedAt).length,
+      songs: nodes.filter((x) => x.kind === 'song' && !x.deletedAt).length,
+      documents: documents.filter((x) => !x.deletedAt).length,
+      trashed: documents.filter((x) => x.deletedAt).length + nodes.filter((x) => x.deletedAt).length,
+      versions: versions.length,
+    },
+    missing,
+    deferred,
+    quarantined,
+  };
 }
 
 /* ------------------------------------------------------------------------------------------------------------------

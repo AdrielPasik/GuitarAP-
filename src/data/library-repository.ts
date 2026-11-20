@@ -241,8 +241,9 @@ export class LibraryRepository {
     });
   }
 
-  async exportBackup() {
-    const scope = await libraryScope();
+  /** `anonymous`: the copy of what this device holds that belongs to no account (the one offered before adopting it). */
+  async exportBackup(options: { anonymous?: boolean } = {}) {
+    const scope = options.anonymous ? { ownerId: null, locked: false } : await libraryScope();
     const [nodes, documents, versions] = await Promise.all([db.nodes.toArray(), db.documents.toArray(), db.versions.toArray()]);
     return JSON.stringify({
       schema: 1,

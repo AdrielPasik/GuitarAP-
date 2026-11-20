@@ -36,6 +36,36 @@ export async function activateOwner(ownerId: string) {
 }
 
 /**
+ * Marks this profile as linked to an account WITHOUT claiming anything: records that have no owner stay unowned (and
+ * hidden from the signed-in account) until the person decides what to do with them (see claimAnonymous).
+ */
+export async function linkWithoutClaiming(ownerId: string) {
+  await db.settings.put({ key, value: { ownerId, locked: true }, updatedAt: Date.now() });
+  await authenticated(ownerId);
+}
+
+/** What this device holds that belongs to nobody (made before any account). Counts and titles only. */
+export async function anonymousRecords() {
+  const [nodes, documents, versions] = await Promise.all([db.nodes.toArray(), db.documents.toArray(), db.versions.toArray()]);
+  const loose = documents.filter((item) => !item.ownerId && !item.deletedAt);
+  return {
+    nodes: nodes.filter((item) => !item.ownerId && !item.deletedAt).length,
+    documents: loose.map((item) => ({ id: item.id, title: item.title || 'Sin título' })),
+    versions: versions.filter((item) => !item.ownerId).length,
+  };
+}
+
+/** An explicit decision: the records nobody owns become this account's (they are then uploaded like any other). */
+export async function claimAnonymous(ownerId: string) {
+  await db.transaction('rw', db.nodes, db.documents, db.versions, async () => {
+    const [nodes, documents, versions] = await Promise.all([db.nodes.toArray(), db.documents.toArray(), db.versions.toArray()]);
+    await db.nodes.bulkPut(nodes.filter((item) => !item.ownerId).map((item) => ({ ...item, ownerId, rev: item.rev ?? 1 })));
+    await db.documents.bulkPut(documents.filter((item) => !item.ownerId).map((item) => ({ ...item, ownerId })));
+    await db.versions.bulkPut(versions.filter((item) => !item.ownerId).map((item) => ({ ...item, ownerId })));
+  });
+}
+
+/**
  * A record is visible to the account on screen when it is theirs. Records that never had an owner (made on this device
  * before any account) are open to whoever uses the device signed out; once the device has been linked to an account they
  * are no longer offered to the signed-in person (the link claimed them; later ones wait for their explicit decision).
