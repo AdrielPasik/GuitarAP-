@@ -37,21 +37,21 @@ export function SaveIndicator({ state, onRetry }: { state: SaveState; onRetry: (
   if (state === 'error') {
     return (
       <button type="button" className="save-state error" onClick={onRetry} title="Reintentar guardado">
-        <Icon name="alert" size={14} /> No se pudo guardar · Reintentar
+        <Icon name="alert" size={14} /> Error al guardar · Reintentar
       </button>
     );
   }
   if (state === 'draft') {
     return (
       <span className="save-state error" role="status" title="No se pudo escribir en el documento: tus cambios quedan guardados como borrador de tu cuenta">
-        <Icon name="alert" size={14} /> Guardado como borrador
+        <Icon name="alert" size={14} /> Borrador recuperable
       </span>
     );
   }
   return (
     <span className={`save-state ${state}`} role="status">
       <Icon name={state === 'saving' ? 'sync' : 'check'} size={14} className={state === 'saving' ? 'spin' : undefined} />
-      {state === 'saving' ? 'Guardando…' : 'Guardado'}
+      {state === 'saving' ? 'Guardando…' : 'Guardado en este dispositivo'}
     </span>
   );
 }

@@ -3,6 +3,8 @@ import type { BackupSummary } from '@/features/backup/backup-download';
 import type { StatusView } from '@/features/account/account-status';
 import type { SyncDiagnostic, Explained } from '@/features/sync/diagnostic';
 import type { SupabaseSession } from '@/features/sync/supabase-auth';
+import type { SyncFacts } from '@/features/sync/sync-facts';
+import type { ConnectivityProbe } from '@/features/sync/connectivity';
 
 export type Dialog = null | 'sign-in' | 'protect';
 export type RecoveryCounts = { folders: number; songs: number; documents: number; trashed: number; versions: number };
@@ -53,6 +55,10 @@ export type Account = {
   prepareBackup: () => Promise<void>;
   setBackupConfirmed: (value: boolean) => void;
   linkLibrary: () => Promise<void>;
+  /** What the server has confirmed and when this device last tried (shared by every tab of this account). */
+  facts: SyncFacts | undefined;
+  /** "Probar conexión": READ-ONLY. Sends nothing of the person's; says how far the browser can get. */
+  probeConnection: () => Promise<{ probe: ConnectivityProbe; verdict: { ok: boolean; text: string } } | undefined>;
   /** v0.8 phase 1.3 behind its flag: false means everything below stays inert and the previous behaviour applies. */
   autoRecovery: boolean;
   recovery: RecoveryView;

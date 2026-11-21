@@ -415,7 +415,7 @@ test.describe('integridad de los borradores: la ventana entre escribir y el disc
     await editor.goto(`/material/${id}`);
     await editor.getByLabel('Título del material').fill('Escrito justo antes de irme');
     await expect(editor.getByRole('status').filter({ hasText: 'Guardando' })).toBeVisible(); // typed, not on disk: not "Guardado"
-    await expect(editor.getByRole('status').filter({ hasText: /^Guardado$/ })).toHaveCount(0);
+    await expect(editor.getByRole('status').filter({ hasText: /^Guardado en este dispositivo$/ })).toHaveCount(0);
     let asked = '';
     editor.once('dialog', (dialog) => {
       asked = dialog.type();

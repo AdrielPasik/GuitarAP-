@@ -48,7 +48,7 @@ test.describe('evidence v0.5.2', () => {
     await shot(page, '01-sincronizacion-error-explicado');
     broken = false;
     await page.getByRole('button', { name: 'Sincronizar ahora' }).click();
-    await expect(page.locator('.topbar').getByText('Todo sincronizado')).toBeVisible({ timeout: 30000 });
+    await expect(page.locator('.topbar').getByText('Guardado en tu cuenta')).toBeVisible({ timeout: 30000 });
     await shot(page, '02-sincronizacion-reparada');
 
     // The project and its header action.

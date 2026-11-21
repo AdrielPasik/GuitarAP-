@@ -9,6 +9,7 @@ const statusIcon: Record<StatusKind, IconName> = {
   unlinked: 'alert',
   expired: 'cloud-off',
   recovering: 'sync',
+  update: 'alert',
   syncing: 'sync',
   synced: 'check',
   pending: 'cloud',
@@ -76,7 +77,7 @@ export function AccountMenu() {
               Revisar y resolver {account.conflictCount === 1 ? 'el conflicto' : 'los conflictos'}
             </Link>
           )}
-          {account.linked && <p className="muted small">Última sincronización: {describeLastSync(account.lastSyncAt)}</p>}
+          {account.linked && <p className="muted small">Última confirmación del servidor: {account.facts?.lastConfirmedAt ? describeLastSync(account.facts.lastConfirmedAt).toLowerCase() : 'todavía ninguna'}</p>}
           <div className="account-actions">
             {!account.linked && (
               <button

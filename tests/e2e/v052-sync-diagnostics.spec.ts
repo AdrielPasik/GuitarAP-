@@ -68,7 +68,7 @@ test('un error 42702 de sync_library se explica con su causa, su código y la ac
   // Once the server is repaired, the very next sync uploads everything (the refused batch is not replayed forever).
   broken = false;
   await page.getByRole('button', { name: 'Sincronizar ahora' }).click();
-  await expect(page.locator('.topbar').getByText('Todo sincronizado')).toBeVisible({ timeout: 30000 });
+  await expect(page.locator('.topbar').getByText('Guardado en tu cuenta')).toBeVisible({ timeout: 30000 });
   const remote = await admin<Array<{ title: string }>>(`select title from public.documents where owner_id = $1 order by title`, [owner]);
   expect(remote.map((row) => row.title)).toEqual(['Arreglos', 'Letra y melodía', 'Riff suelto']);
   expect((await admin<Array<{ n: number }>>(`select count(*)::int as n from public.library_nodes where owner_id = $1`, [owner]))[0].n).toBe(1);
@@ -93,7 +93,7 @@ test('cada tipo de fallo dice lo suyo: sesión vencida, servidor caído y conexi
   mode = 'server';
   await page.getByRole('button', { name: 'Cuenta y sincronización' }).click();
   await page.locator('.account-panel').getByRole('button', { name: 'Sincronizar ahora' }).click();
-  await expect(page.locator('.topbar').getByText(/Sin conexión|Supabase no responde/).first()).toBeVisible({ timeout: 30000 });
+  await expect(page.locator('.topbar').getByText(/Sin conexión|Supabase no responde|Error temporal del servidor/).first()).toBeVisible({ timeout: 30000 });
 
   mode = 'network';
   await page.keyboard.press('Escape');
@@ -105,6 +105,6 @@ test('cada tipo de fallo dice lo suyo: sesión vencida, servidor caído y conexi
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: 'Cuenta y sincronización' }).click();
   await page.locator('.account-panel').getByRole('button', { name: 'Sincronizar ahora' }).click();
-  await expect(page.locator('.topbar').getByText('Todo sincronizado').first()).toBeVisible({ timeout: 40000 });
+  await expect(page.locator('.topbar').getByText('Guardado en tu cuenta').first()).toBeVisible({ timeout: 40000 });
   expect((await admin<Array<{ n: number }>>(`select count(*)::int as n from public.documents where owner_id = $1`, [owner]))[0].n).toBe(3);
 });

@@ -1,7 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { autoRecoveryEnabled } from '@/core/flags';
 import { authenticated, identityMode as modeOf, readIdentity, resolveVisible, signedOutExplicitly, trustsSession, watchVisible, type Visible } from '@/data/identity';
-import { flushAllPendingSaves } from '@/data/pending-saves';
+import { listDrafts } from '@/data/drafts';
+import { libraryScope } from '@/data/library-scope';
+import { dirtyEditors, flushAllPendingSaves, subscribeDirty } from '@/data/pending-saves';
 import { describeBackup, downloadBackup } from '@/features/backup/backup-download';
 import { AccountContext, emptyBackup, type Account, type BackupFlow, type Dialog, type LocalDataView, type RecoveryView } from '@/features/account/account-context';
 import type { RecoveryRecord } from '@/features/account/account-data';
@@ -9,6 +12,7 @@ import { describeStatus } from '@/features/account/account-status';
 import { explainSyncError, type Explained, type SyncDiagnostic } from '@/features/sync/diagnostic';
 import { explainHalt } from '@/features/sync/event-policy';
 import { SyncTransportError } from '@/features/sync/transport';
+import { readFacts, updateFacts, type SyncFacts } from '@/features/sync/sync-facts';
 import {
   AuthError,
   configuredSupabase,
@@ -24,9 +28,8 @@ type SyncPhase = 'idle' | 'syncing' | 'offline' | 'error';
 const lazyData = () => import('@/features/account/account-data');
 const AUTO_SYNC_DELAY = 8_000;
 const POLL_INTERVAL = 90_000;
-const ERROR_COOLDOWN = 60_000;
-/** The first download retries on its own with a growing wait (5 s, 10 s, 20 s... up to 5 min). */
-const recoveryDelay = (attempts: number) => Math.min(5_000 * 2 ** Math.max(0, attempts - 1), 300_000);
+/** Two automatic attempts are never closer than this (a tab coming back to the front is not a reason to ask again at once). */
+const MIN_GAP = 20_000;
 const viewOf = (record: RecoveryRecord): RecoveryView => ({
   phase: 'done',
   counts: record.check.counts,
@@ -58,13 +61,20 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   const adopting = useRef(false);
   const [recovery, setRecovery] = useState<RecoveryView>({ phase: 'idle' });
   const [localData, setLocalData] = useState<LocalDataView | null>(null);
-  const [retryTick, setRetryTick] = useState(0);
   const recoveryDone = useRef(true); // false only while the first download of this account on this device is outstanding
-  const recoveryAttempts = useRef(0);
+  const [failure, setFailure] = useState<{ kind: string; status?: number }>();
+  const [updateNeeded, setUpdateNeeded] = useState(false);
+  // What the server has confirmed, written by whichever tab last talked to it and read by all of them.
+  const ownerId = session?.user.id;
+  const facts = useLiveQuery(async () => (ownerId ? readFacts(ownerId) : undefined), [ownerId]);
+  const factsRef = useRef<SyncFacts | undefined>(undefined);
+  factsRef.current = facts;
+  const draftCount = useLiveQuery(async () => (ownerId ? (await listDrafts(await libraryScope())).length : 0), [ownerId]) ?? 0;
+  const typing = useSyncExternalStore(subscribeDirty, dirtyEditors);
+  const unsaved = Math.max(draftCount, typing);
   const [dialog, setDialog] = useState<Dialog>(null);
   const [backup, setBackup] = useState<BackupFlow>(emptyBackup);
   const running = useRef(false);
-  const lastError = useRef(0);
   const sessionRef = useRef<SupabaseSession | null>(null);
   sessionRef.current = session;
 
@@ -163,9 +173,14 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const syncNow = useCallback(async (): Promise<boolean> => {
+  const attempt = useCallback(async (manual: boolean): Promise<boolean> => {
     const current = sessionRef.current;
     if (!config || !current || !linked || running.current) return false;
+    // An automatic attempt keeps to the wait the last failure asked for; a person pressing a button does not.
+    const due = factsRef.current?.nextAttemptAt;
+    if (!manual && due && due > Date.now()) return false;
+    const attemptOwner = current.user.id;
+    const stillTheSamePerson = () => sessionRef.current?.user.id === attemptOwner;
     running.current = true;
     setPhase('syncing');
     setMessage('');
@@ -173,21 +188,32 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     if (recovering) setRecovery((now) => (now.phase === 'recovering' ? now : { phase: 'recovering', pulled: 0, pages: 0 }));
     const waiting = (reason: 'offline' | 'error' | 'halted') => {
       if (!recovering) return;
-      recoveryAttempts.current += 1;
       setRecovery({ phase: 'waiting', reason });
-      setRetryTick((tick) => tick + 1);
     };
     try {
       const fresh = await restoreSession(config);
       if (!fresh) {
-        setSession(null);
-        setPhase('idle');
-        setMessage('Tu sesión venció. Iniciá sesión de nuevo para seguir sincronizando.');
+        // The session ended by itself (a refused renewal): the library stays, sync waits for a valid session.
+        await updateFacts(attemptOwner, (f) => ({ ...f, lastAttemptAt: Date.now(), lastAttemptOk: false, lastError: { at: Date.now(), kind: 'session', retryable: false }, nextAttemptAt: null })).catch(() => undefined);
+        if (stillTheSamePerson()) {
+          setSession(null);
+          setPhase('idle');
+          setMessage('Tu sesión venció. Iniciá sesión de nuevo para seguir sincronizando.');
+        }
         return false;
       }
       if (fresh.accessToken !== current.accessToken) setSession(fresh);
       const data = await lazyData();
-      const result = await data.runSync(config, fresh, recovering ? { onProgress: (progress) => setRecovery({ phase: 'recovering', pulled: progress.pulled, pages: progress.pages }) } : {});
+      const result = await data.runSync(config, fresh, recovering ? { onProgress: (progress) => stillTheSamePerson() && setRecovery({ phase: 'recovering', pulled: progress.pulled, pages: progress.pages }) } : {});
+      if (!result) {
+        // Another tab is talking to the server for this account right now: nothing to do here, its facts will arrive.
+        setPhase('idle');
+        return false;
+      }
+      // Whatever came back belongs to the person who started it: if somebody else is on screen now, none of it is theirs.
+      if (!stillTheSamePerson()) return false;
+      setFailure(result.report.failure ? { kind: result.report.failure.kind, status: result.report.failure.status } : undefined);
+      setUpdateNeeded(Boolean(result.report.halted));
       setConflicts(result.conflicts);
       setSkipped(result.skipped);
       setDiagnostic(result.diagnostic);
@@ -210,16 +236,16 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       }
       if (recovering && result.recovery) {
         recoveryDone.current = true;
-        recoveryAttempts.current = 0;
         setRecovery(result.recovery.seen ? { phase: 'idle' } : viewOf(result.recovery));
       }
       setPhase('idle');
       setLastSyncAt(result.lastSyncAt);
       return result.skipped === 0;
     } catch (error) {
-      lastError.current = Date.now();
+      if (!stillTheSamePerson()) return false;
       setPhase('error');
       waiting('error');
+      // A refused session (401) is not retried by itself (the facts say so); the person decides: «Sincronizar ahora» renews the session first.
       if (error instanceof AuthError) {
         setProblem(undefined);
         setMessage(error.message);
@@ -237,13 +263,8 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       running.current = false;
     }
   }, [config, linked]);
-
-  // The first download keeps trying by itself, with a growing wait, until the library is confirmed complete.
-  useEffect(() => {
-    if (recovery.phase !== 'waiting' || !session || !linked || !online || !autoSync) return;
-    const timer = window.setTimeout(() => void syncNow(), recoveryDelay(recoveryAttempts.current));
-    return () => window.clearTimeout(timer);
-  }, [autoSync, linked, online, recovery.phase, retryTick, session, syncNow]);
+  const syncNow = useCallback(() => attempt(true), [attempt]);
+  const autoAttempt = useCallback(() => attempt(false), [attempt]);
 
   const probeServer = useCallback(async () => {
     const current = sessionRef.current;
@@ -275,30 +296,56 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     };
   }, [linked, session]);
 
-  // Automatic sync: on start, when the connection returns, periodically, and shortly after edits.
+  // Automatic sync. ONE scheduler for everything: a failed attempt writes when the next one is due (a growing wait with
+  // jitter, see sync/retry-policy.ts) into the shared facts; every tab reads that, nothing retries on its own clock.
   const signedIn = Boolean(session);
+  const nextAt = facts?.nextAttemptAt ?? null;
+  const lastAttemptAt = facts?.lastAttemptAt ?? 0;
+  const lastAttemptRef = useRef(0);
+  lastAttemptRef.current = lastAttemptAt;
+  const ready = signedIn && linked && autoSync && autoSyncReady;
   useEffect(() => {
-    if (!signedIn || !linked || !autoSync || !autoSyncReady || !online) return;
-    void syncNow();
+    if (!ready || !online) return;
+    void autoAttempt();
     const poll = window.setInterval(() => {
-      if (document.visibilityState === 'visible') void syncNow();
+      if (document.visibilityState === 'visible') void autoAttempt();
     }, POLL_INTERVAL);
-    const visible = () => {
-      if (document.visibilityState === 'visible') void syncNow();
+    // Coming back to the front, or back from a suspension (a phone, a sleeping laptop): one attempt, if enough time has passed.
+    const resume = () => {
+      if (document.visibilityState === 'visible' && Date.now() - lastAttemptRef.current > MIN_GAP) void autoAttempt();
     };
-    document.addEventListener('visibilitychange', visible);
+    document.addEventListener('visibilitychange', resume);
+    window.addEventListener('pageshow', resume);
     return () => {
       window.clearInterval(poll);
-      document.removeEventListener('visibilitychange', visible);
+      document.removeEventListener('visibilitychange', resume);
+      window.removeEventListener('pageshow', resume);
     };
-  }, [autoSync, autoSyncReady, linked, online, signedIn, syncNow]);
+  }, [autoAttempt, online, ready]);
 
+  // The connection came back: if an attempt was waiting out a failure, it is due now (with a little spread, not a burst).
   useEffect(() => {
-    if (!signedIn || !linked || !autoSync || !autoSyncReady || !online || pending === 0 || phase === 'syncing') return;
-    const wait = Math.max(AUTO_SYNC_DELAY, ERROR_COOLDOWN - (Date.now() - lastError.current));
-    const timer = window.setTimeout(() => void syncNow(), phase === 'error' ? wait : AUTO_SYNC_DELAY);
+    if (!ready || !online || !ownerId || nextAt === null) return;
+    void updateFacts(ownerId, (f) => (f.nextAttemptAt && f.nextAttemptAt > Date.now() + 3_000 ? { ...f, nextAttemptAt: Date.now() + Math.round(Math.random() * 2_000) } : f)).catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [online]);
+
+  // The scheduled retry itself.
+  useEffect(() => {
+    if (!ready || !online || nextAt === null) return;
+    const timer = window.setTimeout(() => {
+      if (document.visibilityState === 'visible') void autoAttempt();
+    }, Math.max(0, nextAt - Date.now()));
     return () => window.clearTimeout(timer);
-  }, [autoSync, autoSyncReady, linked, online, pending, phase, signedIn, syncNow]);
+  }, [autoAttempt, nextAt, online, ready]);
+
+  // Shortly after local changes, unless a failure asked for a longer wait.
+  useEffect(() => {
+    if (!ready || !online || pending === 0 || phase === 'syncing') return;
+    if (nextAt !== null && nextAt > Date.now()) return;
+    const timer = window.setTimeout(() => void autoAttempt(), AUTO_SYNC_DELAY);
+    return () => window.clearTimeout(timer);
+  }, [autoAttempt, nextAt, online, pending, phase, ready]);
 
   const signIn = useCallback(
     async (email: string, password: string) => {
@@ -373,22 +420,36 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   }, [backup.confirmed, backup.summary, session]);
 
   const mode = modeOf(visible ?? { ownerId: null, epoch: 0, legacy: false }, signedIn, signedOutFlag);
+  // What another tab (or an earlier run) already proved is as true here as in the tab that did it: the shared facts fill
+  // in for a tab that has not tried anything itself, so two tabs never show two different stories.
+  const lastError = facts?.lastError;
+  const lastFailed = facts?.lastAttemptOk === false && lastError !== undefined;
+  const sharedPassing = lastFailed && lastError.retryable && lastError.kind !== 'update' && lastError.kind !== 'session';
+  const sharedUpdate = lastFailed && lastError.kind === 'update';
+  const sharedBlocked = lastFailed && !lastError.retryable && lastError.kind !== 'update' && lastError.kind !== 'session';
+  const own = phase === 'offline' ? failure : undefined;
+  const sharedExplained = sharedBlocked ? explainSyncError({ operation: 'pull', rpc: 'pull_library', kind: lastError.kind as never, status: lastError.status, code: lastError.code }, undefined) : undefined;
   const status = describeStatus({
     signedIn,
     expired: mode === 'expired',
     linked,
     online,
     syncing: phase === 'syncing' && recovery.phase !== 'recovering',
+    updateNeeded: updateNeeded || sharedUpdate,
+    failure: own ?? (sharedPassing ? { kind: lastError.kind, status: lastError.status } : undefined),
+    retryInMs: nextAt !== null ? Math.max(0, nextAt - Date.now()) : undefined,
+    lastConfirmedAt: facts?.lastConfirmedAt,
+    unsaved,
     recovering: recovery.phase === 'recovering' ? { pulled: recovery.pulled } : undefined,
     recoveryPending: recovery.phase === 'waiting',
-    failed: phase === 'error',
-    offlineReport: phase === 'offline',
+    failed: phase === 'error' || sharedBlocked,
+    offlineReport: phase === 'offline' || sharedPassing,
     pending,
     conflicts,
     skipped,
-    confirmed: lastSyncAt !== undefined,
-    errorLabel: problem?.headline,
-    errorDetail: problem?.explanation,
+    confirmed: facts?.lastConfirmedAt !== undefined,
+    errorLabel: problem?.headline ?? sharedExplained?.headline,
+    errorDetail: problem?.explanation ?? sharedExplained?.explanation,
   });
 
   const value: Account = {
@@ -399,6 +460,12 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     identityMode: mode,
     linked,
     status,
+    facts,
+    probeConnection: async () => {
+      const current = sessionRef.current;
+      if (!config || !current) return undefined;
+      return (await lazyData()).probeConnection(config, current.user.id);
+    },
     autoRecovery: autoRecoveryEnabled(),
     recovery,
     dismissRecovery: () => {

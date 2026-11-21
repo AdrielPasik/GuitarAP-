@@ -130,7 +130,7 @@ test('Escenario D — un editor invitado al PROYECTO trabaja en sus partes y el 
 
   // The owner's own sync pulls both edits, and nothing the owner had is lost.
   await page.goto('/biblioteca');
-  await expect(page.locator('.topbar').getByText('Todo sincronizado')).toBeVisible({ timeout: 30000 });
+  await expect(page.locator('.topbar').getByText('Guardado en tu cuenta')).toBeVisible({ timeout: 30000 });
   await openProject(page, 'Proyecto D');
   await page.locator('.lib-row', { hasText: 'Letra y melodía' }).locator('.lib-open').click();
   await expect(page.getByLabel('Letra', { exact: true })).toHaveValue('Letra cambiada por Goti');

@@ -33,7 +33,7 @@ export async function linkAndSync(page: Page) {
   await page.getByRole('button', { name: 'Descargar copia de seguridad' }).click();
   await page.getByLabel(/Confirmo que el archivo se guardó/).check();
   await page.getByRole('button', { name: 'Vincular y sincronizar' }).click();
-  await expect(page.locator('.topbar').getByText('Todo sincronizado')).toBeVisible({ timeout: 30000 });
+  await expect(page.locator('.topbar').getByText('Guardado en tu cuenta')).toBeVisible({ timeout: 30000 });
 }
 
 /** Opens the song project from the library (list row) and returns to its page. */
@@ -73,5 +73,5 @@ export async function inviteUrl(dialog: Locator, role: 'Editor' | 'Comentarista'
 
 /** Waits for the app's automatic sync to confirm that nothing is pending any more. */
 export async function waitSynced(page: Page) {
-  await expect(page.locator('.topbar').getByText('Todo sincronizado')).toBeVisible({ timeout: 40000 });
+  await expect(page.locator('.topbar').getByText('Guardado en tu cuenta')).toBeVisible({ timeout: 40000 });
 }

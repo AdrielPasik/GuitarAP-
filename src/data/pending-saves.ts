@@ -13,3 +13,23 @@ export function registerFlush(flush: () => Promise<void> | void) {
 export async function flushAllPendingSaves() {
   await Promise.allSettled([...flushers].map((flush) => flush()));
 }
+
+/**
+ * Which editors hold changes that are not yet written into their document. The account's status reads this so that it can
+ * never call everything saved while somebody is still typing, in this tab or (through the drafts) in another.
+ */
+const dirty = new Set<string>();
+const listeners = new Set<() => void>();
+export function setEditorDirty(id: string, isDirty: boolean) {
+  if (isDirty === dirty.has(id)) return;
+  if (isDirty) dirty.add(id);
+  else dirty.delete(id);
+  listeners.forEach((listener) => listener());
+}
+export const dirtyEditors = () => dirty.size;
+export function subscribeDirty(listener: () => void) {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}

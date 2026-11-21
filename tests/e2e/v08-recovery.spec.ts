@@ -56,7 +56,7 @@ async function syncNow(page: Page) {
   await topbar(page).getByRole('button', { name: 'Cuenta y sincronización' }).click();
   await page.getByRole('button', { name: 'Sincronizar ahora' }).click();
   await page.keyboard.press('Escape');
-  await expect.poll(() => statusText(page), { timeout: 30_000 }).toContain('Todo sincronizado');
+  await expect.poll(() => statusText(page), { timeout: 30_000 }).toContain('Guardado en tu cuenta');
 }
 /** The status as the account menu says it (the compact top bar of a phone hides the label). */
 async function statusText(page: Page) {
@@ -105,7 +105,7 @@ test('la computadora crea la biblioteca y el celular la recupera sin asistente n
   await expect(banner(phone.page, 'Biblioteca recuperada')).toContainText(/versi/);
   await expect(row(phone.page, 'Escalas')).toBeVisible();
   await expect(row(phone.page, 'Canción A')).toBeVisible();
-  expect(await statusText(phone.page)).toContain('Todo sincronizado');
+  expect(await statusText(phone.page)).toContain('Guardado en tu cuenta');
   // The trash came along.
   await phone.page.goto('/configuracion/recuperacion');
   await expect(phone.page.getByText('Riff descartado')).toBeVisible();
@@ -330,7 +330,7 @@ test('un servidor inaccesible nunca se confunde con una cuenta vacía, y la recu
   await signIn(phone.page, 'ana');
   await expect(banner(phone.page, 'Recuperación pendiente')).toBeVisible({ timeout: 30_000 });
   await expect(phone.page.getByText('Tu cuenta todavía no tiene materiales en la nube.')).toHaveCount(0);
-  expect(await statusText(phone.page)).not.toContain('Todo sincronizado');
+  expect(await statusText(phone.page)).not.toContain('Guardado en tu cuenta');
   down = false;
   await phone.page.getByRole('button', { name: 'Reintentar ahora' }).click();
   await expect(banner(phone.page, 'Biblioteca recuperada')).toContainText(/1 carpeta/, { timeout: 30_000 });

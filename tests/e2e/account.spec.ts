@@ -83,7 +83,7 @@ test('signing in never links the library until a verified backup is confirmed', 
   await expect(page.getByRole('dialog')).toBeHidden();
 
   // Linked and synced: the top bar says so, in words.
-  await expect(topbar(page).getByText('Todo sincronizado')).toBeVisible({ timeout: 15000 });
+  await expect(topbar(page).getByText('Guardado en tu cuenta')).toBeVisible({ timeout: 15000 });
   await topbar(page).getByRole('button', { name: 'Cuenta y sincronización' }).click();
   await expect(page.getByText('prueba@guitarap.test')).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('conectado.png') });
@@ -107,7 +107,7 @@ test('the session is restored, signing out keeps every material, and offline wor
   await page.getByRole('button', { name: 'Descargar copia de seguridad' }).click();
   await page.getByLabel(/Confirmo que el archivo se guardó/).check();
   await page.getByRole('button', { name: 'Vincular y sincronizar' }).click();
-  await expect(topbar(page).getByText('Todo sincronizado')).toBeVisible({ timeout: 15000 });
+  await expect(topbar(page).getByText('Guardado en tu cuenta')).toBeVisible({ timeout: 15000 });
 
   await page.reload();
   await expect(topbar(page).getByRole('button', { name: 'Cuenta y sincronización' })).toBeVisible();

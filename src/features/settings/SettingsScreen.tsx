@@ -22,7 +22,7 @@ import { db } from '@/data/database';
 import { libraryRepository } from '@/data/library-repository';
 import { belongsToOwner, libraryScope } from '@/data/library-scope';
 import { ImportBackup } from '@/features/backup/ImportBackup';
-import { describeLastSync } from '@/features/account/account-status';
+import { SyncDiagnostics } from '@/features/settings/SyncDiagnostics';
 import { diagnosticText } from '@/features/sync/diagnostic';
 import { previewSkin, SKINS, useSkin, type Skin } from '@/features/theme/skin';
 import { Cover } from '@/features/library/Cover';
@@ -175,16 +175,7 @@ function SyncSection() {
       )}
       {account.session && account.linked && (
         <div className="stack">
-          <dl className="facts">
-            <div>
-              <dt>Última sincronización</dt>
-              <dd>{describeLastSync(account.lastSyncAt)}</dd>
-            </div>
-            <div>
-              <dt>Cuenta</dt>
-              <dd>{account.email}</dd>
-            </div>
-          </dl>
+          <SyncDiagnostics />
           {account.message && (
             <p role="status" className="notice warn">
               <Icon name="alert" size={16} />

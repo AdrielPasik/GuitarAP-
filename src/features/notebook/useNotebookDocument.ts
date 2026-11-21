@@ -4,7 +4,7 @@ import { fromNotebook, toNotebook } from '@/core/notebook';
 import { useUndoRedo } from '@/core/use-undo-redo';
 import { libraryRepository, type EditTicket } from '@/data/library-repository';
 import { deleteDraft, writeDraft } from '@/data/drafts';
-import { registerFlush } from '@/data/pending-saves';
+import { registerFlush, setEditorDirty } from '@/data/pending-saves';
 
 export type SaveState = 'saved' | 'saving' | 'error' | 'draft';
 
@@ -85,6 +85,7 @@ export function useNotebookDocument(document: MusicalDocument, readOnly = false,
         await libraryRepository.saveDocument(edit);
         setSaveState('saved');
       }
+      if (lastSaved.current === serialize(latest.current.notebook, latest.current.title)) setEditorDirty(document.id, false);
     } catch {
       lastSaved.current = '';
       setSaveState('error');
@@ -96,12 +97,14 @@ export function useNotebookDocument(document: MusicalDocument, readOnly = false,
     // Typed but not confirmed on disk yet: never "Guardado" until the write really finished.
     if (serialize(history.value, title) !== lastSaved.current) {
       wasDirty.current = true;
+      setEditorDirty(document.id, true);
       setSaveState((state) => (state === 'error' ? state : 'saving'));
       writeJournal();
     } else if (wasDirty.current) {
       // The person undid back to exactly what is stored: there is nothing pending any more, and the journal entry of
       // the state they undid is stale (it must not be offered back later).
       wasDirty.current = false;
+      setEditorDirty(document.id, false);
       const owner = ticket?.ownerId;
       if (journalFailed.current || ticket) {
         journalFailed.current = false;
@@ -143,9 +146,10 @@ export function useNotebookDocument(document: MusicalDocument, readOnly = false,
     return () => {
       window.document.removeEventListener('visibilitychange', hidden);
       window.removeEventListener('pagehide', hidden);
-      void flush();
+      // The editor is going away: once its save has had its say, it no longer holds anything that is not in the document.
+      void flush().finally(() => setEditorDirty(document.id, false));
     };
-  }, [flush, readOnly]);
+  }, [document.id, flush, readOnly]);
 
   const { set: change, undo, redo, canUndo, canRedo } = history;
 

@@ -197,7 +197,8 @@
 .status-chip.kind-recovering,
 .status-chip.kind-expired,
 .status-chip.kind-unlinked,
-.status-chip.kind-conflict {
+.status-chip.kind-conflict,
+.status-chip.kind-update {
   color: var(--warn);
 }
 .status-chip.kind-error {
@@ -229,7 +230,8 @@
 .status-line.kind-offline,
 .status-line.kind-expired,
 .status-line.kind-unlinked,
-.status-line.kind-conflict {
+.status-line.kind-conflict,
+.status-line.kind-update {
   color: var(--warn);
 }
 .account-actions {
