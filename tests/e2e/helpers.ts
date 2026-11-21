@@ -34,11 +34,34 @@ export const neck = (page: Page, testId = 'map-canvas') => ({
     page.getByTestId(testId).getByTestId(`marker-${string}-${fret}`),
 });
 
-/** Waits for the autosave debounce plus the write. */
+/**
+ * Waits for the autosave debounce plus the write. When it cannot see "Guardado", it says what the editor was really
+ * showing and what was on disk, so an intermittent failure arrives with its evidence instead of a bare timeout.
+ */
 export async function settleSave(page: Page) {
-  await expect(page.getByRole('status').filter({ hasText: 'Guardado' })).toBeVisible();
+  const saved = page.getByRole('status').filter({ hasText: 'Guardado' });
+  try {
+    await expect(saved).toBeVisible();
+  } catch (error) {
+    const shown = await page.locator('.save-state').allInnerTexts().catch(() => ['(no se pudo leer)']);
+    const drafts = await page
+      .evaluate(
+        () =>
+          new Promise<string>((resolve) => {
+            const open = indexedDB.open('guitarap');
+            open.onsuccess = () => {
+              const all = open.result.transaction('settings').objectStore('settings').getAllKeys();
+              all.onsuccess = () => resolve(String((all.result as string[]).filter((key) => key.startsWith('draft:')).length));
+            };
+            open.onerror = () => resolve('?');
+          }),
+      )
+      .catch(() => '?');
+    throw new Error(`settleSave: no apareció "Guardado". El editor mostraba ${JSON.stringify(shown)}; borradores en disco: ${drafts}.
+${(error as Error).message}`, { cause: error });
+  }
   await page.waitForTimeout(1000);
-  await expect(page.getByRole('status').filter({ hasText: 'Guardado' })).toBeVisible();
+  await expect(saved).toBeVisible();
 }
 
 export async function noHorizontalOverflow(page: Page) {

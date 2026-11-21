@@ -604,6 +604,20 @@ kbd {
   color: var(--surface);
   box-shadow: var(--shadow-pop);
 }
+.update-banner.firm {
+  outline: 2px solid var(--warn);
+}
+.update-banner.urgent {
+  outline: 2px solid var(--danger);
+}
+@media (max-width: 640px) {
+  .update-banner {
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    flex-wrap: wrap;
+  }
+}
 .route-fallback {
   padding: 32px 0;
   color: var(--ink-2);

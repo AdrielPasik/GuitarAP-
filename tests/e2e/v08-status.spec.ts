@@ -136,8 +136,17 @@ test('cada tipo de fallo dice lo suyo y ninguno se presenta como «Guardado en t
     await context.unroute(rule).catch(() => undefined);
     await context.route(rule, (route) => handler(route));
     await edit(`Cambio ${n}`);
-    await expect.poll(() => label(page), { timeout: 60_000, message: name }).toMatch(expected);
-    const text = await label(page);
+    // The text that satisfied the condition is the one checked: a retry may flip the label to «Sincronizando…» a moment later.
+    let text = '';
+    await expect
+      .poll(
+        async () => {
+          text = await label(page);
+          return text;
+        },
+        { timeout: 60_000, message: name },
+      )
+      .toMatch(expected);
     expect(text, name).not.toContain(SAVED);
     expect(text, name).toContain(detail);
     expect(text, name).not.toMatch(/Error:|TypeError|PGRST|Failed to fetch/); // never the raw error
@@ -268,8 +277,7 @@ test('al volver a primer plano después de una suspensión, la app se pone al d�
   await signIn(other.page, 'ana');
   await expect.poll(() => label(other.page), { timeout: 40_000 }).toContain(SAVED);
   await createFromMenu(other.page, 'Cuaderno de composición', 'Creada en el celular');
-  // (patient: this second device shares a busy machine with the first)
-  await expect(other.page.getByRole('status').filter({ hasText: 'Guardado en este dispositivo' })).toBeVisible({ timeout: 30_000 });
+  await settleSave(other.page); // the standard wait, which now reports what the editor showed if it ever fails
   await other.page.goto('/biblioteca');
   await expect.poll(() => serverTitles(owner), { timeout: 40_000 }).toContain('Creada en el celular');
   // The sleeping tab was last in touch more than the minimum gap ago (real time: an attempt closer than that is never made).
@@ -304,4 +312,30 @@ test('el historial de intentos no guarda contenido', async ({ browser }) => {
   expect(stored).not.toContain('zzz-123');
   expect(stored).not.toMatch(/test-user|Bearer/);
   await d.context.close();
+});
+
+/**
+ * The first failure of the 1.5 runs was a real defect, not a timing one: two elements on one screen had the same accessible
+ * name, so any lookup by that name was ambiguous (for a screen reader as much as for a test). This keeps it from coming back.
+ */
+test('en una misma pantalla, regiones, listas y grupos no comparten nombre accesible', async ({ browser }) => {
+  const { page, context } = await signedInWithSong(browser);
+  for (const route of ['/configuracion/sincronizacion', '/configuracion/datos', '/configuracion/copias', '/configuracion/conflictos', '/configuracion/cuenta', '/biblioteca']) {
+    await page.goto(route);
+    await page.waitForLoadState('networkidle');
+    const duplicates = await page.evaluate(() => {
+      document.querySelectorAll('details').forEach((item) => (item.open = true)); // what a person can open counts too
+      const seen = new Map<string, number>();
+      for (const element of document.querySelectorAll('[aria-label]')) {
+        const tag = element.tagName.toLowerCase();
+        if (['button', 'a', 'input', 'select', 'textarea', 'svg', 'img', 'path'].includes(tag) || element.getAttribute('role') === 'img') continue;
+        if ((element as HTMLElement).offsetParent === null && getComputedStyle(element).position !== 'fixed') continue; // not on screen
+        const name = String(element.getAttribute('aria-label')); // the accessible NAME is what makes a lookup ambiguous, whatever the tag
+        seen.set(name, (seen.get(name) ?? 0) + 1);
+      }
+      return [...seen].filter(([, count]) => count > 1).map(([name]) => name);
+    });
+    expect(duplicates, route).toEqual([]);
+  }
+  await context.close();
 });
