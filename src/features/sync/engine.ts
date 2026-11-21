@@ -4,6 +4,7 @@ import { activeOwnerId, libraryScope } from '@/data/library-scope';
 import { decideEvent, eventKey, type EventExtension } from '@/features/sync/event-policy';
 import {
   SyncTransportError,
+  type SyncErrorKind,
   type ChangeEvent,
   type PullPage,
   type RemoteDocument,
@@ -59,6 +60,10 @@ export async function countDeferred(owner: string) {
 }
 export async function countQuarantined(owner: string) {
   return (await readQuarantine(owner)).length;
+}
+/** The cursor this device has confirmed (how far into the account's log it has really received). */
+export async function readCursor(owner: string) {
+  return (await get(owner)).cursor;
 }
 export async function readHalt(owner: string) {
   return (await get(owner)).halted;
@@ -187,7 +192,18 @@ export type SyncOptions = {
    */
   downloadOnly?: boolean;
 };
+/** Why a run could not finish, in facts only (never content): what kind, what the server said, whether waiting can fix it. */
+export type SyncFailure = { kind: SyncErrorKind; status?: number; code?: string; retryable: boolean; retryAfterMs?: number; operation?: 'push' | 'pull' };
+export function failureOf(error: unknown): SyncFailure {
+  if (error instanceof SyncTransportError) {
+    const d = error.detail;
+    return { kind: d?.kind ?? 'unknown', status: d?.status ?? error.status, code: d?.code, retryable: error.retryable, retryAfterMs: d?.retryAfterMs, operation: d?.operation };
+  }
+  return { kind: 'unknown', retryable: false };
+}
 export type SyncReport = {
+  /** Set when the run stopped because of a failure that can pass by itself (no connection, timeout, server trouble, rate limit). */
+  failure?: SyncFailure;
   /** The download reached the end of the account's log: everything the server had at that moment was received. */
   complete: boolean;
   /** Records with changes of their own that were not uploaded, left untouched by a download-only run. */
@@ -221,6 +237,8 @@ export class SyncEngine {
     private readonly limits = LIMITS,
     /** Support for event kinds this client does not know natively (registered by later versions of the app). */
     private readonly extensions: readonly EventExtension[] = [],
+    /** How long to wait between the attempts of one request (tests pass an instant one). */
+    private readonly wait: (ms: number) => Promise<void> = (ms) => new Promise((resolve) => setTimeout(resolve, import.meta.env.MODE === 'test' ? 0 : ms)),
   ) {}
 
   async sync(owner: string, options: SyncOptions = {}): Promise<SyncReport> {
@@ -248,6 +266,7 @@ export class SyncEngine {
       }
       const batch = state.pending;
       let result;
+      let lastFailure: SyncFailure | undefined;
       for (let attempt = 0; attempt <= this.maxRetries; attempt += 1)
         try {
           result = await this.transport.push(owner, batch.id, this.withBaseRevisions(batch.snapshot, state));
@@ -261,10 +280,15 @@ export class SyncEngine {
             throw error;
           }
           report.retries += 1;
+          lastFailure = failureOf(error);
+          // A short, growing pause between attempts of the same request. A server that asks for a long wait is not asked again now.
+          const pause = lastFailure.retryAfterMs ?? Math.min(400 * 2 ** attempt, 4_000);
+          if (pause > 5_000 || attempt >= this.maxRetries) break;
+          await this.wait(pause * (0.75 + Math.random() * 0.5));
         }
       if (!result) {
         await save(owner, state);
-        return { ...report, offline: true };
+        return { ...report, offline: true, failure: lastFailure };
       }
       report.requests += 1;
       for (const x of result.documents) {
@@ -304,7 +328,10 @@ export class SyncEngine {
       if (halted) report.halted = { kind: halted.kind, v: halted.v };
       else report.complete = true;
     } catch (error) {
-      if (error instanceof SyncTransportError && error.retryable) report.offline = true;
+      if (error instanceof SyncTransportError && error.retryable) {
+        report.offline = true;
+        report.failure = failureOf(error);
+      }
       else {
         await save(owner, state);
         throw error;

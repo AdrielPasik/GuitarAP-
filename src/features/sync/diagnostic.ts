@@ -49,7 +49,11 @@ export function explainSyncError(detail: SyncErrorDetail | undefined, server?: S
     };
   switch (detail.kind) {
     case 'network':
-      return { headline: 'Sin conexión con Supabase', explanation: 'No se pudo conectar. Tus cambios están a salvo en este dispositivo y se enviarán solos cuando vuelva la conexión.', action: 'wait' };
+      return { headline: 'Sin conexión con el servidor', explanation: 'El navegador no pudo llegar al servidor. Puede ser la red, el DNS o un bloqueo (no hay forma de distinguirlo desde acá). Tus cambios están a salvo en este dispositivo y se enviarán solos cuando vuelva la conexión.', action: 'wait' };
+    case 'timeout':
+      return { headline: 'El servidor no responde', explanation: 'El servidor tardó demasiado en contestar. Tus cambios siguen guardados acá y se vuelve a intentar solo, con esperas cada vez más largas.', action: 'wait' };
+    case 'rate-limit':
+      return { headline: 'Sincronización en pausa', explanation: 'El servidor pidió esperar un poco antes de recibir más peticiones. No es un error tuyo: se retoma solo cuando pase el tiempo que pidió.', action: 'wait' };
     case 'auth':
       return { headline: 'Tu sesión venció', explanation: `Supabase no aceptó tu sesión${code}. Iniciá sesión de nuevo: tus materiales no se tocan.`, action: 'sign-in' };
     case 'permission':

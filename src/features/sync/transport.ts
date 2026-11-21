@@ -33,7 +33,15 @@ export interface SyncTransport {
   push(ownerId: string, opId: string, snapshot: SyncSnapshot): Promise<PushResult>;
   pull(ownerId: string, cursor: string, limit: number): Promise<PullPage>;
 }
-export type SyncErrorKind = 'network' | 'auth' | 'permission' | 'schema' | 'data' | 'conflict' | 'too-large' | 'server' | 'unknown';
+/**
+ * What kind of failure it was, as far as anybody can truthfully tell. 'network' is deliberately generic: for a `fetch` the
+ * browser reports DNS failures, a lost connection, a blocked request and CORS problems in exactly the same way, so none
+ * of them may be presented as a definite cause. 'timeout' means this app gave up waiting; 'rate-limit' means the server
+ * asked to slow down (429).
+ */
+export type SyncErrorKind = 'network' | 'timeout' | 'rate-limit' | 'auth' | 'permission' | 'schema' | 'data' | 'conflict' | 'too-large' | 'server' | 'unknown';
+/** Failures that can go away by themselves: worth trying again later. The rest need a person (or an update) first. */
+export const RETRYABLE_KINDS: ReadonlySet<SyncErrorKind> = new Set(['network', 'timeout', 'rate-limit', 'server']);
 
 /**
  * What a failed request carries, without anything private: which operation and RPC, the HTTP status, the
@@ -47,6 +55,8 @@ export type SyncErrorDetail = {
   message?: string;
   hint?: string;
   kind: SyncErrorKind;
+  /** What the server asked for (Retry-After), in ms, when it said. */
+  retryAfterMs?: number;
 };
 
 export class SyncTransportError extends Error {
@@ -83,7 +93,9 @@ export function classify(status: number | undefined, code: string | undefined): 
   if (code === '40001' || code === '40P01' || code === '23505' || status === 409) return code === '23503' ? 'data' : 'conflict';
   if (code && /^(22|23)/.test(code)) return 'data';
   if (status === 400) return 'data';
-  if (status === 408 || status === 429 || status >= 500) return 'server';
+  if (status === 429) return 'rate-limit';
+  if (status === 408 || status === 504) return 'timeout';
+  if (status >= 500) return 'server';
   return 'unknown';
 }
 
@@ -169,14 +181,32 @@ export class FakeTransport implements SyncTransport {
     };
   }
 }
+export const REQUEST_TIMEOUT_MS = 30_000;
+/** Retry-After as milliseconds: either a number of seconds or an HTTP date. Capped at an hour; unknown or absent is `undefined`. */
+export function parseRetryAfter(value: string | null | undefined, now = Date.now()): number | undefined {
+  if (!value) return undefined;
+  const seconds = Number(value);
+  const ms = Number.isFinite(seconds) ? seconds * 1000 : Date.parse(value) - now;
+  return Number.isFinite(ms) && ms > 0 ? Math.min(ms, 3_600_000) : undefined;
+}
 export class SupabaseTransport implements SyncTransport {
   constructor(
     private readonly url: string,
     private readonly anonKey: string,
     private readonly accessToken: string,
+    /** How long one request may take before this app stops waiting for it. */
+    private readonly timeoutMs = REQUEST_TIMEOUT_MS,
   ) {}
+  /** Whatever the server echoes back, this client's own credentials are removed first. */
+  private scrub(text: string) {
+    let out = text;
+    for (const secret of [this.accessToken, this.anonKey]) if (secret && secret.length > 6) out = out.split(secret).join('[secreto]');
+    return out;
+  }
   private async rpc<T>(method: string, body: unknown, operation: 'push' | 'pull'): Promise<T> {
     let response: Response;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
       response = await fetch(`${this.url.replace(/\/$/, '')}/rest/v1/rpc/${method}`, {
         method: 'POST',
@@ -186,14 +216,20 @@ export class SupabaseTransport implements SyncTransport {
           authorization: `Bearer ${this.accessToken}`,
         },
         body: JSON.stringify(body),
+        signal: controller.signal,
       });
     } catch {
+      // The browser says only "it failed": no connection, a DNS error, a blocked request and CORS look the same from here.
+      // The one thing this code knows for sure is whether IT stopped waiting.
+      const timedOut = controller.signal.aborted;
       throw new SyncTransportError(
-        'No se pudo conectar con Supabase. Los cambios permanecen guardados localmente.',
+        timedOut ? 'El servidor tardó demasiado en responder. Los cambios permanecen guardados localmente.' : 'No se pudo conectar con Supabase. Los cambios permanecen guardados localmente.',
         true,
         undefined,
-        { operation, rpc: method, kind: 'network' },
+        { operation, rpc: method, kind: timedOut ? 'timeout' : 'network' },
       );
+    } finally {
+      clearTimeout(timer);
     }
     if (!response.ok) {
       let parsed: { code?: string; message?: string; hint?: string; details?: string } = {};
@@ -203,15 +239,17 @@ export class SupabaseTransport implements SyncTransport {
         /* a gateway error page: only the status is known */
       }
       const kind = classify(response.status, parsed.code);
-      const retryable = kind === 'server' || (kind === 'conflict' && parsed.code === '40001');
+      const retryable = RETRYABLE_KINDS.has(kind) || (kind === 'conflict' && parsed.code === '40001');
+      const retryAfterMs = parseRetryAfter(response.headers?.get?.('retry-after'));
       const detail: SyncErrorDetail = {
         operation,
         rpc: method,
         status: response.status,
         code: parsed.code ? redact(parsed.code, 16) : undefined,
-        message: parsed.message ? redact([parsed.message, parsed.details].filter(Boolean).join(' · ')) : undefined,
-        hint: parsed.hint ? redact(parsed.hint, 160) : undefined,
+        message: parsed.message ? redact(this.scrub([parsed.message, parsed.details].filter(Boolean).join(' · '))) : undefined,
+        hint: parsed.hint ? redact(this.scrub(parsed.hint), 160) : undefined,
         kind,
+        ...(retryAfterMs ? { retryAfterMs } : {}),
       };
       throw new SyncTransportError(
         retryable
